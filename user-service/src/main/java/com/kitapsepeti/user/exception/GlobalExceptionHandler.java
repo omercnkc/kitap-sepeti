@@ -3,7 +3,6 @@ package com.kitapsepeti.user.exception;
 import java.util.List;
 
 import jakarta.servlet.http.HttpServletRequest;
-import org.hibernate.exception.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -57,7 +56,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 	public ResponseEntity<Object> handleDataIntegrityViolation(DataIntegrityViolationException ex,
 			HttpServletRequest request) {
 		ErrorCode code = ErrorCode.CONFLICT;
-		String constraint = constraintName(ex);
+		String constraint = DbConstraints.nameOf(ex);
 		ProblemDetails.log(log, code, request, ex, (constraint != null) ? "constraint=" + constraint : null);
 		return respond(code, code.defaultDetail(), request);
 	}
@@ -162,15 +161,6 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 				return new FieldViolation(field, message);
 			})
 			.toList();
-	}
-
-	private static String constraintName(Throwable ex) {
-		for (Throwable cause = ex; cause != null; cause = cause.getCause()) {
-			if (cause instanceof ConstraintViolationException violation) {
-				return violation.getConstraintName();
-			}
-		}
-		return null;
 	}
 
 }

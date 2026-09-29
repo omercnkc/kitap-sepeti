@@ -14,6 +14,7 @@ public enum ErrorCode {
 	EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, Level.INFO, "Email is already registered."),
 	INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, Level.WARN, "Invalid email or password."),
 	INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, Level.WARN, "Refresh token is invalid or expired."),
+	ACCOUNT_SUSPENDED(HttpStatus.FORBIDDEN, Level.WARN, "Account is suspended."),
 	RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, Level.INFO, "Requested resource was not found."),
 	VALIDATION_FAILED(HttpStatus.BAD_REQUEST, Level.INFO, "Request validation failed."),
 	MALFORMED_REQUEST(HttpStatus.BAD_REQUEST, Level.INFO, "Request could not be read."),

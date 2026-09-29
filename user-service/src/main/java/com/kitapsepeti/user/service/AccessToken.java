@@ -9,4 +9,10 @@ import java.time.Instant;
  * @param expiresAt token'daki {@code exp} ile aynı an
  */
 public record AccessToken(String value, Instant expiresAt) {
+
+	@Override
+	public String toString() {
+		return "AccessToken[value=***, expiresAt=" + expiresAt + "]";
+	}
+
 }

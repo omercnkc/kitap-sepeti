@@ -44,13 +44,14 @@ class SecurityConfigTest {
 	}
 
 	@Test
-	void registerIsPermittedAndReturns404UntilControllerExists() throws Exception {
+	void registerIsPermittedWithoutToken() throws Exception {
+		// 401 değil 400: istek security'den geçip controller'daki doğrulamaya ulaştı.
 		MvcResult result = mockMvc.perform(post("/api/auth/register")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{}"))
-			.andExpect(status().isNotFound())
+			.andExpect(status().isBadRequest())
 			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
-			.andExpect(jsonPath("$.code").value("NOT_FOUND"))
+			.andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
 			.andReturn();
 
 		assertNoSession(result);
