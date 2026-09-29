@@ -98,7 +98,30 @@
     `AddressControllerTest`.
   - PowerShell 5.1: BOM'suz `.ps1` ANSI okunur → script içindeki Türkçe literal'ler bozulur (sunucu değil).
 
+- RabbitMQ + outbox worker (64 test yeşil, henüz commit edilmedi):
+  - `docker-compose.yml`: `rabbitmq:4-management` (`kitapsepeti-rabbitmq`, 5672 + 127.0.0.1:15672, volume
+    `rabbitmq_data`, sabit `hostname` — RabbitMQ veriyi node adına göre saklar). `.env`: `RABBITMQ_USER/PASSWORD`.
+  - Bağımlılıklar: `spring-boot-starter-amqp` (+ test: `spring-boot-starter-amqp-test`,
+    `org.testcontainers:testcontainers-rabbitmq` → `org.testcontainers.rabbitmq.RabbitMQContainer`, `awaitility`).
+  - `application.yml`: `spring.rabbitmq.*` (`publisher-confirm-type: correlated`, `connection-timeout: 5s`),
+    `app.outbox.*` → `outbox/OutboxProperties` (`RabbitConfig` üzerinde `@EnableConfigurationProperties`).
+    Test profilinde `app.outbox.enabled: false`.
+  - `config/RabbitConfig`: durable `TopicExchange kitapsepeti.events`; açılışta `AmqpAdmin.initialize()` (broker
+    kapalıysa WARN, uygulama açılır). Kuyruk tanımı YOK (consumer'ın işi).
+  - `outbox/OutboxPublisher`: tek satır → mesaj (messageId=outbox id, type, JSON/UTF-8, timestamp=created_at,
+    persistent, header aggregateType/aggregateId) + `CorrelationData` future ile confirm bekler; nack/timeout/bağlantı →
+    `OutboxPublishException`. `outbox/EventRoutingKeys`: `UserRegistered` → `user.registered`.
+  - `outbox/OutboxRelay` (`@ConditionalOnProperty app.outbox.enabled`), `config/SchedulingConfig` (`@EnableScheduling`,
+    aynı koşul). Tur = `TransactionTemplate`; `OutboxRepository.lockUnpublishedBatch` (native `FOR UPDATE SKIP LOCKED`);
+    ilk hatada `break` + WARN (id, eventType, hata sınıfı), başarılılar commit.
+  - `GlobalExceptionHandler`: `ConstraintViolationException` → 400 VALIDATION_FAILED, errors[{field=son path düğümü, message}].
+  - Testler: `OutboxRelayIT` (worker açık, `FaultInjectingPublisher` @Primary test double), `OutboxSkipLockedTest`
+    (worker kapalı paylaşılan context), `EventRoutingKeysTest`. Surefire `**/*IT.java`'yı da koşar (user-service pom).
+  - Doküman: `docs/events/user-registered.md`.
+  - PowerShell tuzağı: tr-TR kültüründe `-match '[A-Z]'` "I" harfini eşlemez (Türkçe I); `-cmatch` kullan.
+  - Spring AMQP, correlated confirm'de mesaja `spring_returned_message_correlation` header'ı ekler (dokümanda not var).
+
 ## Sonraki adımlar
-- Bu adımın commit'i (kullanıcı isteyince), logout, e-posta/parola değiştirme, outbox yayıncısı, CORS, Swagger.
-- Açık konu: sınıf seviyesinde `@Validated` kullanılırsa `ConstraintViolationException` 500'e düşer (henüz kullanılmıyor).
+- Bu adımın commit'i (kullanıcı isteyince), logout, e-posta/parola değiştirme, consumer servisler, CORS, Swagger.
+- Açık konu: outbox'ta yayınlanmış satırların temizliği (retention) yok; bilinmeyen event_type kuyruğun başını tıkar.
 - Yeni servisler eklendikçe kök POM kontrol listesini uygula (bkz. systemPatterns.md).

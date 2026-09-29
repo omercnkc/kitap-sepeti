@@ -40,6 +40,14 @@
   `org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase`; Testcontainers 2.x:
   `org.testcontainers.mysql.MySQLContainer`, artifact `testcontainers-mysql`.
 
+## Olaylar (transactional outbox)
+- Yazma: `OutboxService.append` (`Propagation.MANDATORY`) iş verisiyle aynı transaction'da `outbox`'a yazar.
+- Yayın: `OutboxRelay` turu tek transaction; `FOR UPDATE SKIP LOCKED` batch, sırayla yayın + confirm bekleme,
+  ilk hatada dur (başarılılar commit). At-least-once; consumer `messageId` ile idempotent olmalı.
+- Üretici kuyruk tanımlamaz; consumer kendi kuyruğunu declare/bind eder. Yeni olay tipi = `EventRoutingKeys`'e
+  routing key + `docs/events/<olay>.md`.
+- Worker testlerde varsayılan kapalı (`app.outbox.enabled: false`); açan test ayrı context kurar.
+
 ## Yeni servis eklerken (KULLANICI KURALI)
 Kullanıcı, her yeni serviste kök `pom.xml`'in kontrol edilip gerekiyorsa
 güncellenmesini ve her değişikliğin NE ve NEDEN olduğunun açıklanmasını istiyor.
