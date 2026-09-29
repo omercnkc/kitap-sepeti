@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+	KitapSepeti - Parent (Aggregator) POM
+
+	Bu dosyanın iki görevi var:
+	  1. Aggregator: <modules> altındaki tüm servisleri tek komutla build eder.
+	     Kök dizinde: .\mvnw.cmd clean package
+	     Tek servis:  .\mvnw.cmd -pl user-service -am clean package
+	  2. Parent: Java sürümü, kütüphane versiyonları (BOM), ortak bağımlılıklar
+	     ve plugin ayarlarını tek yerden tüm servislere dağıtır.
+
+	YENİ SERVİS EKLERKEN KONTROL LİSTESİ
+	  [1] <modules> altına servis klasörünün adını ekle.
+	  [2] Servisin pom.xml'inde <parent> olarak bu POM'u göster
+	      (groupId: com.kitapsepeti, artifactId: kitap-sepeti-parent).
+	      Servis POM'undan groupId, version, java.version ve
+	      lombok/compiler ayarlarını sil; bunlar buradan miras alınır.
+	  [3] Servis yeni bir kütüphane ailesi getiriyorsa (Spring Cloud vb.)
+	      versiyonunu <properties>'e, BOM'unu <dependencyManagement>'a ekle.
+	      Servis POM'unda bu kütüphaneler versiyonsuz yazılır.
+	  [4] Bir bağımlılık TÜM servislerde gerekliyse buradaki <dependencies>'e
+	      taşı. Sadece bazı servislerde gerekiyorsa servis POM'unda bırak.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<!--
+		Spring Boot'un kendi parent'ı: Spring Boot ile uyumlu yüzlerce kütüphanenin
+		versiyonunu ve spring-boot-maven-plugin, maven-compiler-plugin gibi
+		plugin'lerin varsayılan ayarlarını getirir. Spring Boot sürümü yükseltilecekse
+		SADECE burası değiştirilir, tüm servisler otomatik güncellenir.
+	-->
+	<parent>
+		<groupId>org.springframework.boot</groupId>
+		<artifactId>spring-boot-starter-parent</artifactId>
+		<version>4.1.1</version>
+		<relativePath/>
+	</parent>
+
+	<groupId>com.kitapsepeti</groupId>
+	<artifactId>kitap-sepeti-parent</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<!-- pom: Bu proje çalıştırılabilir bir jar üretmez, sadece diğer modülleri yönetir. -->
+	<packaging>pom</packaging>
+	<name>KitapSepeti Parent</name>
+	<description>KitapSepeti mikroservisleri için ortak parent ve aggregator POM</description>
+
+	<!--
+		Boş bırakılan bu alanlar, spring-boot-starter-parent'tan gelen Spring
+		ekibine ait lisans/geliştirici/scm bilgilerinin servislerimize miras
+		kalmasını engeller.
+	-->
+	<url/>
+	<licenses>
+		<license/>
+	</licenses>
+	<developers>
+		<developer/>
+	</developers>
+	<scm>
+		<connection/>
+		<developerConnection/>
+		<tag/>
+		<url/>
+	</scm>
+
+	<!-- [1] Build'e dahil edilecek servisler. Her yeni servis klasörü buraya eklenir. -->
+	<modules>
+		<module>user-service</module>
+	</modules>
+
+	<!--
+		[3] Ortak versiyonlar. Servis POM'larında versiyon numarası yazılmaz,
+		hepsi buradan yönetilir; böylece servisler arasında versiyon çakışması olmaz.
+	-->
+	<properties>
+		<java.version>21</java.version>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+		<spring-modulith.version>2.1.1</spring-modulith.version>
+	</properties>
+
+	<!--
+		[3] BOM (Bill of Materials) importları. Buradaki kütüphaneler servislere
+		otomatik EKLENMEZ; sadece bir servis bu kütüphaneyi kullanırsa hangi
+		versiyonun seçileceğini belirler.
+	-->
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>org.springframework.modulith</groupId>
+				<artifactId>spring-modulith-bom</artifactId>
+				<version>${spring-modulith.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
+	<!--
+		[4] Buradaki bağımlılıklar TÜM servislere otomatik eklenir. Bu yüzden
+		sadece gerçekten her serviste kullanılacak olanlar buraya konur.
+	-->
+	<dependencies>
+		<dependency>
+			<groupId>org.projectlombok</groupId>
+			<artifactId>lombok</artifactId>
+			<optional>true</optional>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<plugins>
+			<!--
+				Lombok'un @Getter, @Builder gibi anotasyonlarını derleme sırasında
+				koda dönüştürebilmesi için annotation processor olarak tanıtılır.
+				Lombok tüm servislerde olduğu için bu ayar da burada tutulur.
+			-->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<configuration>
+					<annotationProcessorPaths>
+						<path>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok</artifactId>
+						</path>
+					</annotationProcessorPaths>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>
