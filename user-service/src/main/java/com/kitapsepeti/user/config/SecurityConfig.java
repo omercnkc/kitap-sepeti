@@ -12,13 +12,17 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
+import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
  * Stateless, varsayılanı kapalı (deny-by-default) güvenlik ayarı.
- * Oturum/cookie yok; kimlik ileride JWT ile taşınacak. Sadece açıkça listelenen
- * yollar herkese açık, geri kalan her istek kimlik doğrulaması ister.
- * Parola kontrolü AuthService içinde {@link PasswordEncoder#matches} ile elle yapılacağı için
+ * Oturum/cookie yok; kimlik {@code Authorization: Bearer <JWT>} ile taşınır ve RsaKeyConfig'teki
+ * JwtDecoder (RS256 + iss + exp) ile doğrulanır. Sadece açıkça listelenen yollar herkese açık.
+ * Parola kontrolü AuthService içinde {@link PasswordEncoder#matches} ile elle yapıldığı için
  * AuthenticationManager / UserDetailsService tanımlanmaz.
  * {@code @EnableMethodSecurity}: {@code @PreAuthorize} ile uç bazında rol kontrolü.
  */
@@ -26,6 +30,8 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
+
+	private static final String AUTH_PATH_PREFIX = "/api/auth/";
 
 	/** BCrypt, varsayılan strength 10. */
 	@Bean
@@ -51,12 +57,38 @@ public class SecurityConfig {
 				// Hata yanıtları /error'a yönlendirilir; kapalı olursa her hata 401'e dönüşür.
 				.requestMatchers("/error").permitAll()
 				.anyRequest().authenticated())
-			// Basic kapalıyken varsayılan yanıt 403 olur; kimliksiz istek için doğru kod 401.
-			// Filtre hataları controller advice'a ulaşmadığı için 401/403 gövdesini bu handler'lar yazar.
+			// Geçersiz/süresi dolmuş token da aynı ProblemDetail entry point'ine düşer.
+			.oauth2ResourceServer(rs -> rs
+				.bearerTokenResolver(bearerTokenResolver())
+				.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
+				.authenticationEntryPoint(authenticationEntryPoint)
+				.accessDeniedHandler(accessDeniedHandler))
+			// Token hiç yoksa (veya method security reddi) ExceptionTranslationFilter bu handler'ları kullanır;
+			// filtre hataları controller advice'a ulaşmadığı için 401/403 gövdesini bunlar yazar.
 			.exceptionHandling(ex -> ex
 				.authenticationEntryPoint(authenticationEntryPoint)
 				.accessDeniedHandler(accessDeniedHandler));
 		return http.build();
+	}
+
+	/** {@code role} claim'i (USER/ADMIN) → {@code ROLE_USER}/{@code ROLE_ADMIN}; principal adı = {@code sub}. */
+	private static JwtAuthenticationConverter jwtAuthenticationConverter() {
+		JwtGrantedAuthoritiesConverter authorities = new JwtGrantedAuthoritiesConverter();
+		authorities.setAuthoritiesClaimName("role");
+		authorities.setAuthorityPrefix("ROLE_");
+		JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+		converter.setJwtGrantedAuthoritiesConverter(authorities);
+		converter.setPrincipalClaimName("sub");
+		return converter;
+	}
+
+	/**
+	 * Auth uçlarında Authorization başlığı yok sayılır. Aksi halde süresi dolmuş access token'ı başlıkta
+	 * göndermeye devam eden istemci, tam da token yenilemek istediği {@code /api/auth/refresh}'te 401 alırdı.
+	 */
+	private static BearerTokenResolver bearerTokenResolver() {
+		DefaultBearerTokenResolver delegate = new DefaultBearerTokenResolver();
+		return request -> request.getRequestURI().startsWith(AUTH_PATH_PREFIX) ? null : delegate.resolve(request);
 	}
 
 }

@@ -2,6 +2,7 @@ package com.kitapsepeti.user.exception;
 
 import java.util.List;
 
+import com.kitapsepeti.user.security.BearerChallenge;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,11 +45,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 	public record FieldViolation(String field, String message) {
 	}
 
+	/** UNAUTHORIZED (token geçerli ama kullanıcı yok) filtre katmanındaki 401 ile aynı challenge'ı taşır. */
 	@ExceptionHandler(ApiException.class)
 	public ResponseEntity<Object> handleApiException(ApiException ex, HttpServletRequest request) {
 		ErrorCode code = ex.getErrorCode();
 		ProblemDetails.log(log, code, request, ex);
-		return respond(code, ex.getDetail(), request);
+		ResponseEntity.BodyBuilder response = ResponseEntity.status(code.status());
+		if (code == ErrorCode.UNAUTHORIZED) {
+			response.header(HttpHeaders.WWW_AUTHENTICATE, BearerChallenge.INVALID_TOKEN);
+		}
+		return response.body(ProblemDetails.create(code, ex.getDetail(), request));
 	}
 
 	/** DB mesajı kullanıcı verisi içerebilir (örn. çakışan e-posta); logda yalnızca constraint adı yer alır. */

@@ -8,14 +8,17 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Kimliksiz istek korumalı bir yola geldiğinde 401 + ProblemDetail ({@code code=UNAUTHORIZED}) yazar.
- * {@code WWW-Authenticate} header'ı eklenmez; tarayıcı Basic giriş penceresi açmaz.
+ * Kimliksiz istek (token yok, bozuk, süresi dolmuş veya başka anahtarla imzalı) korumalı bir yola
+ * geldiğinde 401 + ProblemDetail ({@code code=UNAUTHORIZED}) ve {@code WWW-Authenticate: Bearer} yazar.
+ * Basic challenge verilmez; tarayıcı giriş penceresi açmaz. Red nedeni ne yanıta ne loga yazılır.
  */
 @Component
 public class ProblemDetailAuthenticationEntryPoint implements AuthenticationEntryPoint {
@@ -33,6 +36,8 @@ public class ProblemDetailAuthenticationEntryPoint implements AuthenticationEntr
 			AuthenticationException authException) throws IOException {
 		ErrorCode code = ErrorCode.UNAUTHORIZED;
 		ProblemDetails.log(log, code, request, authException);
+		response.setHeader(HttpHeaders.WWW_AUTHENTICATE, (authException instanceof OAuth2AuthenticationException)
+				? BearerChallenge.INVALID_TOKEN : BearerChallenge.MISSING_TOKEN);
 		ProblemDetailResponses.write(this.jsonMapper, response,
 				ProblemDetails.create(code, code.defaultDetail(), request));
 	}

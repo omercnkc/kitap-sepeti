@@ -39,6 +39,7 @@ class SecurityConfigTest {
 			.andReturn();
 
 		assertThat(Objects.toString(result.getResponse().getHeader(HttpHeaders.WWW_AUTHENTICATE), ""))
+			.isEqualTo("Bearer")
 			.doesNotContain("Basic");
 		assertNoSession(result);
 	}

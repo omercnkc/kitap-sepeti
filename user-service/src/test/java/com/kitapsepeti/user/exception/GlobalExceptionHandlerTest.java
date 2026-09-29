@@ -133,7 +133,7 @@ class GlobalExceptionHandlerTest {
 		mockMvc.perform(get("/api/me"))
 			.andExpect(status().isUnauthorized())
 			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
-			.andExpect(header().doesNotExist(HttpHeaders.WWW_AUTHENTICATE))
+			.andExpect(header().string(HttpHeaders.WWW_AUTHENTICATE, "Bearer"))
 			.andExpect(jsonPath("$.status").value(401))
 			.andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
 			.andExpect(jsonPath("$.instance").value("/api/me"));

@@ -23,7 +23,8 @@ public enum ErrorCode {
 	NOT_ACCEPTABLE(HttpStatus.NOT_ACCEPTABLE, Level.INFO, "Requested response media type is not supported."),
 	UNSUPPORTED_MEDIA_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, Level.INFO, "Content type is not supported."),
 	CONFLICT(HttpStatus.CONFLICT, Level.INFO, "Request conflicts with the current state of the resource."),
-	UNAUTHORIZED(HttpStatus.UNAUTHORIZED, Level.WARN, "Authentication is required."),
+	DEFAULT_ADDRESS_REQUIRED(HttpStatus.CONFLICT, Level.INFO, "An address list must keep one default address."),
+	UNAUTHORIZED(HttpStatus.UNAUTHORIZED, Level.INFO, "Authentication is required."),
 	FORBIDDEN(HttpStatus.FORBIDDEN, Level.WARN, "Access is denied."),
 	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, Level.ERROR, "An unexpected error occurred.");
 
