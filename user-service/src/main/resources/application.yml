@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: user-service
+  config:
+    import: optional:file:../.env[.properties],optional:file:.env[.properties]
+  datasource:
+    url: jdbc:mysql://${USER_DB_HOST:localhost}:${USER_DB_PORT:3306}/user_db
+    username: ${USER_DB_USER}
+    password: ${USER_DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: 8081
