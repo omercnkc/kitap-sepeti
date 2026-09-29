@@ -39,6 +39,26 @@ server:
     include-stacktrace: never
     include-message: never
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+      # /actuator link listesi de kapalı; dışarıya yalnızca health açılır.
+      discovery:
+        enabled: false
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        # RabbitMQ bilinçli olarak yok: broker kapalıyken de istek alınır, olaylar outbox'ta bekler.
+        readiness:
+          include: readinessState, db
+
 springdoc:
   # /test/** gibi yalnızca testte var olan uçlar dokümana girmez.
   paths-to-match: /api/**, /.well-known/**

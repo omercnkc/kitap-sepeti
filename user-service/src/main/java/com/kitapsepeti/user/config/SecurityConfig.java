@@ -54,6 +54,7 @@ public class SecurityConfig {
 				.requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login", "/api/auth/refresh").permitAll()
 				.requestMatchers(HttpMethod.GET, "/.well-known/jwks.json").permitAll()
 				.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+				.requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
 				// Hata yanıtları /error'a yönlendirilir; kapalı olursa her hata 401'e dönüşür.
 				.requestMatchers("/error").permitAll()
 				.anyRequest().authenticated())
