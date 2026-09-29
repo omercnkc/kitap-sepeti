@@ -42,6 +42,25 @@
   - Spring context'li testler `@ActiveProfiles("test")` → `src/test/resources/application-test.yml` test anahtarları.
   - `http.oauth2ResourceServer` henüz AÇIK DEĞİL (9. adım).
 
+- Global hata altyapısı (RFC 9457 ProblemDetail, 25 test yeşil):
+  - `exception/ErrorCode`: status + log seviyesi (slf4j `Level`) + genel İngilizce detail; tek kaynak.
+    Spec'teki listeye ek olarak `NOT_ACCEPTABLE(406)` eklendi.
+  - `ApiException` (abstract) + `EmailAlreadyExists`, `InvalidCredentials`, `InvalidRefreshToken`, `ResourceNotFound`.
+  - `ProblemDetails`: ortak yapı (`code` + `instance`=istek yolu) ve log satırı `METHOD path -> CODE`;
+    stack trace yalnızca ERROR seviyesinde. Exception mesajı / gövde / rejectedValue ASLA loglanmaz.
+  - `GlobalExceptionHandler extends ResponseEntityExceptionHandler`: Spring MVC exception'ları
+    `handleExceptionInternal` override'ında code+genel detail alır; DataIntegrityViolation → 409 CONFLICT
+    (logda yalnızca Hibernate constraint adı); catch-all → 500. `AccessDeniedException`/`AuthenticationException`
+    advice'ta yeniden fırlatılır → 401/403 kararını ExceptionTranslationFilter verir.
+  - `security/ProblemDetailAuthenticationEntryPoint` (401) ve `ProblemDetailAccessDeniedHandler` (403):
+    Boot'un `tools.jackson.databind.json.JsonMapper` bean'i ile yazar (Boot bu mapper'a ProblemDetail mixin'ini ekler).
+  - SecurityConfig'e `@EnableMethodSecurity` eklendi. `ClockConfig`'ten `@ConditionalOnMissingBean` kaldırıldı.
+  - Test-only `src/test/.../exception/ExceptionTestController` (`/test/exceptions/**`) component scan ile tüm
+    `@SpringBootTest` context'lerine girer (tek context, tek container).
+  - Açık konu: Hibernate `org.hibernate.orm.jdbc.error` logger'ı SQL hata mesajını (örn. `Duplicate entry '<email>'`)
+    WARN seviyesinde kendisi yazıyor.
+  - PowerShell 5.1: 401 gövdesi `$_.ErrorDetails.Message` içinde gelir (yanıt stream'i boş olabilir).
+
 ## Sonraki adımlar
-- 401 için JSON gövde, service/DTO/controller katmanı, JWT filter + JWKS endpoint (`app.jwt.*`), CORS.
+- AuthService/DTO/controller (register, login, refresh), refresh token, `oauth2ResourceServer` (9. adım), CORS.
 - Yeni servisler eklendikçe kök POM kontrol listesini uygula (bkz. systemPatterns.md).
