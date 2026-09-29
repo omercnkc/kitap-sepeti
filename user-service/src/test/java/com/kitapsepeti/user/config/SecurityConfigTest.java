@@ -3,6 +3,8 @@ package com.kitapsepeti.user.config;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.Objects;
@@ -32,6 +34,8 @@ class SecurityConfigTest {
 	void protectedEndpointReturns401WithoutBasicChallenge() throws Exception {
 		MvcResult result = mockMvc.perform(get("/api/me"))
 			.andExpect(status().isUnauthorized())
+			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+			.andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
 			.andReturn();
 
 		assertThat(Objects.toString(result.getResponse().getHeader(HttpHeaders.WWW_AUTHENTICATE), ""))
@@ -45,6 +49,8 @@ class SecurityConfigTest {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{}"))
 			.andExpect(status().isNotFound())
+			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+			.andExpect(jsonPath("$.code").value("NOT_FOUND"))
 			.andReturn();
 
 		assertNoSession(result);
