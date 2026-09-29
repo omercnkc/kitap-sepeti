@@ -7,6 +7,10 @@ spring:
     url: jdbc:mysql://${USER_DB_HOST:localhost}:${USER_DB_PORT:3306}/user_db
     username: ${USER_DB_USER}
     password: ${USER_DB_PASSWORD}
+    hikari:
+      # DB kesintisinde istekler ve readiness varsayılan 30 sn yerine ~5 sn'de hata döner.
+      # Milisaniye: HikariDataSource alanı long olduğu için "5s" gibi Duration yazımı bağlanmaz.
+      connection-timeout: 5000
   jpa:
     hibernate:
       ddl-auto: validate

@@ -8,9 +8,11 @@ import com.kitapsepeti.user.repository.OutboxRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.dao.DataAccessException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionException;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -45,9 +47,20 @@ public class OutboxRelay {
 		this.clock = clock;
 	}
 
+	/**
+	 * DB'ye ulaşılamıyorsa tur atlanır ve tek satır WARN yazılır; kesinti boyunca her turda stack trace basılmaz.
+	 * Diğer exception'lar Spring'in scheduler error handler'ına gider (ERROR + stack trace).
+	 */
 	@Scheduled(fixedDelayString = "${app.outbox.poll-interval}")
 	public void poll() {
-		Integer published = transactionTemplate.execute(status -> relayBatch());
+		Integer published;
+		try {
+			published = transactionTemplate.execute(status -> relayBatch());
+		}
+		catch (DataAccessException | TransactionException ex) {
+			log.warn("Outbox poll skipped, database unavailable: {}", ex.getClass().getSimpleName());
+			return;
+		}
 		if (published != null && published > 0) {
 			log.debug("Published {} outbox event(s)", published);
 		}
