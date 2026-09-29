@@ -15,6 +15,15 @@
 - Spring Modulith tamamen kaldırıldı. Flyway V1 (`users`, `addresses`, `refresh_tokens`, `outbox`)
   `user_db`'ye uygulandı; UNIQUE/CHECK/FK kısıtları elle test edildi, tablolar boş bırakıldı.
 
+- Entity (`entity/`: User, Address, RefreshToken, OutboxEvent, UserStatus+UserStatusConverter, Role) ve
+  repository (`repository/`) katmanı eklendi; `validate` ek düzeltme gerektirmeden geçti.
+- Testler Testcontainers MySQL 8.4 ile (`TestcontainersConfiguration`, `@ServiceConnection`); H2 yok.
+
+- Entity, repository ve V1 SQL'e Türkçe açıklama yorumları eklendi. V1'in checksum'ı değişti
+  (1293545622 → -625709255); yerel `user_db` Flyway repair ile hizalandı. V1'i eski haliyle
+  uygulamış başka bir DB varsa orada da repair gerekir.
+- Kural: uygulanmış migration dosyaları (yorum dahil) bir daha değiştirilmez; değişiklik = yeni V2, V3...
+
 ## Sonraki adımlar
-- Entity'ler (ddl-auto=validate ile V1 şemasına birebir uymalı), repository'ler, SecurityConfig, JWT (`app.jwt.*`).
+- Service/DTO katmanı, SecurityConfig, JWT (`app.jwt.*`).
 - Yeni servisler eklendikçe kök POM kontrol listesini uygula (bkz. systemPatterns.md).

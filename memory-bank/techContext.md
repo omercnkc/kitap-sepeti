@@ -25,4 +25,5 @@
 ## Komutlar (kök dizinden)
 - Tüm servisleri build: `.\mvnw.cmd clean package`
 - Tek servis: `.\mvnw.cmd -pl user-service -am clean package`
-- `UserServiceApplicationTests.contextLoads` çalışan bir MySQL ister; DB yokken `-DskipTests` kullan.
+- Testler: `.\mvnw.cmd -pl user-service test` — Docker açık olmalı (Testcontainers kendi MySQL'ini açar,
+  `user_db`'ye dokunmaz).
