@@ -1,0 +1,1301 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "description": "Kullanıcı kaydı, kimlik doğrulama, profil ve adres yönetimi.\n\n**Kimlik doğrulama:** `POST /api/auth/login` (veya `register`) yanıtındaki `accessToken`'ı her istekte `Authorization: Bearer <accessToken>` başlığıyla gönderin. Access token 15 dakika geçerlidir; süresi dolunca `POST /api/auth/refresh` ile yeni bir token çifti alın. Refresh token her kullanımda yenilenir (rotation): yanıttaki yeni refresh token saklanmalı, eskisi artık geçersizdir.\n\n**Hatalar:** Tüm hatalar RFC 9457 ProblemDetail olarak `application/problem+json` ile döner (`Problem` şeması). İstemci hatayı `code` alanına göre ayırt eder; doğrulama hatalarında `errors` dizisi alan bazında mesaj içerir.\n",
+    "title": "Kitap Sepeti — User Service API",
+    "version": "0.0.1-SNAPSHOT"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8081",
+      "description": "Generated server url"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "description": "Oturum sahibinin adresleri. Adresi olan kullanıcının tam olarak bir varsayılan adresi vardır.",
+      "name": "Addresses"
+    },
+    {
+      "description": "Access token imzasını doğrulamak için açık anahtarlar.",
+      "name": "Keys"
+    },
+    {
+      "description": "Oturum sahibinin profili. Kullanıcı token'dan belirlenir.",
+      "name": "Profile"
+    },
+    {
+      "description": "Kayıt, giriş ve token yenileme. Token gerektirmez.",
+      "name": "Auth"
+    }
+  ],
+  "paths": {
+    "/.well-known/jwks.json": {
+      "get": {
+        "description": "RS256 açık anahtar(lar)ı. Token başlığındaki `kid` ile eşleşen anahtar seçilir; anahtar değişince `kid` de değişir.",
+        "operationId": "getJwks",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "keys": [
+                    {
+                      "kty": "RSA",
+                      "e": "AQAB",
+                      "use": "sig",
+                      "kid": "hN3x...",
+                      "alg": "RS256",
+                      "n": "0vx7..."
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Açık anahtar kümesi."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INTERNAL_ERROR`: beklenmeyen hata; ayrıntı yanıtta yer almaz."
+          }
+        },
+        "security": [],
+        "summary": "JWKS",
+        "tags": [
+          "Keys"
+        ]
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "description": "E-posta ve parola ile token çifti alır.",
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description": "Giriş başarılı."
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`VALIDATION_FAILED` (alan hataları `errors` dizisinde) veya `MALFORMED_REQUEST` (okunamayan JSON)."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "example": {
+                  "title": "Unauthorized",
+                  "status": 401,
+                  "detail": "Invalid email or password.",
+                  "instance": "/api/auth/login",
+                  "code": "INVALID_CREDENTIALS"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INVALID_CREDENTIALS`: e-posta veya parola hatalı (hangisinin hatalı olduğu bilinçli olarak söylenmez)."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`ACCOUNT_SUSPENDED`: hesap askıya alınmış (yalnızca parola doğruysa)."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INTERNAL_ERROR`: beklenmeyen hata; ayrıntı yanıtta yer almaz."
+          }
+        },
+        "security": [],
+        "summary": "Giriş yap",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/auth/refresh": {
+      "post": {
+        "description": "Refresh token karşılığında yeni bir access + refresh token çifti döner. Her çağrı yeni bir refresh token üretir ve gönderileni iptal eder (rotation); istemci yanıttaki yeni token'ı saklamalıdır. İptal edilmiş (eski) bir refresh token tekrar kullanılırsa token çalınmış sayılır ve kullanıcının tüm oturumları (tüm refresh token'ları) iptal edilir.",
+        "operationId": "refresh",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description": "Yeni token çifti."
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`VALIDATION_FAILED` (alan hataları `errors` dizisinde) veya `MALFORMED_REQUEST` (okunamayan JSON)."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INVALID_REFRESH_TOKEN`: token bilinmiyor, süresi dolmuş veya iptal edilmiş."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INTERNAL_ERROR`: beklenmeyen hata; ayrıntı yanıtta yer almaz."
+          }
+        },
+        "security": [],
+        "summary": "Token yenile",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/auth/register": {
+      "post": {
+        "description": "Yeni kullanıcı oluşturur ve doğrudan oturum açar (token çifti döner).",
+        "operationId": "register",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description": "Kullanıcı oluşturuldu."
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`VALIDATION_FAILED` (alan hataları `errors` dizisinde) veya `MALFORMED_REQUEST` (okunamayan JSON)."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "example": {
+                  "title": "Conflict",
+                  "status": 409,
+                  "detail": "Email is already registered.",
+                  "instance": "/api/auth/register",
+                  "code": "EMAIL_ALREADY_EXISTS"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`EMAIL_ALREADY_EXISTS`: e-posta zaten kayıtlı."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INTERNAL_ERROR`: beklenmeyen hata; ayrıntı yanıtta yer almaz."
+          }
+        },
+        "security": [],
+        "summary": "Kayıt ol",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/me": {
+      "get": {
+        "operationId": "getProfile",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            },
+            "description": "Profil."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`UNAUTHORIZED`: token yok, geçersiz, süresi dolmuş ya da kullanıcı silinmiş. Yanıtta `WWW-Authenticate: Bearer` başlığı bulunur."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`ACCOUNT_SUSPENDED`: hesap askıya alınmış."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INTERNAL_ERROR`: beklenmeyen hata; ayrıntı yanıtta yer almaz."
+          }
+        },
+        "summary": "Profilimi getir",
+        "tags": [
+          "Profile"
+        ]
+      },
+      "patch": {
+        "description": "Kısmi güncelleme: yalnızca gönderilen alanlar değişir.",
+        "operationId": "updateProfile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProfileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            },
+            "description": "Güncellenmiş profil."
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`VALIDATION_FAILED` (alan hataları `errors` dizisinde) veya `MALFORMED_REQUEST` (okunamayan JSON)."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`UNAUTHORIZED`: token yok, geçersiz, süresi dolmuş ya da kullanıcı silinmiş. Yanıtta `WWW-Authenticate: Bearer` başlığı bulunur."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`ACCOUNT_SUSPENDED`: hesap askıya alınmış."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INTERNAL_ERROR`: beklenmeyen hata; ayrıntı yanıtta yer almaz."
+          }
+        },
+        "summary": "Profilimi güncelle",
+        "tags": [
+          "Profile"
+        ]
+      }
+    },
+    "/api/me/addresses": {
+      "get": {
+        "description": "Önce varsayılan adres, sonra en yeniden eskiye.",
+        "operationId": "listAddresses",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AddressResponse"
+                  }
+                }
+              }
+            },
+            "description": "Adres listesi (boş olabilir)."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`UNAUTHORIZED`: token yok, geçersiz, süresi dolmuş ya da kullanıcı silinmiş. Yanıtta `WWW-Authenticate: Bearer` başlığı bulunur."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`ACCOUNT_SUSPENDED`: hesap askıya alınmış."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INTERNAL_ERROR`: beklenmeyen hata; ayrıntı yanıtta yer almaz."
+          }
+        },
+        "summary": "Adreslerimi listele",
+        "tags": [
+          "Addresses"
+        ]
+      },
+      "post": {
+        "description": "`isDefault: true` ise önceki varsayılan adres varsayılanlıktan çıkar. Kullanıcının ilk adresi her durumda varsayılan olur.",
+        "operationId": "createAddress",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAddressRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddressResponse"
+                }
+              }
+            },
+            "description": "Adres oluşturuldu.",
+            "headers": {
+              "Location": {
+                "description": "Yeni adresin yolu.",
+                "schema": {
+                  "type": "string",
+                  "format": "uri-reference",
+                  "example": "/api/me/addresses/01a0ed1b-22f7-7a76-aa96-c8ec0f3b3a4a"
+                },
+                "style": "simple"
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`VALIDATION_FAILED` (alan hataları `errors` dizisinde) veya `MALFORMED_REQUEST` (okunamayan JSON)."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`UNAUTHORIZED`: token yok, geçersiz, süresi dolmuş ya da kullanıcı silinmiş. Yanıtta `WWW-Authenticate: Bearer` başlığı bulunur."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`ACCOUNT_SUSPENDED`: hesap askıya alınmış."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INTERNAL_ERROR`: beklenmeyen hata; ayrıntı yanıtta yer almaz."
+          }
+        },
+        "summary": "Adres ekle",
+        "tags": [
+          "Addresses"
+        ]
+      }
+    },
+    "/api/me/addresses/{id}": {
+      "delete": {
+        "description": "Silinen adres varsayılansa, kalan en yeni adres varsayılan olur.",
+        "operationId": "deleteAddress",
+        "parameters": [
+          {
+            "description": "Adres id'si",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Silindi."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`UNAUTHORIZED`: token yok, geçersiz, süresi dolmuş ya da kullanıcı silinmiş. Yanıtta `WWW-Authenticate: Bearer` başlığı bulunur."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`ACCOUNT_SUSPENDED`: hesap askıya alınmış."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`RESOURCE_NOT_FOUND`: kayıt yok veya başka bir kullanıcıya ait."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INTERNAL_ERROR`: beklenmeyen hata; ayrıntı yanıtta yer almaz."
+          }
+        },
+        "summary": "Adres sil",
+        "tags": [
+          "Addresses"
+        ]
+      },
+      "get": {
+        "operationId": "getAddress",
+        "parameters": [
+          {
+            "description": "Adres id'si",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddressResponse"
+                }
+              }
+            },
+            "description": "Adres."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`UNAUTHORIZED`: token yok, geçersiz, süresi dolmuş ya da kullanıcı silinmiş. Yanıtta `WWW-Authenticate: Bearer` başlığı bulunur."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`ACCOUNT_SUSPENDED`: hesap askıya alınmış."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`RESOURCE_NOT_FOUND`: kayıt yok veya başka bir kullanıcıya ait."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INTERNAL_ERROR`: beklenmeyen hata; ayrıntı yanıtta yer almaz."
+          }
+        },
+        "summary": "Adres getir",
+        "tags": [
+          "Addresses"
+        ]
+      },
+      "patch": {
+        "description": "Kısmi güncelleme: yalnızca gönderilen alanlar değişir. `isDefault: true` bu adresi varsayılan yapar (öncekini çıkarır).",
+        "operationId": "updateAddress",
+        "parameters": [
+          {
+            "description": "Adres id'si",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAddressRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddressResponse"
+                }
+              }
+            },
+            "description": "Güncellenmiş adres."
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`VALIDATION_FAILED` (alan hataları `errors` dizisinde) veya `MALFORMED_REQUEST` (okunamayan JSON)."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`UNAUTHORIZED`: token yok, geçersiz, süresi dolmuş ya da kullanıcı silinmiş. Yanıtta `WWW-Authenticate: Bearer` başlığı bulunur."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`ACCOUNT_SUSPENDED`: hesap askıya alınmış."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`RESOURCE_NOT_FOUND`: kayıt yok veya başka bir kullanıcıya ait."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`DEFAULT_ADDRESS_REQUIRED`: varsayılan adrese `isDefault: false` gönderildi; önce başka bir adresi varsayılan yapın."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INTERNAL_ERROR`: beklenmeyen hata; ayrıntı yanıtta yer almaz."
+          }
+        },
+        "summary": "Adres güncelle",
+        "tags": [
+          "Addresses"
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AddressResponse": {
+        "type": "object",
+        "description": "Adres.",
+        "properties": {
+          "city": {
+            "type": "string",
+            "example": "İstanbul"
+          },
+          "country": {
+            "type": "string",
+            "description": "ISO 3166-1 alpha-2.",
+            "example": "TR"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Oluşturulma zamanı (UTC).",
+            "example": "2026-09-29T12:19:33.752772Z"
+          },
+          "district": {
+            "type": "string",
+            "description": "Yoksa null.",
+            "example": "Kadıköy"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Adres id'si.",
+            "example": "01a0ed1b-22f7-7a76-aa96-c8ec0f3b3a4a"
+          },
+          "isDefault": {
+            "type": "boolean",
+            "description": "Varsayılan adres mi.",
+            "example": true
+          },
+          "label": {
+            "type": "string",
+            "description": "Etiket; yoksa null.",
+            "example": "Ev"
+          },
+          "line1": {
+            "type": "string",
+            "example": "Atatürk Cad. No:1"
+          },
+          "line2": {
+            "type": "string",
+            "description": "Yoksa null.",
+            "example": "Daire 5"
+          },
+          "phone": {
+            "type": "string",
+            "example": "5551112233"
+          },
+          "postalCode": {
+            "type": "string",
+            "description": "Yoksa null.",
+            "example": "34710"
+          },
+          "recipientName": {
+            "type": "string",
+            "example": "Ali Veli"
+          }
+        }
+      },
+      "CreateAddressRequest": {
+        "type": "object",
+        "description": "Yeni adres.",
+        "properties": {
+          "city": {
+            "type": "string",
+            "description": "İl.",
+            "example": "İstanbul",
+            "maxLength": 80,
+            "minLength": 0
+          },
+          "country": {
+            "type": "string",
+            "description": "ISO 3166-1 alpha-2, büyük harf; gönderilmezse `TR`.",
+            "example": "TR",
+            "pattern": "^[A-Z]{2}$"
+          },
+          "district": {
+            "type": "string",
+            "description": "İlçe (opsiyonel).",
+            "example": "Kadıköy",
+            "maxLength": 80,
+            "minLength": 0
+          },
+          "isDefault": {
+            "type": "boolean",
+            "description": "Varsayılan adres yap. Kullanıcının ilk adresi her durumda varsayılan olur.",
+            "example": false
+          },
+          "label": {
+            "type": "string",
+            "description": "Kısa etiket (opsiyonel).",
+            "example": "Ev",
+            "maxLength": 40,
+            "minLength": 0
+          },
+          "line1": {
+            "type": "string",
+            "description": "Adres satırı 1.",
+            "example": "Atatürk Cad. No:1",
+            "maxLength": 200,
+            "minLength": 0
+          },
+          "line2": {
+            "type": "string",
+            "description": "Adres satırı 2 (opsiyonel).",
+            "example": "Daire 5",
+            "maxLength": 200,
+            "minLength": 0
+          },
+          "phone": {
+            "type": "string",
+            "description": "Alıcının telefonu.",
+            "example": "5551112233",
+            "maxLength": 32,
+            "minLength": 0
+          },
+          "postalCode": {
+            "type": "string",
+            "description": "Posta kodu (opsiyonel).",
+            "example": "34710",
+            "maxLength": 16,
+            "minLength": 0
+          },
+          "recipientName": {
+            "type": "string",
+            "description": "Alıcının adı soyadı.",
+            "example": "Ali Veli",
+            "maxLength": 120,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "city",
+          "line1",
+          "phone",
+          "recipientName"
+        ]
+      },
+      "FieldError": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "Hatalı alanın adı.",
+            "example": "email"
+          },
+          "message": {
+            "type": "string",
+            "description": "Doğrulama mesajı.",
+            "example": "must be a well-formed email address"
+          }
+        },
+        "required": [
+          "field",
+          "message"
+        ]
+      },
+      "LoginRequest": {
+        "type": "object",
+        "description": "Giriş isteği.",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Kayıtlı e-posta.",
+            "example": "ali@example.com",
+            "minLength": 1
+          },
+          "password": {
+            "type": "string",
+            "description": "Parola.",
+            "example": "Gizli-Parola-7391",
+            "minLength": 1,
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "Problem": {
+        "type": "object",
+        "description": "RFC 9457 Problem Details. İstemci hatayı `code` alanına göre ayırt etmelidir; `title`/`detail` insan içindir ve değişebilir.",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Makine tarafından okunacak hata kodu.",
+            "enum": [
+              "EMAIL_ALREADY_EXISTS",
+              "INVALID_CREDENTIALS",
+              "INVALID_REFRESH_TOKEN",
+              "ACCOUNT_SUSPENDED",
+              "RESOURCE_NOT_FOUND",
+              "VALIDATION_FAILED",
+              "MALFORMED_REQUEST",
+              "NOT_FOUND",
+              "METHOD_NOT_ALLOWED",
+              "NOT_ACCEPTABLE",
+              "UNSUPPORTED_MEDIA_TYPE",
+              "CONFLICT",
+              "DEFAULT_ADDRESS_REQUIRED",
+              "UNAUTHORIZED",
+              "FORBIDDEN",
+              "INTERNAL_ERROR"
+            ],
+            "example": "EMAIL_ALREADY_EXISTS"
+          },
+          "detail": {
+            "type": "string",
+            "description": "Genel açıklama; kullanıcı verisi içermez.",
+            "example": "Email is already registered."
+          },
+          "errors": {
+            "type": "array",
+            "description": "Yalnızca `VALIDATION_FAILED`'da: alan bazında hatalar. Gönderilen değer yer almaz.",
+            "items": {
+              "$ref": "#/components/schemas/FieldError"
+            }
+          },
+          "instance": {
+            "type": "string",
+            "format": "uri-reference",
+            "description": "İsteğin yolu.",
+            "example": "/api/auth/register"
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "description": "HTTP durum kodu.",
+            "example": 409
+          },
+          "title": {
+            "type": "string",
+            "description": "HTTP durumunun kısa adı.",
+            "example": "Conflict"
+          },
+          "type": {
+            "type": "string",
+            "format": "uri",
+            "description": "Problem tipi; varsayılan `about:blank` olduğunda yanıtta yer almaz."
+          }
+        },
+        "required": [
+          "code",
+          "instance",
+          "status",
+          "title"
+        ]
+      },
+      "RefreshRequest": {
+        "type": "object",
+        "description": "Token yenileme isteği.",
+        "properties": {
+          "refreshToken": {
+            "type": "string",
+            "description": "Son alınan refresh token (tek kullanımlık).",
+            "example": "fIC1kvizEe7Qm3p0Yx9aLr2Nw8cVtKjHbUoS4dGyZ6E",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "refreshToken"
+        ]
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "description": "Kayıt isteği.",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "E-posta; büyük/küçük harf duyarsız ve benzersiz.",
+            "example": "ali@example.com",
+            "maxLength": 255,
+            "minLength": 0
+          },
+          "firstName": {
+            "type": "string",
+            "description": "Ad.",
+            "example": "Ali",
+            "maxLength": 80,
+            "minLength": 0
+          },
+          "lastName": {
+            "type": "string",
+            "description": "Soyad.",
+            "example": "Veli",
+            "maxLength": 80,
+            "minLength": 0
+          },
+          "password": {
+            "type": "string",
+            "description": "Parola: 8–72 karakter ve en fazla 72 byte (UTF-8).",
+            "example": "Gizli-Parola-7391",
+            "maxLength": 72,
+            "minLength": 8,
+            "writeOnly": true
+          },
+          "phone": {
+            "type": "string",
+            "description": "Telefon (opsiyonel).",
+            "example": "5551112233",
+            "maxLength": 32,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "email",
+          "firstName",
+          "lastName",
+          "password"
+        ]
+      },
+      "TokenResponse": {
+        "type": "object",
+        "description": "Token çifti. Yanıt `Cache-Control: no-store` ile döner.",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "RS256 imzalı JWT; `Authorization: Bearer <accessToken>` ile gönderilir.",
+            "example": "eyJraWQiOiJoTjN4Li4uIiwiYWxnIjoiUlMyNTYifQ.eyJzdWIiOiIuLi4ifQ.c2lnbmF0dXJl"
+          },
+          "expiresIn": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Access token'ın ömrü, saniye.",
+            "example": 900
+          },
+          "refreshToken": {
+            "type": "string",
+            "description": "Opak refresh token; yalnızca `POST /api/auth/refresh`'te ve bir kez kullanılır.",
+            "example": "fIC1kvizEe7Qm3p0Yx9aLr2Nw8cVtKjHbUoS4dGyZ6E"
+          },
+          "tokenType": {
+            "type": "string",
+            "description": "Her zaman `Bearer`.",
+            "example": "Bearer"
+          }
+        }
+      },
+      "UpdateAddressRequest": {
+        "type": "object",
+        "description": "Kısmi adres güncellemesi. null/gönderilmemiş = değiştirme; opsiyonel alanda \"\" = sil; zorunlu alan boş olamaz. Zorunlu: recipientName, phone, line1, city. Opsiyonel: label, line2, district, postalCode.",
+        "properties": {
+          "city": {
+            "type": "string",
+            "description": "İl; gönderildiyse boş olamaz.",
+            "example": "İstanbul",
+            "maxLength": 80,
+            "minLength": 0,
+            "pattern": ".*\\S.*"
+          },
+          "country": {
+            "type": "string",
+            "description": "ISO 3166-1 alpha-2, büyük harf.",
+            "example": "TR",
+            "pattern": "^[A-Z]{2}$"
+          },
+          "district": {
+            "type": "string",
+            "description": "İlçe; \"\" gönderilirse silinir.",
+            "example": "Şişli",
+            "maxLength": 80,
+            "minLength": 0
+          },
+          "isDefault": {
+            "type": "boolean",
+            "description": "`true`: bu adresi varsayılan yap. Varsayılan adrese `false` gönderilirse 409 `DEFAULT_ADDRESS_REQUIRED`.",
+            "example": true
+          },
+          "label": {
+            "type": "string",
+            "description": "Etiket; \"\" gönderilirse silinir.",
+            "example": "İş",
+            "maxLength": 40,
+            "minLength": 0
+          },
+          "line1": {
+            "type": "string",
+            "description": "Adres satırı 1; gönderildiyse boş olamaz.",
+            "example": "Büyükdere Cad. No:100",
+            "maxLength": 200,
+            "minLength": 0,
+            "pattern": ".*\\S.*"
+          },
+          "line2": {
+            "type": "string",
+            "description": "Adres satırı 2; \"\" gönderilirse silinir.",
+            "maxLength": 200,
+            "minLength": 0
+          },
+          "phone": {
+            "type": "string",
+            "description": "Alıcının telefonu; gönderildiyse boş olamaz.",
+            "example": "5551112233",
+            "maxLength": 32,
+            "minLength": 0,
+            "pattern": ".*\\S.*"
+          },
+          "postalCode": {
+            "type": "string",
+            "description": "Posta kodu; \"\" gönderilirse silinir.",
+            "example": "34394",
+            "maxLength": 16,
+            "minLength": 0
+          },
+          "recipientName": {
+            "type": "string",
+            "description": "Alıcının adı soyadı; gönderildiyse boş olamaz.",
+            "example": "Ali Veli",
+            "maxLength": 120,
+            "minLength": 0,
+            "pattern": ".*\\S.*"
+          }
+        }
+      },
+      "UpdateProfileRequest": {
+        "type": "object",
+        "description": "Kısmi profil güncellemesi. null/gönderilmemiş = değiştirme; opsiyonel alanda \"\" = sil; zorunlu alan boş olamaz. Zorunlu: firstName, lastName. Opsiyonel: phone.",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "description": "Ad; gönderildiyse boş olamaz.",
+            "example": "Ayşe",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": ".*\\S.*"
+          },
+          "lastName": {
+            "type": "string",
+            "description": "Soyad; gönderildiyse boş olamaz.",
+            "example": "Yılmaz",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": ".*\\S.*"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Telefon; \"\" gönderilirse silinir.",
+            "example": "5559998877",
+            "maxLength": 32,
+            "minLength": 0
+          }
+        }
+      },
+      "UserResponse": {
+        "type": "object",
+        "description": "Kullanıcı profili.",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "E-posta (küçük harfe normalize).",
+            "example": "ali@example.com"
+          },
+          "firstName": {
+            "type": "string",
+            "example": "Ali"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Kullanıcı id'si (UUIDv7).",
+            "example": "01a0ed1b-215d-7a27-9658-370bd146cb43"
+          },
+          "lastName": {
+            "type": "string",
+            "example": "Veli"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Telefon; yoksa null.",
+            "example": "5551112233"
+          },
+          "role": {
+            "type": "string",
+            "description": "Rol.",
+            "enum": [
+              "USER",
+              "ADMIN"
+            ],
+            "example": "USER"
+          },
+          "status": {
+            "type": "string",
+            "description": "Hesap durumu.",
+            "enum": [
+              "ACTIVE",
+              "SUSPENDED"
+            ],
+            "example": "ACTIVE"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "bearerFormat": "JWT",
+        "description": "`POST /api/auth/login` yanıtındaki `accessToken`.",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}

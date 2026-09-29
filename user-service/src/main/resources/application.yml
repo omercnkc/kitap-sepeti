@@ -39,7 +39,23 @@ server:
     include-stacktrace: never
     include-message: never
 
+springdoc:
+  # /test/** gibi yalnızca testte var olan uçlar dokümana girmez.
+  paths-to-match: /api/**, /.well-known/**
+  # Uçlarda produces yazılmadığı için başarı yanıtları aksi halde */* görünür.
+  default-produces-media-type: application/json
+  # docs/api/user-service.openapi.json diff'leri sıralama gürültüsü içermesin.
+  writer-with-order-by-keys: true
+  api-docs:
+    enabled: ${SPRINGDOC_ENABLED:true}
+  swagger-ui:
+    enabled: ${SPRINGDOC_ENABLED:true}
+    tags-sorter: alpha
+    operations-sorter: method
+
 app:
+  # Maven resource filtering ile pom'daki sürüm yazılır (OpenAPI info.version).
+  version: "@project.version@"
   jwt:
     issuer: kitapsepeti-user-service
     access-ttl: 15m
