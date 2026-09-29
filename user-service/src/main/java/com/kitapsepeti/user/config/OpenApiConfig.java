@@ -20,6 +20,7 @@ import io.swagger.v3.oas.models.responses.ApiResponse;
 import io.swagger.v3.oas.models.responses.ApiResponses;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
+import io.swagger.v3.oas.models.servers.Server;
 import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -51,6 +52,8 @@ public class OpenApiConfig {
 				.title("Kitap Sepeti — User Service API")
 				.version(version)
 				.description(description(jwtProperties)))
+			// Tanımlanmazsa springdoc isteğin host:port'unu yazar; doküman ortama göre değişir (sözleşme dosyası kayar).
+			.servers(List.of(new Server().url("/").description("Dokümanın sunulduğu sunucu")))
 			.addSecurityItem(new SecurityRequirement().addList(BEARER_AUTH))
 			.components(new Components()
 				.addSecuritySchemes(BEARER_AUTH, new SecurityScheme()
