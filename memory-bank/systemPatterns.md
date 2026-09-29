@@ -48,6 +48,13 @@
   routing key + `docs/events/<olay>.md`.
 - Worker testlerde varsayılan kapalı (`app.outbox.enabled: false`); açan test ayrı context kurar.
 
+## API dokümanı (OpenAPI)
+- Yeni uç: `@Tag` (sınıf), `@Operation(operationId, summary)`, başarı kodu `@ApiResponse` ile; uca özel hata
+  (`@ApiResponse` + `application/problem+json` + `Problem` ref). 401/400/404/500'ü `OpenApiConfig` ekler, elle yazma.
+- Public uç = sınıf/metotta boş `@SecurityRequirements` (+ SecurityConfig permitAll). Yeni `ErrorCode` enum'a
+  otomatik girer. DTO alanlarına `@Schema(description, example)`; parola/sır `accessMode = WRITE_ONLY`.
+- Uç/DTO değişince `docs/api/<servis>.openapi.json` yeniden üretilir (`GET /v3/api-docs`, pretty, BOM'suz).
+
 ## Yeni servis eklerken (KULLANICI KURALI)
 Kullanıcı, her yeni serviste kök `pom.xml`'in kontrol edilip gerekiyorsa
 güncellenmesini ve her değişikliğin NE ve NEDEN olduğunun açıklanmasını istiyor.

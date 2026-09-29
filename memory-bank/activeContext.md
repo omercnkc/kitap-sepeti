@@ -98,7 +98,7 @@
     `AddressControllerTest`.
   - PowerShell 5.1: BOM'suz `.ps1` ANSI okunur → script içindeki Türkçe literal'ler bozulur (sunucu değil).
 
-- RabbitMQ + outbox worker (64 test yeşil, henüz commit edilmedi):
+- RabbitMQ + outbox worker (64 test yeşil; commit `059a8f1`):
   - `docker-compose.yml`: `rabbitmq:4-management` (`kitapsepeti-rabbitmq`, 5672 + 127.0.0.1:15672, volume
     `rabbitmq_data`, sabit `hostname` — RabbitMQ veriyi node adına göre saklar). `.env`: `RABBITMQ_USER/PASSWORD`.
   - Bağımlılıklar: `spring-boot-starter-amqp` (+ test: `spring-boot-starter-amqp-test`,
@@ -121,7 +121,24 @@
   - PowerShell tuzağı: tr-TR kültüründe `-match '[A-Z]'` "I" harfini eşlemez (Türkçe I); `-cmatch` kullan.
   - Spring AMQP, correlated confirm'de mesaja `spring_returned_message_correlation` header'ı ekler (dokümanda not var).
 
+- OpenAPI 3 dokümantasyonu (71 test yeşil, henüz commit edilmedi; yalnızca anotasyon/doküman, davranış aynı):
+  - `springdoc-openapi-starter-webmvc-ui` 3.1.1 (kök POM `springdoc.version` + dependencyManagement). 3.x = Boot 4
+    hattı; 3.1.1'in parent'ı `spring-boot-starter-parent` 4.1.0. Çıktı OpenAPI **3.1.0**.
+  - `application.yml` `springdoc.*`: `paths-to-match: /api/**, /.well-known/**` (test controller dışarıda),
+    `default-produces-media-type: application/json`, `writer-with-order-by-keys: true` (deterministik çıktı),
+    `api-docs`/`swagger-ui.enabled: ${SPRINGDOC_ENABLED:true}`. `/v3/api-docs/**` ve `/swagger-ui/**` zaten permitAll'daydı.
+  - `app.version: "@project.version@"` → Maven resource filtering (Boot parent `@..@` delimiter) → `info.version`.
+  - `config/OpenApiConfig`: global `bearerAuth` (HTTP bearer JWT); `Problem` (+ `FieldError`) şeması, `code` enum'u
+    `ErrorCode.values()`'tan; `OpenApiCustomizer` standart hataları ekler (korumalıya 401, gövdeliye 400, `{id}`'liye 404,
+    hepsine 500) — operasyonda aynı kod varsa dokunmaz. Public uçlar (Auth, Keys) sınıf seviyesinde boş `@SecurityRequirements`
+    → dokümanda `security: []`. Profile/Addresses'te sınıf seviyesi `@ApiResponse` 403.
+  - Tüm operasyonlarda açık `operationId` (aksi halde `get`, `get_1`...). DTO'larda `@Schema`; parolalar `WRITE_ONLY`.
+  - Sözleşme dosyası: `docs/api/user-service.openapi.json` (çalışan uygulamadan `GET /v3/api-docs`, 2 boşluk girinti,
+    BOM'suz UTF-8, sonda newline). Uç/DTO değişince yeniden üretilmeli. 7 path / 11 operasyon.
+  - Test: `config/OpenApiDocsTest` (7 test; JsonPath).
+
 ## Sonraki adımlar
-- Bu adımın commit'i (kullanıcı isteyince), logout, e-posta/parola değiştirme, consumer servisler, CORS, Swagger.
+- OpenAPI adımının commit'i (kullanıcı isteyince), logout, e-posta/parola değiştirme, consumer servisler, CORS.
+- Açık konu: sözleşme dosyası elle üretiliyor; CI'da `/v3/api-docs` ile diff kontrolü yok.
 - Açık konu: outbox'ta yayınlanmış satırların temizliği (retention) yok; bilinmeyen event_type kuyruğun başını tıkar.
 - Yeni servisler eklendikçe kök POM kontrol listesini uygula (bkz. systemPatterns.md).
