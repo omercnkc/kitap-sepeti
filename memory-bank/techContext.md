@@ -14,6 +14,10 @@
   ile kökteki `.env`'den okunur (`USER_DB_USER`, `USER_DB_PASSWORD`, opsiyonel `USER_DB_HOST`/`USER_DB_PORT`).
   `ddl-auto: validate`, şema Flyway'de (`classpath:db/migration`).
 - Çalıştırma: kökten `.\mvnw.cmd -pl user-service spring-boot:run` (MySQL container healthy olmalı).
+- Container ile çalıştırma: `docker compose build user-service` + `docker compose up -d` (image
+  `kitapsepeti/user-service:local`, port 8081 — yerel `spring-boot:run` ile aynı anda çalışamaz; biri durdurulmalı).
+  Health: `/actuator/health/liveness`, `/actuator/health/readiness` (public, yalnızca status).
+- Docker Desktop 29.x, Compose v5. Base image'lar `eclipse-temurin:21-jdk` / `21-jre` (Ubuntu 26.04).
 - Windows PowerShell 5.1: `Invoke-WebRequest -SkipHttpErrorCheck` yok; 4xx için try/catch kullan.
 - Veritabanı: MySQL 8.4, kökteki `docker-compose.yml` ile (`container_name: kitapsepeti-mysql`, port 3306,
   volume `kitapsepeti_mysql_data`). Şifreler kökteki `.env`'de (git'e girmez), şablon `.env.example`.

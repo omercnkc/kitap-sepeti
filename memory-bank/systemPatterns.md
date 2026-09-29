@@ -53,7 +53,14 @@
   (`@ApiResponse` + `application/problem+json` + `Problem` ref). 401/400/404/500'ü `OpenApiConfig` ekler, elle yazma.
 - Public uç = sınıf/metotta boş `@SecurityRequirements` (+ SecurityConfig permitAll). Yeni `ErrorCode` enum'a
   otomatik girer. DTO alanlarına `@Schema(description, example)`; parola/sır `accessMode = WRITE_ONLY`.
-- Uç/DTO değişince `docs/api/<servis>.openapi.json` yeniden üretilir (`GET /v3/api-docs`, pretty, BOM'suz).
+- Uç/DTO değişince `docs/api/<servis>.openapi.json` yeniden üretilir: `OpenApiContractTest` fark varsa kırılır;
+  `-Dopenapi.contract.update=true` ile dosyayı yeniden yazar.
+
+## Container (servis başına)
+- `<servis>/Dockerfile`, build context = repo kökü (kök pom + mvnw gerekir). Çok aşamalı: pom'lar → `go-offline`
+  (cache mount) → src → `package -DskipTests` → layered extract → JRE runtime, sabit UID/GID 10001 non-root.
+- Sırlar image'a girmez (`.dockerignore`); compose'ta env yalnızca tek tek, anahtar dosyaları compose `secrets`.
+- Readiness'a yalnızca isteği karşılamak için şart olan bağımlılık (DB) girer; mesaj broker'ı girmez (outbox tamponlar).
 
 ## Yeni servis eklerken (KULLANICI KURALI)
 Kullanıcı, her yeni serviste kök `pom.xml`'in kontrol edilip gerekiyorsa

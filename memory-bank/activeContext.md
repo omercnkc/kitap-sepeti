@@ -121,7 +121,7 @@
   - PowerShell tuzağı: tr-TR kültüründe `-match '[A-Z]'` "I" harfini eşlemez (Türkçe I); `-cmatch` kullan.
   - Spring AMQP, correlated confirm'de mesaja `spring_returned_message_correlation` header'ı ekler (dokümanda not var).
 
-- OpenAPI 3 dokümantasyonu (71 test yeşil, henüz commit edilmedi; yalnızca anotasyon/doküman, davranış aynı):
+- OpenAPI 3 dokümantasyonu (71 test yeşil; commit `edacb78`):
   - `springdoc-openapi-starter-webmvc-ui` 3.1.1 (kök POM `springdoc.version` + dependencyManagement). 3.x = Boot 4
     hattı; 3.1.1'in parent'ı `spring-boot-starter-parent` 4.1.0. Çıktı OpenAPI **3.1.0**.
   - `application.yml` `springdoc.*`: `paths-to-match: /api/**, /.well-known/**` (test controller dışarıda),
@@ -137,8 +137,38 @@
     BOM'suz UTF-8, sonda newline). Uç/DTO değişince yeniden üretilmeli. 7 path / 11 operasyon.
   - Test: `config/OpenApiDocsTest` (7 test; JsonPath).
 
+- Docker image + Compose + Actuator + sözleşme drift testi (80 test yeşil, henüz commit edilmedi):
+  - `OpenApiContractTest`: `/v3/api-docs` ↔ `docs/api/user-service.openapi.json` anlamsal (JsonNode) karşılaştırma,
+    farklı JSON Pointer yollarını listeler. Yeniden üretim:
+    `.\mvnw.cmd -pl user-service test "-Dtest=OpenApiContractTest" "-Dopenapi.contract.update=true"`
+    (Maven `-D` surefire JVM'ine geçiyor). Yazım biçimi (2 boşluk, `"ad": değer`, LF) node `JSON.stringify(d,null,2)` ile birebir.
+  - `OpenApiConfig`: `servers: [{url: "/"}]` sabit — aksi halde springdoc isteğin host:port'unu yazar (test `http://localhost`,
+    gerçek `:8081`) ve drift testi hep kırılır.
+  - Actuator: yalnızca `health` expose, `show-details: never`, `probes.enabled`, liveness = `livenessState`,
+    readiness = `readinessState, db` (RabbitMQ yok), `endpoints.web.discovery.enabled: false` (`/actuator` 404).
+    SecurityConfig permitAll'a `GET /actuator/health`, `/actuator/health/**`. Kök `/actuator/health` yanıtı
+    `{"status","groups"}` (Boot grup adlarını listeler; kapatma ayarı yok).
+  - Boot 4 health paketleri: `org.springframework.boot.health.actuate.endpoint.HealthEndpointGroups`,
+    `org.springframework.boot.health.registry.HealthContributorRegistry` (modül `spring-boot-health`).
+  - `user-service/Dockerfile` (context = kök): temurin 21 jdk build (go-offline katmanı + `/root/.m2` cache mount) →
+    `jarmode=tools extract --layers --launcher` → temurin 21 jre runtime, `app` 10001:10001, ENTRYPOINT
+    `java org.springframework.boot.loader.launch.JarLauncher` (manifest Main-Class ile doğrulandı). Image 594 MB (base JRE 459 MB).
+    JRE image'ında curl/wget var → compose healthcheck `curl -fsS`.
+  - Compose `user-service`: env yalnızca gerekenler (env_file YOK), JWT anahtarları compose secrets → `/run/secrets/*`.
+    Docker Desktop'ta secret dosyaları root:root 0777 bağlanır (non-root okur). Linux host'ta host dosya izni geçerli olur.
+  - `.gitattributes` (mvnw/`*.sh` LF, mvnw.cmd CRLF), `.dockerignore` (sırlar, target, docs, memory-bank, src/test).
+  - DB kesintisi (aynı adım, sonradan): `spring.datasource.hikari.connection-timeout: 5000` (ms; `5s` yazımı
+    HikariDataSource'un long alanına BAĞLANMAZ, context açılmaz). DB kapalıyken readiness ~5 s'de 503 DOWN, login ~5 s'de
+    500 INTERNAL_ERROR ProblemDetail. `OutboxRelay.poll()` `DataAccessException | TransactionException` → tek satır WARN
+    `Outbox poll skipped, database unavailable: <SimpleName>`; diğerleri scheduler error handler'ına (ERROR + stack).
+    Test: `OutboxRelayDatabaseFailureTest` (context'siz; stub transaction manager + Mockito repository, OutputCapture).
+    DB dönünce restart gerekmeden healthy (~10 s).
+  - Kalan log gürültüsü (dokunulmadı): `DataSourceHealthIndicator` her health çağrısında WARN + ~180 satır stack trace;
+    Hikari `ProxyConnection` kesinti anında bir kez WARN + stack; 500'lerde `GlobalExceptionHandler` ERROR + stack (tasarım gereği).
+    Readiness DB yokken ~5,0 s sürüyor; compose healthcheck `curl --max-time 4` bu yüzden 503 yerine timeout (28) ile fail eder.
+
 ## Sonraki adımlar
-- OpenAPI adımının commit'i (kullanıcı isteyince), logout, e-posta/parola değiştirme, consumer servisler, CORS.
-- Açık konu: sözleşme dosyası elle üretiliyor; CI'da `/v3/api-docs` ile diff kontrolü yok.
+- Docker adımının commit'i (kullanıcı isteyince), logout, e-posta/parola değiştirme, consumer servisler, CORS.
+- Açık konular: DataSourceHealthIndicator stack trace gürültüsü; CI pipeline yok (drift testi yalnızca yerel `mvnw test`'te).
 - Açık konu: outbox'ta yayınlanmış satırların temizliği (retention) yok; bilinmeyen event_type kuyruğun başını tıkar.
 - Yeni servisler eklendikçe kök POM kontrol listesini uygula (bkz. systemPatterns.md).
