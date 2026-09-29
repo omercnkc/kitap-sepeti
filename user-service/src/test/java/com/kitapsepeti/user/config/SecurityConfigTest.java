@@ -15,11 +15,13 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@ActiveProfiles("test")
 @Import(TestcontainersConfiguration.class)
 class SecurityConfigTest {
 
@@ -49,9 +51,9 @@ class SecurityConfigTest {
 	}
 
 	@Test
-	void jwksIsPermittedAndReturns404UntilEndpointExists() throws Exception {
+	void jwksIsPermittedWithoutToken() throws Exception {
 		MvcResult result = mockMvc.perform(get("/.well-known/jwks.json"))
-			.andExpect(status().isNotFound())
+			.andExpect(status().isOk())
 			.andReturn();
 
 		assertNoSession(result);

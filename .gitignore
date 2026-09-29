@@ -4,6 +4,12 @@ target/
 ### Environment ###
 .env
 
+### Secrets ###
+secrets/
+*.pem
+# Test-only key pair, safe to commit.
+!user-service/src/test/resources/jwt/*.pem
+
 ### IntelliJ IDEA ###
 .idea
 *.iws

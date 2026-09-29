@@ -21,3 +21,11 @@ spring:
 
 server:
   port: 8081
+
+app:
+  jwt:
+    issuer: kitapsepeti-user-service
+    access-ttl: 15m
+    refresh-ttl: 14d
+    private-key-location: ${JWT_PRIVATE_KEY_LOCATION}
+    public-key-location: ${JWT_PUBLIC_KEY_LOCATION}
