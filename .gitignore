@@ -1,6 +1,9 @@
 target/
 .mvn/wrapper/maven-wrapper.jar
 
+### Environment ###
+.env
+
 ### IntelliJ IDEA ###
 .idea
 *.iws
