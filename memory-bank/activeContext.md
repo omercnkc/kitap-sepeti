@@ -26,6 +26,22 @@
 
 - SecurityConfig (BCrypt + stateless deny-by-default filter chain) eklendi; 11 test yeşil.
 
+- RS256 JWT altyapısı tamamlandı (18 test yeşil):
+  - Anahtarlar: kökte `secrets/jwt/{private,public}.pem` (git dışı), test-only çift
+    `user-service/src/test/resources/jwt/test-{private,public}.pem` (izleniyor). `.gitignore`: `secrets/`,
+    `*.pem`, `!user-service/src/test/resources/jwt/*.pem`.
+  - `.env`: `JWT_PRIVATE_KEY_LOCATION` / `JWT_PUBLIC_KEY_LOCATION` (file: mutlak yol); `.env.example` güncel.
+  - Bağımlılık: `spring-boot-starter-security-oauth2-resource-server` (Boot 4 adı; eski
+    `spring-boot-starter-oauth2-resource-server` deprecated). Nimbus 10.9.1 gelir, jjwt yok.
+  - `app.jwt.*` (issuer kitapsepeti-user-service, access 15m, refresh 14d) → `security/JwtProperties`
+    (`RsaKeyConfig` üzerinde `@EnableConfigurationProperties`).
+  - `config/RsaKeyConfig`: RSAKey (kid = RFC 7638 thumbprint), JWKSet, JwtEncoder, JwtDecoder (RS256 +
+    issuer + timestamp; saat = Clock bean'i). `config/ClockConfig`: `Clock.systemUTC()` (@ConditionalOnMissingBean).
+  - `service/JwtService.issueAccessToken(User)` → `AccessToken(value, expiresAt)`; claims: iss, sub, role, iat, exp, jti.
+  - `controller/JwksController`: `GET /.well-known/jwks.json` → yalnızca public JWKS.
+  - Spring context'li testler `@ActiveProfiles("test")` → `src/test/resources/application-test.yml` test anahtarları.
+  - `http.oauth2ResourceServer` henüz AÇIK DEĞİL (9. adım).
+
 ## Sonraki adımlar
 - 401 için JSON gövde, service/DTO/controller katmanı, JWT filter + JWKS endpoint (`app.jwt.*`), CORS.
 - Yeni servisler eklendikçe kök POM kontrol listesini uygula (bkz. systemPatterns.md).
