@@ -17,6 +17,10 @@
 - Container ile çalıştırma: `docker compose build user-service` + `docker compose up -d` (image
   `kitapsepeti/user-service:local`, port 8081 — yerel `spring-boot:run` ile aynı anda çalışamaz; biri durdurulmalı).
   Health: `/actuator/health/liveness`, `/actuator/health/readiness` (public, yalnızca status).
+- Adminer (profil `tools`): aç `docker compose --profile tools up -d adminer`, kapat
+  `docker compose --profile tools stop adminer`. Adres http://localhost:8090; giriş: System MySQL, Server `mysql`
+  (localhost değil), Username `user_svc`, Password `.env`'deki `USER_DB_PASSWORD`, Database `user_db`. Salt okunur kullanım.
+- Terminalden DB: `docker compose exec mysql mysql -uuser_svc -p user_db` (parola istemi yazılanı göstermez).
 - Docker Desktop 29.x, Compose v5. Base image'lar `eclipse-temurin:21-jdk` / `21-jre` (Ubuntu 26.04).
 - Windows PowerShell 5.1: `Invoke-WebRequest -SkipHttpErrorCheck` yok; 4xx için try/catch kullan.
 - Veritabanı: MySQL 8.4, kökteki `docker-compose.yml` ile (`container_name: kitapsepeti-mysql`, port 3306,

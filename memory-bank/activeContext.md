@@ -167,6 +167,11 @@
     Hikari `ProxyConnection` kesinti anında bir kez WARN + stack; 500'lerde `GlobalExceptionHandler` ERROR + stack (tasarım gereği).
     Readiness DB yokken ~5,0 s sürüyor; compose healthcheck `curl --max-time 4` bu yüzden 503 yerine timeout (28) ile fail eder.
 
+- Adminer (opsiyonel geliştirme aracı, henüz commit edilmedi): compose'da `adminer` servisi, `profiles: ["tools"]` →
+  normal `docker compose up -d` açmaz. Port yalnızca `127.0.0.1:8090`; `ADMINER_DEFAULT_SERVER: mysql`, parola/env_file yok.
+  Yalnızca bakmak için; şema değişikliği Flyway ile (Adminer'dan tablo değiştirmek `ddl-auto: validate`'i kırar).
+  Kökte README yok; kullanım notu burada ve techContext'te.
+
 ## Sonraki adımlar
 - Docker adımının commit'i (kullanıcı isteyince), logout, e-posta/parola değiştirme, consumer servisler, CORS.
 - Açık konular: DataSourceHealthIndicator stack trace gürültüsü; CI pipeline yok (drift testi yalnızca yerel `mvnw test`'te).
