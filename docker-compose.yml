@@ -41,6 +41,51 @@ services:
       retries: 10
       start_period: 30s
 
+  user-service:
+    build:
+      context: .
+      dockerfile: user-service/Dockerfile
+    image: kitapsepeti/user-service:local
+    container_name: kitapsepeti-user-service
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    secrets:
+      - jwt_private_key
+      - jwt_public_key
+    # .env toplu verilmez (env_file yok); yalnızca gereken değişkenler. .env'deki JWT_* yolları
+    # yerel (Windows) çalıştırma içindir; container anahtarları secret dosyalarından okur.
+    environment:
+      USER_DB_HOST: mysql
+      USER_DB_PORT: "3306"
+      USER_DB_USER: ${USER_DB_USER}
+      USER_DB_PASSWORD: ${USER_DB_PASSWORD}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      JWT_PRIVATE_KEY_LOCATION: file:/run/secrets/jwt_private_key
+      JWT_PUBLIC_KEY_LOCATION: file:/run/secrets/jwt_public_key
+    # Readiness yalnızca DB'ye bakar; RabbitMQ kapalıyken servis healthy kalır (olaylar outbox'ta bekler).
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "--max-time", "4", "-o", "/dev/null", "http://localhost:8081/actuator/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    mem_limit: 768m
+
+secrets:
+  jwt_private_key:
+    file: ./secrets/jwt/private.pem
+  jwt_public_key:
+    file: ./secrets/jwt/public.pem
+
 volumes:
   mysql_data:
   rabbitmq_data:

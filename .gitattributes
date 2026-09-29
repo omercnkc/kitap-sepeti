@@ -1,0 +1,4 @@
+# Linux container'da çalışan script'ler CRLF ile checkout edilirse "/bin/sh^M: bad interpreter" hatası verir.
+mvnw text eol=lf
+*.sh text eol=lf
+mvnw.cmd text eol=crlf

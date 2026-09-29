@@ -1,0 +1,13 @@
+# Build context = repo kökü. Sırlar ve build'e gerekmeyen her şey image'a (ve build cache'ine) girmez.
+.git
+.env
+.env.*
+secrets/
+**/*.pem
+**/target/
+.idea
+.vscode
+*.iml
+memory-bank/
+docs/
+**/src/test/
