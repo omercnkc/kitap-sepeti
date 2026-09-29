@@ -22,6 +22,17 @@
   zorunlu alanlar için public constructor. `@Data`/`@ToString`/`@EqualsAndHashCode` yok.
   Not: `boolean isDefault` → Lombok `isDefault()` / `setDefault(boolean)` üretir.
 
+## Güvenlik (user-service)
+- `config/SecurityConfig`: BCrypt (strength 10) `PasswordEncoder`; stateless `SecurityFilterChain`,
+  csrf/httpBasic/formLogin/logout kapalı, deny-by-default. permitAll: POST /api/auth/{register,login,refresh},
+  GET /.well-known/jwks.json, /v3/api-docs/**, /swagger-ui/**, /swagger-ui.html, /error.
+  Kimliksiz istek → `HttpStatusEntryPoint(401)` (Basic başlığı yok).
+- AuthenticationManager / UserDetailsService YOK; giriş AuthService'te `passwordEncoder.matches()` ile elle.
+- `UserDetailsServiceAutoConfiguration` exclude (Boot 4 paketi:
+  `org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration`), `@SpringBootApplication(exclude=...)`.
+- Boot 4 MockMvc: `org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc`
+  (`spring-boot-starter-webmvc-test` içinde).
+
 ## Test
 - Repository testleri: `@DataJpaTest` + `@AutoConfigureTestDatabase(replace = NONE)` +
   `@Import(TestcontainersConfiguration.class)`; Flyway test container'ında çalışır.

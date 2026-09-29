@@ -24,6 +24,8 @@
   uygulamış başka bir DB varsa orada da repair gerekir.
 - Kural: uygulanmış migration dosyaları (yorum dahil) bir daha değiştirilmez; değişiklik = yeni V2, V3...
 
+- SecurityConfig (BCrypt + stateless deny-by-default filter chain) eklendi; 11 test yeşil.
+
 ## Sonraki adımlar
-- Service/DTO katmanı, SecurityConfig, JWT (`app.jwt.*`).
+- 401 için JSON gövde, service/DTO/controller katmanı, JWT filter + JWKS endpoint (`app.jwt.*`), CORS.
 - Yeni servisler eklendikçe kök POM kontrol listesini uygula (bkz. systemPatterns.md).
