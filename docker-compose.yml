@@ -19,5 +19,28 @@ services:
       retries: 10
       start_period: 30s
 
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: kitapsepeti-rabbitmq
+    # RabbitMQ verisini node adına (rabbit@<hostname>) göre saklar; sabit hostname olmadan
+    # container yeniden oluşturulunca volume'daki exchange/kuyruk/mesajlar görünmez olur.
+    hostname: kitapsepeti-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "127.0.0.1:15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
 volumes:
   mysql_data:
+  rabbitmq_data:

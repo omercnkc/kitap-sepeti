@@ -1,9 +1,14 @@
 package com.kitapsepeti.user.exception;
 
+import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 
 import com.kitapsepeti.user.security.BearerChallenge;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
+import jakarta.validation.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -65,6 +70,20 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 		String constraint = DbConstraints.nameOf(ex);
 		ProblemDetails.log(log, code, request, ex, (constraint != null) ? "constraint=" + constraint : null);
 		return respond(code, code.defaultDetail(), request);
+	}
+
+	/**
+	 * Sınıf seviyesinde {@code @Validated} bean'lerin metot doğrulaması (AOP) bu exception'ı fırlatır.
+	 * {@code field} = property path'in son parçası (ör. {@code update.request.email} → {@code email}).
+	 */
+	@ExceptionHandler(ConstraintViolationException.class)
+	public ResponseEntity<Object> handleConstraintViolation(ConstraintViolationException ex,
+			HttpServletRequest request) {
+		ErrorCode code = ErrorCode.VALIDATION_FAILED;
+		ProblemDetails.log(log, code, request, ex);
+		ProblemDetail problem = ProblemDetails.create(code, code.defaultDetail(), request);
+		problem.setProperty("errors", violations(ex.getConstraintViolations()));
+		return ResponseEntity.status(code.status()).body(problem);
 	}
 
 	/**
@@ -167,6 +186,24 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 				return new FieldViolation(field, message);
 			})
 			.toList();
+	}
+
+	/** {@link ConstraintViolation#getInvalidValue()} bilinçli olarak kullanılmaz. Set sırasız; yanıt kararlı olsun diye sıralanır. */
+	private static List<FieldViolation> violations(Set<ConstraintViolation<?>> constraintViolations) {
+		return constraintViolations.stream()
+			.map(violation -> new FieldViolation(lastNodeName(violation.getPropertyPath()), violation.getMessage()))
+			.sorted(Comparator.comparing(FieldViolation::field).thenComparing(FieldViolation::message))
+			.toList();
+	}
+
+	private static String lastNodeName(Path path) {
+		String name = "";
+		for (Path.Node node : path) {
+			if (node.getName() != null) {
+				name = node.getName();
+			}
+		}
+		return name;
 	}
 
 }

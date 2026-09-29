@@ -3,3 +3,6 @@ app:
   jwt:
     private-key-location: classpath:jwt/test-private.pem
     public-key-location: classpath:jwt/test-public.pem
+  # Worker arka planda outbox satırlarını kilitleyip yayınlamasın; yalnızca OutboxRelayIT açar.
+  outbox:
+    enabled: false

@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -19,7 +20,18 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/test/exceptions")
 public class ExceptionTestController {
 
+	private final ValidatedTestService validatedTestService;
+
+	public ExceptionTestController(ValidatedTestService validatedTestService) {
+		this.validatedTestService = validatedTestService;
+	}
+
 	public record SampleRequest(@Email String email, @Size(min = 8, max = 72) String password) {
+	}
+
+	@GetMapping("/constraint-violation")
+	public void constraintViolation(@RequestParam String name, @RequestParam String email) {
+		validatedTestService.check(name, email);
 	}
 
 	@GetMapping("/email-exists")

@@ -75,6 +75,30 @@ class GlobalExceptionHandlerTest {
 
 	@Test
 	@WithMockUser
+	void constraintViolationBecomes400WithoutInvalidValues(CapturedOutput output) throws Exception {
+		String body = mockMvc.perform(get(BASE + "/constraint-violation")
+				.param("name", "cok-uzun-isim")
+				.param("email", "gecersiz-posta"))
+			.andExpect(status().isBadRequest())
+			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+			.andExpect(jsonPath("$.status").value(400))
+			.andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+			.andExpect(jsonPath("$.detail").value(ErrorCode.VALIDATION_FAILED.defaultDetail()))
+			.andExpect(jsonPath("$.instance").value(BASE + "/constraint-violation"))
+			.andExpect(jsonPath("$.errors.length()").value(2))
+			.andExpect(jsonPath("$.errors[0].field").value("email"))
+			.andExpect(jsonPath("$.errors[1].field").value("name"))
+			.andExpect(jsonPath("$.errors[0].message").isNotEmpty())
+			.andExpect(jsonPath("$.errors[0].invalidValue").doesNotExist())
+			.andReturn().getResponse().getContentAsString();
+
+		assertThat(body).doesNotContain("cok-uzun-isim").doesNotContain("gecersiz-posta").doesNotContain("check.");
+		assertThat(output).contains("GET " + BASE + "/constraint-violation -> VALIDATION_FAILED");
+		assertThat(output).doesNotContain("cok-uzun-isim").doesNotContain("gecersiz-posta");
+	}
+
+	@Test
+	@WithMockUser
 	void malformedJsonDoesNotLeakParserDetails() throws Exception {
 		String body = mockMvc.perform(post(BASE + "/validate")
 				.contentType(MediaType.APPLICATION_JSON)
