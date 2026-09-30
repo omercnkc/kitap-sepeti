@@ -1,0 +1,35 @@
+spring:
+  application:
+    name: catalog-service
+  config:
+    import: optional:file:../.env[.properties],optional:file:.env[.properties]
+  datasource:
+    url: jdbc:mysql://${CATALOG_DB_HOST:localhost}:${CATALOG_DB_PORT:3306}/catalog_db
+    username: ${CATALOG_DB_USER}
+    password: ${CATALOG_DB_PASSWORD}
+    hikari:
+      # DB kesintisinde istekler varsayılan 30 sn yerine ~5 sn'de hata döner.
+      # Milisaniye: HikariDataSource alanı long olduğu için "5s" gibi Duration yazımı bağlanmaz.
+      connection-timeout: 5000
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+logging:
+  level:
+    # SQL hata mesajı kullanıcı verisi içerebilir; WARN satırları kapatılır.
+    org.hibernate.orm.jdbc.error: ERROR
+
+server:
+  port: 8082
+  error:
+    include-stacktrace: never
+    include-message: never

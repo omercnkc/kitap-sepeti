@@ -1,0 +1,5 @@
+# Bağlantı bilgisi @ServiceConnection ile Testcontainers'tan gelir; testler .env'deki CATALOG_DB_* değerlerine bağımlı olmamalı.
+spring:
+  datasource:
+    username: test
+    password: test

@@ -10,8 +10,13 @@ services:
       MYSQL_DATABASE: user_db
       MYSQL_USER: ${USER_DB_USER}
       MYSQL_PASSWORD: ${USER_DB_PASSWORD}
+      # infra/mysql/init/10-catalog-db.sh okur (catalog_db şeması + kullanıcısı).
+      CATALOG_DB_USER: ${CATALOG_DB_USER}
+      CATALOG_DB_PASSWORD: ${CATALOG_DB_PASSWORD}
     volumes:
       - mysql_data:/var/lib/mysql
+      # Yalnızca boş volume'da otomatik çalışır; mevcut volume'da script elle çalıştırılır.
+      - ./infra/mysql/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD"]
       interval: 10s

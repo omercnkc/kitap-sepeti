@@ -68,6 +68,7 @@
 	<!-- [1] Build'e dahil edilecek servisler. Her yeni servis klasörü buraya eklenir. -->
 	<modules>
 		<module>user-service</module>
+		<module>catalog-service</module>
 	</modules>
 
 	<!--
