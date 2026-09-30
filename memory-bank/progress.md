@@ -8,8 +8,11 @@
   SKIP LOCKED), OpenAPI 3 dokümanı + Swagger UI + `docs/api/user-service.openapi.json` (drift testi ile korunur),
   Actuator liveness/readiness.
 - Testler Testcontainers (MySQL + RabbitMQ) ile; 83 test yeşil.
+- catalog-service iskeleti (port 8082): `catalog_db` + `catalog_svc` (init script `infra/mysql/init/10-catalog-db.sh`),
+  Hikari/Flyway bağlanıyor, context testi yeşil (1 test). Henüz tablo/uç yok, commit edilmedi.
 
 ## Yapılacaklar
+- catalog-service: V1 şema, entity, API, security, springdoc, actuator, Dockerfile + compose servisi.
 - Docker/Actuator adımının commit'i.
 - Logout, e-posta/parola değiştirme, CORS.
 - Diğer servisler (katalog, sepet, sipariş vb. — henüz kararlaştırılmadı) ve olay consumer'ları.

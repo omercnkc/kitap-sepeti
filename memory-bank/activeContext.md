@@ -172,7 +172,30 @@
   Yalnızca bakmak için; şema değişikliği Flyway ile (Adminer'dan tablo değiştirmek `ddl-auto: validate`'i kırar).
   Kökte README yok; kullanım notu burada ve techContext'te.
 
+- catalog-service iskeleti (henüz commit edilmedi; tablo/entity/security/amqp/springdoc/actuator YOK):
+  - Kök POM `<modules>`'e `catalog-service` eklendi; başka kök POM değişikliği gerekmedi (yeni kütüphane ailesi yok,
+    Lombok zaten kökte). Servis POM'u: webmvc, data-jpa, validation, flyway + flyway-mysql, mysql-connector-j (runtime);
+    test: user-service'in MySQL Testcontainers seti (RabbitMQ/amqp-test/awaitility/security-test hariç). Surefire `*IT` include'u aynı.
+  - Ana sınıf `com.kitapsepeti.catalog.CatalogServiceApplication` (exclude yok; security bağımlılığı yok). Port 8082.
+  - `application.yml` user-service kalıbı: `CATALOG_DB_HOST/PORT/USER/PASSWORD`, `catalog_db`, Hikari `connection-timeout: 5000`
+    (ms; `5s` bağlanmaz), validate, open-in-view false, UTC, Flyway `classpath:db/migration` (şimdilik yalnızca `.gitkeep`).
+    Açılışta Flyway `No migrations found` WARN'ı ve `catalog_db`'de boş `flyway_schema_history` beklenen durum.
+  - Test: `TestcontainersConfiguration` (yalnızca MySQL), `CatalogServiceApplicationTests` (`@ActiveProfiles("test")`),
+    `application-test.yml` datasource username/password sabit (.env'e bağımlılık yok).
+  - DB çoklu şema yöntemi kararlaştırıldı: `infra/mysql/init/NN-<servis>-db.sh` (LF, `.gitattributes` `*.sh eol=lf`),
+    compose mysql'e `./infra/mysql/init:/docker-entrypoint-initdb.d:ro` + `CATALOG_DB_USER/PASSWORD` env.
+    Script gövdesi `( set -eu ... )` alt kabukta: entrypoint çalıştırılabilir olmayan .sh'leri source eder (Linux host'ta
+    git modu 644), `set -u` entrypoint'e sızmasın. Root parolası `MYSQL_PWD` ile; SQL idempotent (IF NOT EXISTS).
+    Parola SQL'e tek tırnakla gömülür → yalnızca alfanümerik.
+  - Entrypoint init klasörünü yalnızca BOŞ volume'da çalıştırır; mevcut volume'da elle:
+    `docker compose exec mysql sh /docker-entrypoint-initdb.d/10-catalog-db.sh` (iki kez çalıştırıldı, hatasız).
+  - Yetki doğrulandı: catalog_svc yalnızca catalog_db görür, `user_db`/`CREATE DATABASE x` → 1044; user_svc catalog_db görmez.
+  - PowerShell 5.1: `docker compose exec mysql sh -c '...'` içindeki çift tırnaklar native argümana geçerken kaybolur.
+    Parolayı göstermeden bağlanmak için: `"SQL;" | docker compose exec -T mysql sh -c 'MYSQL_PWD=$CATALOG_DB_PASSWORD mysql -ucatalog_svc'`.
+  - Kökte hâlâ README yok (port haritası eklenmedi). Portlar: user-service 8081, catalog-service 8082, adminer 8090.
+
 ## Sonraki adımlar
+- catalog-service: şema (V1), entity, security (resource server, user-service JWKS), springdoc, actuator, Dockerfile + compose servisi.
 - Docker adımının commit'i (kullanıcı isteyince), logout, e-posta/parola değiştirme, consumer servisler, CORS.
 - Açık konular: DataSourceHealthIndicator stack trace gürültüsü; CI pipeline yok (drift testi yalnızca yerel `mvnw test`'te).
 - Açık konu: outbox'ta yayınlanmış satırların temizliği (retention) yok; bilinmeyen event_type kuyruğun başını tıkar.
