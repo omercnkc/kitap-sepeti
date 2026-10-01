@@ -262,9 +262,7 @@
     `OAuth2ResourceServerProperties`'ten (Boot 4 paketi `org.springframework.boot.security.oauth2.server.resource.autoconfigure`),
     issuer `security/JwtProperties` (`app.jwt.issuer`, @Validated @NotBlank). JWKS istemcisi RestTemplate connect 2 s / read 3 s.
     issuer-uri/OIDC discovery KULLANILMAZ (issuer URI değil). JWKS lazy: açılışta istek yok; user-service kapalıyken başlar.
-  - Bilinen davranış (düzeltilmedi): JWKS erişilemezken token'lı korumalı istek → Security 7 `AuthenticationServiceException`'ı
-    yeniden fırlatır → Boot varsayılan `/error` JSON'u ile **500** (ProblemDetail değil, ERROR + stack trace). Token'sız/public
-    istekler etkilenmez. Düzeltme seçeneği: resource server'a failure handler + 503 kodu.
+  - JWKS erişilemezken 500 sorunu sonraki adımda 503 ile çözüldü (aşağıya bak).
   - user-service token'larında `typ` yok; `createDefaultWithIssuer` bunu reddetmiyor (uçtan uca doğrulandı).
   - Testler: `support/TestJwt` (user-service test anahtarıyla imza, thumbprint kid; yabancı anahtar, alg none),
     `support/JwksServer` (JDK `com.sun.net.httpserver.HttpServer`, loopback rastgele port, istek sayacı), `ApiTestSupport`
@@ -274,9 +272,27 @@
   - Test anahtarı `catalog-service/src/test/resources/jwt/` (user-service'ten kopya); kök `.gitignore`'a
     `!catalog-service/src/test/resources/jwt/*.pem` eklendi.
   - Uçtan uca (compose user-service): USER token → /api/admin/x 403; role=ADMIN + yeniden login → 404; token'sız /api/books → 404.
+  - Commit `c6cee96` (+ memory-bank `a46cee5`), push edildi.
+
+- catalog-service JWKS kesintisi → 503 (65 test yeşil; henüz commit edilmedi):
+  - `ErrorCode.AUTHENTICATION_UNAVAILABLE` (503, WARN). Retry-After YOK (süre bilinmiyor), WWW-Authenticate YOK.
+  - `security/ProblemDetailAuthenticationFailureHandler`: `AuthenticationServiceException` (JWKS'e ulaşılamaması / anahtar alınamaması;
+    JwtAuthenticationProvider BadJwtException dışındaki JwtException'ları buna çevirir) → 503 ProblemDetail; diğer
+    AuthenticationException'lar → mevcut entry point (401 + WWW-Authenticate aynen). Log tek WARN satırı:
+    `GET /api/admin/x -> AUTHENTICATION_UNAVAILABLE (cause=ConnectException)` (kök neden kısa adı; mesaj JWKS URL'si içerdiği için yazılmaz).
+  - Bağlama: Security 7.1 resource server DSL'inde failure handler ayarı YOK (yalnızca entryPoint/accessDeniedHandler/bearerTokenResolver/
+    authenticationManagerResolver). `OAuth2ResourceServerConfigurer.configure` BearerTokenAuthenticationFilter'ı entry point ayarından
+    SONRA `postProcess`'ten geçirir → `rs.withObjectPostProcessor(ObjectPostProcessor<BearerTokenAuthenticationFilter>)` içinde
+    `setAuthenticationFailureHandler`. ObjectPostProcessor generic metotlu → lambda değil anonim sınıf.
+  - Nimbus/Spring JWKS hatayı önbelleğe almaz: kesinti sonrası ilk istek yeniden çeker (test + uçtan uca doğrulandı).
+    Anahtar alındıktan sonra JWKS kapanırsa önbellek süresi içinde doğrulama sürer.
+  - Testler: `security/JwksOutageTest` (4; sabit port, sıralı adımlar: 503 + tek WARN → token'sız 401 / public 200 → sunucu açılınca 200 →
+    kapanınca önbellekten 200), `exception/DbConstraintsTest` (4, context'siz), SecurityRulesTest'e bozuk imza testi.
+    `support/JwksServer`: `start(json, port)`, `freePort()`, statik `jwkSetUri(port)`.
+  - Uçtan uca: user-service kapalı + catalog yeniden başlatılmış → 503 AUTHENTICATION_UNAVAILABLE; user-service healthy → aynı token 404.
 
 ## Sonraki adımlar
-- catalog-service: servis + API (admin CRUD, public okuma), JWKS erişilemezken 500 davranışı kararı,
+- catalog-service: servis + API (admin CRUD, public okuma),
   springdoc, actuator, Dockerfile + compose servisi (`USER_SERVICE_JWKS_URI` compose'ta user-service adına).
 - Docker adımının commit'i (kullanıcı isteyince), logout, e-posta/parola değiştirme, consumer servisler, CORS.
 - Açık konular: DataSourceHealthIndicator stack trace gürültüsü; CI pipeline yok (drift testi yalnızca yerel `mvnw test`'te).

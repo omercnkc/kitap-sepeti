@@ -13,7 +13,10 @@
 - catalog-service V1 şeması (8 tablo) yerel `catalog_db`'ye uygulandı (commit `b32141e`).
 - catalog-service entity + repository katmanı (validate geçiyor; commit `ed3a62c`, `afce68a`).
 - catalog-service hata altyapısı (user-service kopyası + Catalog kodları/kısıt eşlemesi) ve OAuth2 Resource Server
-  (user-service JWKS, RS256 + iss + exp, lazy JWKS); 56 test yeşil (önceki 30 + güvenlik 15 + hata 11). Henüz commit edilmedi.
+  (user-service JWKS, RS256 + iss + exp, lazy JWKS); commit `c6cee96`.
+- catalog-service JWKS kesintisi: token'lı korumalı istek 503 AUTHENTICATION_UNAVAILABLE ProblemDetail (eskiden 500);
+  DbConstraints birim testleri. 65 test yeşil. Henüz commit edilmedi.
+  (Kapatılan bilinen sorun: "JWKS erişilemezken 500, Boot varsayılan JSON".)
 
 ## Yapılacaklar
 - catalog-service: servis + API, springdoc, actuator, Dockerfile + compose servisi.
@@ -21,10 +24,11 @@
 - Logout, e-posta/parola değiştirme, CORS.
 - Diğer servisler (katalog, sepet, sipariş vb. — henüz kararlaştırılmadı) ve olay consumer'ları.
 - CI pipeline (testler + image build).
+- Gateway fazı backlog'u: kesintiye dayanıklı (outage-tolerant) JWKS önbelleği — anahtar önbellek süresi dolduktan sonra
+  user-service/JWKS kapalıysa son bilinen anahtarla doğrulamaya devam (şu an önbellek süresi içinde 200, sonrasında 503).
 
 ## Bilinen sorunlar
 - MySQL CHECK ihlali (3819, HY000) JdbcTemplate'te `UncategorizedSQLException` olur; JPA yolunda ise
   `DataIntegrityViolationException` (Hibernate çevirir). catalog-service'te CHECK'e dokunan yazımlar JPA üzerinden yapılmalı.
 - Outbox'ta yayınlanmış satırlar temizlenmiyor; bilinmeyen `event_type` kuyruğun başını tıkar.
-- catalog-service: JWKS (user-service) erişilemezken token'lı korumalı istek 500 döner (Boot varsayılan JSON, ProblemDetail değil).
 - DB kapalıyken `DataSourceHealthIndicator` her health çağrısında WARN + uzun stack trace yazıyor (log gürültüsü).
