@@ -1,0 +1,5 @@
+# Yalnızca yerel geliştirme: örnek katalog verisi (db/seed, Flyway repeatable migration) da yüklenir.
+# Varsayılan ve test profilleri yalnızca db/migration'ı görür.
+spring:
+  flyway:
+    locations: classpath:db/migration,classpath:db/seed

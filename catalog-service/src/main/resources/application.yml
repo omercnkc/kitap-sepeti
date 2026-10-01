@@ -19,9 +19,14 @@ spring:
       hibernate:
         jdbc:
           time_zone: UTC
+        # Lazy koleksiyonlar (ör. listedeki kitapların yazarları) kitap başına değil, 50'lik gruplarla tek sorguda yüklenir.
+        default_batch_fetch_size: 50
   flyway:
     enabled: true
     locations: classpath:db/migration
+    # local profilinde uygulanan dev seed (repeatable) bu profilde bulunmaz; doğrulama onun yüzünden düşmesin.
+    # Versioned migration'lar için eksik/değişmiş kontrolü aynen geçerli.
+    ignore-migration-patterns: "*:future,repeatable:missing"
   security:
     oauth2:
       resourceserver:
