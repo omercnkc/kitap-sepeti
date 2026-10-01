@@ -65,6 +65,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 			problem.setProperty("errors",
 					List.of(new FieldViolation(invalidField.getField(), invalidField.getFieldMessage())));
 		}
+		if (ex instanceof StockUnavailableException stockUnavailable) {
+			problem.setProperty("bookIds", stockUnavailable.getBookIds());
+		}
 		return response.body(problem);
 	}
 

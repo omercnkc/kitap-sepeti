@@ -9,7 +9,7 @@ import org.springframework.http.ProblemDetail;
 import tools.jackson.databind.json.JsonMapper;
 
 /** Filtre katmanında (controller advice'a ulaşmadan) ProblemDetail yanıtı yazar. */
-final class ProblemDetailResponses {
+public final class ProblemDetailResponses {
 
 	private ProblemDetailResponses() {
 	}
@@ -18,7 +18,7 @@ final class ProblemDetailResponses {
 	 * Boot'un {@link JsonMapper}'ı ProblemDetail mixin'ini içerir; böylece {@code code} gibi ek alanlar
 	 * MVC yanıtlarındaki gibi kök seviyede yazılır.
 	 */
-	static void write(JsonMapper jsonMapper, HttpServletResponse response, ProblemDetail problem) throws IOException {
+	public static void write(JsonMapper jsonMapper, HttpServletResponse response, ProblemDetail problem) throws IOException {
 		if (response.isCommitted()) {
 			return;
 		}

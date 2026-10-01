@@ -98,11 +98,12 @@ class SecurityRulesTest extends ApiTestSupport {
 	}
 
 	@Test
-	void internalPathIsDeniedEvenForAdmin() throws Exception {
+	void internalPathRejectsEvenAdminJwt() throws Exception {
+		// /internal/** ayrı zincirde; kullanıcı JWT'si orada kimlik sayılmaz (API anahtarı: InternalAuthTest).
 		mockMvc.perform(get("/internal/ping").with(bearer(TestJwt.admin(SUBJECT))))
-			.andExpect(status().isForbidden())
+			.andExpect(status().isUnauthorized())
 			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
-			.andExpect(jsonPath("$.code").value("FORBIDDEN"));
+			.andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
 	}
 
 	@Test

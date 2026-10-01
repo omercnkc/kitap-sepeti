@@ -58,6 +58,12 @@ public final class DbConstraints {
 		return new Violation(code, constraint, kind);
 	}
 
+	/** Hata zincirinde adı verilen kısıtın ihlali var mı (ad büyük/küçük harf ve tablo önekinden bağımsız). */
+	public static boolean isViolated(Throwable ex, String constraintName) {
+		ConstraintViolationException violation = find(ex);
+		return violation != null && constraintName.equalsIgnoreCase(normalize(violation.getConstraintName()));
+	}
+
 	/** MySQL UNIQUE ihlalinde adı "tablo.kısıt" biçiminde verir; tablo öneki atılır. */
 	static String normalize(String name) {
 		if (name == null) {

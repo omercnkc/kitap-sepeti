@@ -53,6 +53,13 @@ app:
     poll-interval: 2s
     batch-size: 50
     confirm-timeout: 5s
+  # /internal/** istemcileri. Ham anahtar burada değil; yalnızca SHA-256 özeti (64 hex). Boşsa istemci kapalı.
+  internal-auth:
+    clients:
+      - name: order-service
+        key-sha256: ${CATALOG_INTERNAL_KEY_ORDER_SHA256:}
+  stock:
+    reservation-ttl: 15m
 
 logging:
   level:

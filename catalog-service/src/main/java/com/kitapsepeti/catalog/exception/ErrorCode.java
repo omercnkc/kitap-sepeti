@@ -28,6 +28,11 @@ public enum ErrorCode {
 	CATEGORY_CYCLE(HttpStatus.CONFLICT, Level.INFO, "Category cannot be moved under itself or its descendants."),
 	BOOK_NOT_PUBLISHABLE(HttpStatus.CONFLICT, Level.INFO, "Book does not meet the requirements for publishing."),
 	STOCK_BELOW_RESERVED(HttpStatus.CONFLICT, Level.INFO, "Stock cannot be reduced below the reserved quantity."),
+	INSUFFICIENT_STOCK(HttpStatus.CONFLICT, Level.INFO, "Not enough stock for one or more books."),
+	BOOK_NOT_AVAILABLE(HttpStatus.CONFLICT, Level.INFO, "One or more books are not available for sale."),
+	RESERVATION_MISMATCH(HttpStatus.CONFLICT, Level.INFO, "A different reservation already exists for this order."),
+	RESERVATION_RELEASED(HttpStatus.CONFLICT, Level.INFO, "Reservation was released and can no longer be committed."),
+	RESERVATION_COMMITTED(HttpStatus.CONFLICT, Level.INFO, "Reservation was already committed and cannot be released."),
 	AUTHENTICATION_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, Level.WARN, "Authentication service is temporarily unavailable; retry later."),
 	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, Level.ERROR, "An unexpected error occurred.");
 

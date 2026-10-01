@@ -6,10 +6,11 @@ Kitap kaydı silinmez (sipariş geçmişi için korunur); yeniden yayınlanırsa
 - **Üretici:** `catalog-service` (transactional outbox)
 - **Tetikleyici:** aşağıdaki admin işlemleri başarılı olduğunda; olay, durum değişikliğiyle aynı DB transaction'ında
   `outbox` tablosuna yazılır.
+- **Gönderim:** `OutboxRelay` yayınlanmamış satırları birkaç saniyede bir (`app.outbox.poll-interval`, varsayılan
+  2 sn) broker'a gönderir; broker onayı (publisher confirm) gelince satır yayınlandı işaretlenir.
 
-> **Durum:** `catalog-service`'te outbox'ı broker'a gönderen worker henüz yok; satırlar `published_at = NULL`
-> olarak birikir. Aşağıdaki yönlendirme ve mesaj özellikleri, worker eklendiğinde user-service'teki
-> `OutboxRelay` ile aynı biçimde uygulanacak sözleşmedir.
+Stok değişiklikleri (admin stok düzeltmesi, sipariş rezervasyonları) kitabı kaldırmaz; satılabilir stok bitse bile
+kitap listelenmeye devam eder ve `BookUpserted` ile `inStock: false` gelir.
 
 ## Ne zaman yayınlanır
 

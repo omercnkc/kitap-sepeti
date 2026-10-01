@@ -4,12 +4,10 @@ Yayındaki bir kitabın aramada/listelemede gereken güncel hali. Her olay kitab
 consumer kendi kaydını bununla tamamen değiştirmelidir (alan bazlı birleştirme yok).
 
 - **Üretici:** `catalog-service` (transactional outbox)
-- **Tetikleyici:** aşağıdaki admin işlemleri başarılı olduğunda; olay, kitap değişikliğiyle aynı DB transaction'ında
-  `outbox` tablosuna yazılır. Biri geri alınırsa diğeri de alınır.
-
-> **Durum:** `catalog-service`'te outbox'ı broker'a gönderen worker henüz yok; satırlar `published_at = NULL`
-> olarak birikir. Aşağıdaki yönlendirme ve mesaj özellikleri, worker eklendiğinde user-service'teki
-> `OutboxRelay` ile aynı biçimde uygulanacak sözleşmedir.
+- **Tetikleyici:** aşağıdaki admin ve stok rezervasyonu işlemleri başarılı olduğunda; olay, kitap değişikliğiyle aynı
+  DB transaction'ında `outbox` tablosuna yazılır. Biri geri alınırsa diğeri de alınır.
+- **Gönderim:** `OutboxRelay` yayınlanmamış satırları birkaç saniyede bir (`app.outbox.poll-interval`, varsayılan
+  2 sn) broker'a gönderir; broker onayı (publisher confirm) gelince satır yayınlandı işaretlenir.
 
 ## Ne zaman yayınlanır
 
@@ -18,6 +16,11 @@ consumer kendi kaydını bununla tamamen değiştirmelidir (alan bazlı birleşt
 | `POST /api/admin/books/{id}/publish` | Kitap DRAFT veya ARCHIVED'dan PUBLISHED'a geçtiğinde. Zaten yayındaysa olay yok. |
 | `PATCH /api/admin/books/{id}` | Kitap PUBLISHED ise (her başarılı PATCH'te). DRAFT/ARCHIVED kitapta olay yok. |
 | `POST /api/admin/books/{id}/stock-adjustments` | Kitap PUBLISHED ise ve yalnızca `inStock` değeri değiştiyse (stok 0→3 gibi). Diğer stok değişikliklerinde olay yok. |
+| `POST /internal/stock/reservations` | Rezervasyon bir kitabın son satılabilir kopyalarını ayırdıysa (`inStock` true→false). Kitap başına bir olay. |
+| `POST /internal/stock/reservations/{orderId}/release` | Kitap PUBLISHED ise ve rezervin geri verilmesiyle `inStock` false→true olduysa. |
+
+Rezervasyon onayı (`.../commit`) olay üretmez: stok ve rezerv birlikte azalır, satılabilir adet değişmez.
+Ayrıntılar: [catalog-internal-stock.md](../api/catalog-internal-stock.md).
 
 Yayınlanmaz: kitap oluşturma (her zaman DRAFT), DRAFT kitapta değişiklik, arşivleme (bkz. `BookRemoved`).
 Yayınevi/yazar/kategori adı veya slug'ı değiştiğinde de **yayınlanmaz**; bu durumda aramanın yeniden

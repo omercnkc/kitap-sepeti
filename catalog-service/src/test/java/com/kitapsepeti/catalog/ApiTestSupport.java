@@ -3,6 +3,8 @@ package com.kitapsepeti.catalog;
 import java.util.UUID;
 
 import com.kitapsepeti.catalog.support.JwksServer;
+import com.kitapsepeti.catalog.support.MutableClock;
+import com.kitapsepeti.catalog.support.MutableClockConfiguration;
 import com.kitapsepeti.catalog.support.TestJwt;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,7 +27,8 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Import({ TestcontainersConfiguration.class, RabbitTestcontainersConfiguration.class })
+@Import({ TestcontainersConfiguration.class, RabbitTestcontainersConfiguration.class,
+		MutableClockConfiguration.class })
 public abstract class ApiTestSupport {
 
 	private static final JwksServer JWKS = JwksServer.start(TestJwt.publicJwksJson());
@@ -38,6 +41,9 @@ public abstract class ApiTestSupport {
 	@Autowired
 	protected JdbcTemplate jdbc;
 
+	@Autowired
+	protected MutableClock clock;
+
 	@DynamicPropertySource
 	static void jwksProperties(DynamicPropertyRegistry registry) {
 		registry.add("spring.security.oauth2.resourceserver.jwt.jwk-set-uri", JWKS::jwkSetUri);
@@ -45,6 +51,7 @@ public abstract class ApiTestSupport {
 
 	@BeforeEach
 	void cleanDatabase() {
+		clock.useSystemTime();
 		jdbc.update("DELETE FROM outbox");
 		jdbc.update("DELETE FROM book_authors");
 		jdbc.update("DELETE FROM book_categories");

@@ -52,7 +52,7 @@ public class SecurityConfig {
 				// Hata yanıtları /error'a yönlendirilir; kapalı olursa her hata 401'e dönüşür.
 				.requestMatchers("/error").permitAll()
 				.requestMatchers("/api/admin/**").hasRole("ADMIN")
-				// Servisler arası uçlar; kendi kimlik doğrulaması gelene kadar kullanıcı token'ıyla bile kapalı.
+				// Servisler arası uçlar InternalSecurityConfig'teki zincire düşer; bu kural yalnızca ek savunma.
 				.requestMatchers("/internal/**").denyAll()
 				.anyRequest().authenticated())
 			// Geçersiz/süresi dolmuş token da aynı ProblemDetail entry point'ine düşer; JWKS'e ulaşılamazsa 503.

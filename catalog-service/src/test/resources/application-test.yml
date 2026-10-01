@@ -20,6 +20,11 @@ app:
   # Worker arka planda outbox satırlarını kilitleyip yayınlamasın; yalnızca relay testleri açar.
   outbox:
     enabled: false
+  # Yalnızca testte geçerli anahtarın özeti (ham hali InternalTestKeys'te); .env'deki gerçek özet kullanılmaz.
+  internal-auth:
+    clients:
+      - name: order-service
+        key-sha256: b0a681124643e6144f8f373b0ab9338f8d9999598d6355c8244e8014ba3c15ff
 
 logging:
   level:
