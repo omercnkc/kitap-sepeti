@@ -39,12 +39,16 @@
   (Kapatılan bilinen sorunlar: "süresi dolan held rezervasyonlar serbest bırakılmıyor", "seed'de satırsız rezerv".)
 - catalog-service OpenAPI (Adım 10): Swagger UI `http://localhost:8082/swagger-ui.html`, `bearerAuth` (admin) / `internalApiKey`
   (internal) / public kilitsiz, tüm hatalar `application/problem+json` (`Problem`, rezervasyon 409'u `StockUnavailableProblem` + `bookIds`).
-  Sözleşme `docs/api/catalog-service.openapi.json` (19 path / 31 operasyon), drift testi ile korunur. 260 test yeşil. Henüz commit edilmedi.
+  Sözleşme `docs/api/catalog-service.openapi.json` (19 path / 31 operasyon), drift testi ile korunur. 260 test yeşil. Commit `5c30ca5` (+ memory-bank `725144f`), push edildi.
+- catalog-service Adım 10b: rezervasyon `unitPrice` JSON sayı (`priceAmount` ile aynı biçim, 2 ondalık); tüm response şemalarında
+  her zaman dolu alanlar `required` (opsiyonel: kitap isbn/description/pageCount/coverUrl/publishedAt, kategori parentId).
+  `OpenApiRequiredFieldsTest` gerçek yanıtları şemaya karşı doğrular. 262 test yeşil. Commit `3c40d4d`, push edildi.
 
 ## Yapılacaklar
 - order-service (catalog rezervasyon istemcisi).
 - catalog-service: actuator, Dockerfile + compose servisi.
 - Search için: yayınevi/yazar/kategori yeniden adlandırması yayındaki kitaplar için olay üretmiyor → yeniden indeksleme gerekecek.
+- Backlog: admin PATCH'te bilinmeyen alanlar (stok, status) sessizce yok sayılıyor; ileride 400 düşünülebilir.
 - Docker/Actuator adımının commit'i.
 - Logout, e-posta/parola değiştirme, CORS.
 - Diğer servisler (katalog, sepet, sipariş vb. — henüz kararlaştırılmadı) ve olay consumer'ları.

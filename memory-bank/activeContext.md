@@ -427,7 +427,7 @@
   - Yeni ErrorCode'lar (409/INFO): INSUFFICIENT_STOCK, BOOK_NOT_AVAILABLE (ikisi `bookIds` uzantısıyla, `StockUnavailableException`),
     RESERVATION_MISMATCH, RESERVATION_RELEASED, RESERVATION_COMMITTED. `DbConstraints.isViolated(ex, ad)`. `ProblemDetailResponses` public.
   - Kurallar ve kilit sırası: systemPatterns.md "Stok rezervasyonu". `ReserveStockRequest` (items 1–50, quantity 1–100; tekrar eden bookId
-    serviste → 400 `items`), `ReservationResponse` (status küçük harf, items bookId sıralı, unitPrice metin).
+    serviste → 400 `items`), `ReservationResponse` (status küçük harf, items bookId sıralı, unitPrice Adım 10b'den beri sayı).
   - ORDER SÖZLEŞME NOTU: `unitPrice` okunduğu anki fiyat; mevcut rezervasyon döndürülürken GÜNCEL fiyat okunur → fiyat anlık görüntüsü
     order-service'in işi. Süresi geçmiş `held` hâlâ onaylanabilir (temizlik işi yok). 500 = işlem geri alındı, tekrar güvenli.
     Rezervasyon idempotency anahtarı `orderId`; order-service yeniden denemede aynı kalemleri göndermeli.
@@ -459,7 +459,7 @@
     BookUpserted inStock=true yayınlandı) → commit 409 RESERVATION_RELEASED; normal TTL ile yeniden açılıp 403 −1 ile seed değerine (0)
     döndü, değişmez 0. Yerel catalog_db: 403 için 1 released rezervasyon + outbox satırları; user_db'de 2 yeni e2e kullanıcısı.
 
-- Adım 10 — catalog-service OpenAPI (260 test yeşil = 248 + 12; user-service 83; henüz commit EDİLMEDİ; uç davranışı/yolu/alan adı/
+- Adım 10 — catalog-service OpenAPI (260 test yeşil = 248 + 12; user-service 83; commit `5c30ca5` + memory-bank `725144f`, push edildi; uç davranışı/yolu/alan adı/
   durum kodu değişmedi, yalnızca anotasyon + springdoc; user-service sözleşmesi/testi, migration, compose, .env'ye dokunulmadı):
   - `springdoc-openapi-starter-webmvc-ui` (sürüm kök POM'dan, 3.1.1). `application.yml` `springdoc.*` user-service ile aynı anahtarlar
     + farklar: `packages-to-scan: com.kitapsepeti.catalog.controller` (src/test'teki `/test/errors/**` ve `*/ping` deneme controller'ları
@@ -491,12 +491,32 @@
     problem+json `WWW-Authenticate: Bearer`; anahtarla rastgele orderId 404 RESOURCE_NOT_FOUND; anahtarsız 401 `ApiKey realm="internal"`.
     Canlı `/v3/api-docs` = sözleşme dosyası (servers `/`). user_db'de 2 yeni e2e kullanıcısı.
 
+- Adım 10b — unitPrice sayı + response şemalarında required (262 test yeşil = 260 + 2; user-service 83; commit `3c40d4d`, push edildi;
+  alan adı/yol/durum kodu/global Jackson, migration, compose, .env, user-service değişmedi):
+  - `ReservationResponse.Item.unitPrice` String → `BigDecimal`; `StockReservationTransactions` `priceAmount.setScale(2, UNNECESSARY)`
+    (artık `toPlainString()` yok). Özel serializer/anotasyon yok: Jackson varsayılanı BigDecimal'i `toString()` ile sayı yazar →
+    `priceAmount` ile aynı biçim (129.90 → 129.90, 130 → 130.00). Replay ve GET aynı yoldan geçer.
+  - Tüm response DTO'larında (public, admin, internal, PageResponse, kategori ağacı, *Ref) her zaman dolu alanlara
+    `@Schema(requiredMode = REQUIRED)` (static import). Opsiyonel = V1'de NULL olabilen kolonlar: kitap isbn, description, pageCount,
+    coverUrl, publishedAt (public detayda da; PUBLISHED satırda DB NULL'a izin veriyor) ve kategori parentId. Nullable işareti yok
+    (user-service gibi; opsiyonel alan yalnızca `required` dışında). Request DTO'ları kontrol edildi, değişiklik gerekmedi.
+  - Sözleşme yeniden üretildi: yalnızca 18 response şemasına `required` listeleri + ReservationItem.unitPrice `string` → `number`
+    (+ açıklama). `docs/api/catalog-internal-stock.md` örneği `"unitPrice": 149.90` ve tablo satırı (BigDecimal ile okunmalı).
+  - Yeni testler: `ReservationUnitPriceTest` (201 / replay 200 / GET: `isNumber()` ve ham token = public detaydaki `priceAmount`
+    tokenı; 149.90, 130.00, 89.50), `OpenApiRequiredFieldsTest` (gerçek yanıtlar — public liste/detay/ağaç, admin kitap/yayınevi/yazar/
+    kategori liste+detay, rezervasyon 201+GET — `/v3/api-docs` şemasına karşı özyinelemeli: required alan var ve null değil; 2xx'ten
+    ulaşılan tüm şemalar kontrol edilmiş olmalı). Mutasyon kanıtı: `BookSummaryResponse.coverUrl` geçici REQUIRED → test kırıldı
+    (`GET /api/books <PageResponseBookSummaryResponse>.items[0] <BookSummaryResponse>.coverUrl`), geri alındı.
+    `OpenApiDocsTest`: unitPrice tipi = priceAmount tipi = number. `InternalStockControllerTest` unitPrice beklentileri sayı.
+  - Kapsam dışı bırakıldı: `BookUpserted` olayındaki `priceAmount` hâlâ metin (docs/events/book-upserted.md).
+
 ## Sonraki adımlar
 - order-service (rezervasyon istemcisi; fiyat anlık görüntüsü kendisinde; `RESERVATION_RELEASED` → ödeme iadesi telafisi; süre dolumu
   olayı yok, GET ile sorgulanır; istemci `docs/api/catalog-service.openapi.json`'dan). catalog: actuator, Dockerfile + compose servisi
   (`USER_SERVICE_JWKS_URI`, `RABBITMQ_HOST` ve `CATALOG_INTERNAL_KEY_ORDER_SHA256` compose'ta).
 - Backlog: yayınevi/yazar/kategori yeniden adlandırılınca yayındaki kitaplar için olay ÜRETİLMİYOR; Search servisi gelince
   yeniden indeksleme (ya da bu değişikliklerde etkilenen kitaplar için BookUpserted) gerekecek.
+- Backlog: admin PATCH'te bilinmeyen alanlar (stok, status) sessizce yok sayılıyor; ileride 400 düşünülebilir.
 - Docker adımının commit'i (kullanıcı isteyince), logout, e-posta/parola değiştirme, consumer servisler, CORS.
 - Açık konular: DataSourceHealthIndicator stack trace gürültüsü; CI pipeline yok (drift testi yalnızca yerel `mvnw test`'te).
 - Açık konu (user-service VE catalog-service): outbox'ta yayınlanmış satırların temizliği (retention) yok; bilinmeyen event_type
@@ -504,5 +524,5 @@
 - Açık konu (catalog): tıkanan süre dolumu siparişleri kuyruğun başını tıkayabilir (batch dolarsa), outbox'taki tanınmayan
   event_type sorunuyla birlikte çözülecek.
 - Açık konu (catalog OpenAPI): `/v3/api-docs` her profilde açık (user-service ile aynı) → internal uçların şekli de herkese görünür
-  (sır yok); prod'da `SPRINGDOC_ENABLED=false` düşünülmeli. Response şemalarında `required` yok (alanlar her zaman dolu olsa da).
+  (sır yok); prod'da `SPRINGDOC_ENABLED=false` düşünülmeli.
 - Yeni servisler eklendikçe kök POM kontrol listesini uygula (bkz. systemPatterns.md).

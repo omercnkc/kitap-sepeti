@@ -169,6 +169,11 @@
   record'lara `@Schema(name = ...)` (springdoc basit adla şema üretir, çakışanı sessizce ezer). Küçük harfli enum parametreleri
   (`sort`, `status`) için `@Schema(type = "string", allowableValues = ...)`. Test-only controller'lar `packages-to-scan` ile dışarıda.
   Catalog drift testi farkta değeri de gösterir ve üretilen dokümanı `target/openapi/` altına yazar.
+- catalog response DTO'ları: yalnızca hiç null olmayan alan (DB'de NOT NULL ya da kodda her zaman atanan; listeler `toList()`/
+  `List.of()`) `@Schema(requiredMode = REQUIRED)`; emin olunmayan/NULL olabilen alan işaretlenmez, nullable işareti de konmaz
+  (user-service gibi: opsiyonel = `required` dışında). Yeni response alanında bu karar verilmeli; `OpenApiRequiredFieldsTest`
+  gerçek yanıtları şemaya karşı kontrol eder (yeni 2xx şeması ekleyince o teste de örnek çağrı eklenmeli, yoksa kırılır).
+- Para alanları JSON'da sayı: `BigDecimal`, scale 2 (`setScale(2)`), Jackson varsayılanı; metne çevirme (olay payload'ları hariç).
 
 ## Container (servis başına)
 - `<servis>/Dockerfile`, build context = repo kökü (kök pom + mvnw gerekir). Çok aşamalı: pom'lar → `go-offline`
