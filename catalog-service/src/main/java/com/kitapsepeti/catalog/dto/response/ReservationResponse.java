@@ -1,5 +1,8 @@
 package com.kitapsepeti.catalog.dto.response;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -11,13 +14,20 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * Kalemler bookId'ye göre sıralı. {@code unitPrice} kitabın okunduğu andaki fiyatıdır (yeni rezervasyonda
  * rezervasyon anı); fiyat anlık görüntüsünü saklamak sipariş servisinin işidir.
  */
-public record ReservationResponse(UUID orderId,
-		@Schema(allowableValues = { "held", "committed", "released" }) String status, Instant expiresAt,
-		List<Item> items) {
+public record ReservationResponse(
+		@Schema(requiredMode = REQUIRED) UUID orderId,
+		@Schema(requiredMode = REQUIRED, allowableValues = { "held", "committed", "released" }) String status,
+		@Schema(requiredMode = REQUIRED) Instant expiresAt,
+		@Schema(requiredMode = REQUIRED) List<Item> items) {
 
 	@Schema(name = "ReservationItem")
-	public record Item(UUID bookId, String title, int quantity,
-			@Schema(description = "Ondalık metin, ör. \"129.90\"") String unitPrice, String currency) {
+	public record Item(
+			@Schema(requiredMode = REQUIRED) UUID bookId,
+			@Schema(requiredMode = REQUIRED) String title,
+			@Schema(requiredMode = REQUIRED) int quantity,
+			@Schema(requiredMode = REQUIRED, description = "Kitabın okunduğu andaki birim fiyatı; `priceAmount` ile "
+					+ "aynı biçimde sayı, 2 ondalık") BigDecimal unitPrice,
+			@Schema(requiredMode = REQUIRED) String currency) {
 	}
 
 }

@@ -1,7 +1,14 @@
 package com.kitapsepeti.catalog.dto.response;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import java.util.UUID;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 /** Kitap yanıtlarında yayınevi özeti. */
-public record PublisherRef(UUID id, String name, String slug) {
+public record PublisherRef(
+		@Schema(requiredMode = REQUIRED) UUID id,
+		@Schema(requiredMode = REQUIRED) String name,
+		@Schema(requiredMode = REQUIRED) String slug) {
 }

@@ -3511,7 +3511,23 @@
             "type": "integer",
             "format": "int64"
           }
-        }
+        },
+        "required": [
+          "authors",
+          "availableQuantity",
+          "categories",
+          "createdAt",
+          "currency",
+          "id",
+          "priceAmount",
+          "publisher",
+          "reservedQuantity",
+          "status",
+          "stockQuantity",
+          "title",
+          "updatedAt",
+          "version"
+        ]
       },
       "AdminBookSummaryResponse": {
         "type": "object",
@@ -3560,7 +3576,20 @@
             "type": "integer",
             "format": "int64"
           }
-        }
+        },
+        "required": [
+          "availableQuantity",
+          "currency",
+          "id",
+          "priceAmount",
+          "publisher",
+          "reservedQuantity",
+          "status",
+          "stockQuantity",
+          "title",
+          "updatedAt",
+          "version"
+        ]
       },
       "AuthorRef": {
         "type": "object",
@@ -3575,7 +3604,12 @@
           "slug": {
             "type": "string"
           }
-        }
+        },
+        "required": [
+          "id",
+          "name",
+          "slug"
+        ]
       },
       "AuthorResponse": {
         "type": "object",
@@ -3598,7 +3632,14 @@
             "type": "string",
             "format": "date-time"
           }
-        }
+        },
+        "required": [
+          "createdAt",
+          "id",
+          "name",
+          "slug",
+          "updatedAt"
+        ]
       },
       "BookDetailResponse": {
         "type": "object",
@@ -3651,7 +3692,17 @@
           "title": {
             "type": "string"
           }
-        }
+        },
+        "required": [
+          "authors",
+          "categories",
+          "currency",
+          "id",
+          "inStock",
+          "priceAmount",
+          "publisher",
+          "title"
+        ]
       },
       "BookSummaryResponse": {
         "type": "object",
@@ -3684,7 +3735,16 @@
           "title": {
             "type": "string"
           }
-        }
+        },
+        "required": [
+          "authors",
+          "currency",
+          "id",
+          "inStock",
+          "priceAmount",
+          "publisher",
+          "title"
+        ]
       },
       "CategoryRef": {
         "type": "object",
@@ -3699,7 +3759,12 @@
           "slug": {
             "type": "string"
           }
-        }
+        },
+        "required": [
+          "id",
+          "name",
+          "slug"
+        ]
       },
       "CategoryResponse": {
         "type": "object",
@@ -3726,7 +3791,14 @@
             "type": "string",
             "format": "date-time"
           }
-        }
+        },
+        "required": [
+          "createdAt",
+          "id",
+          "name",
+          "slug",
+          "updatedAt"
+        ]
       },
       "CategoryTreeResponse": {
         "type": "object",
@@ -3747,7 +3819,13 @@
           "slug": {
             "type": "string"
           }
-        }
+        },
+        "required": [
+          "children",
+          "id",
+          "name",
+          "slug"
+        ]
       },
       "CreateAuthorRequest": {
         "type": "object",
@@ -3924,7 +4002,14 @@
             "type": "integer",
             "format": "int32"
           }
-        }
+        },
+        "required": [
+          "items",
+          "page",
+          "size",
+          "totalElements",
+          "totalPages"
+        ]
       },
       "PageResponseAuthorResponse": {
         "type": "object",
@@ -3951,7 +4036,14 @@
             "type": "integer",
             "format": "int32"
           }
-        }
+        },
+        "required": [
+          "items",
+          "page",
+          "size",
+          "totalElements",
+          "totalPages"
+        ]
       },
       "PageResponseBookSummaryResponse": {
         "type": "object",
@@ -3978,7 +4070,14 @@
             "type": "integer",
             "format": "int32"
           }
-        }
+        },
+        "required": [
+          "items",
+          "page",
+          "size",
+          "totalElements",
+          "totalPages"
+        ]
       },
       "PageResponseCategoryResponse": {
         "type": "object",
@@ -4005,7 +4104,14 @@
             "type": "integer",
             "format": "int32"
           }
-        }
+        },
+        "required": [
+          "items",
+          "page",
+          "size",
+          "totalElements",
+          "totalPages"
+        ]
       },
       "PageResponsePublisherResponse": {
         "type": "object",
@@ -4032,7 +4138,14 @@
             "type": "integer",
             "format": "int32"
           }
-        }
+        },
+        "required": [
+          "items",
+          "page",
+          "size",
+          "totalElements",
+          "totalPages"
+        ]
       },
       "Problem": {
         "type": "object",
@@ -4124,7 +4237,12 @@
           "slug": {
             "type": "string"
           }
-        }
+        },
+        "required": [
+          "id",
+          "name",
+          "slug"
+        ]
       },
       "PublisherResponse": {
         "type": "object",
@@ -4147,7 +4265,14 @@
             "type": "string",
             "format": "date-time"
           }
-        }
+        },
+        "required": [
+          "createdAt",
+          "id",
+          "name",
+          "slug",
+          "updatedAt"
+        ]
       },
       "ReservationItem": {
         "type": "object",
@@ -4167,10 +4292,17 @@
             "type": "string"
           },
           "unitPrice": {
-            "type": "string",
-            "description": "Ondalık metin, ör. \"129.90\""
+            "type": "number",
+            "description": "Kitabın okunduğu andaki birim fiyatı; `priceAmount` ile aynı biçimde sayı, 2 ondalık"
           }
-        }
+        },
+        "required": [
+          "bookId",
+          "currency",
+          "quantity",
+          "title",
+          "unitPrice"
+        ]
       },
       "ReservationResponse": {
         "type": "object",
@@ -4197,7 +4329,13 @@
               "released"
             ]
           }
-        }
+        },
+        "required": [
+          "expiresAt",
+          "items",
+          "orderId",
+          "status"
+        ]
       },
       "ReserveStockItem": {
         "type": "object",

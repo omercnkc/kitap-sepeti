@@ -55,7 +55,7 @@ X-Internal-Api-Key: <ham anahtar>
       "bookId": "01920000-0000-7000-8000-000000000401",
       "title": "Kırmızı Pazartesi",
       "quantity": 2,
-      "unitPrice": "149.90",
+      "unitPrice": 149.90,
       "currency": "TRY"
     }
   ]
@@ -66,7 +66,7 @@ X-Internal-Api-Key: <ham anahtar>
 |---|---|
 | `status` | `held` (ayrıldı), `committed` (stoktan düşüldü), `released` (geri verildi). |
 | `expiresAt` | `held` rezervasyonun geçerlilik sonu (ISO-8601 UTC). Durum değişse de aynı kalır. |
-| `unitPrice` | Kitabın **okunduğu andaki** fiyatı, 2 ondalıklı metin. Yeni rezervasyonda rezervasyon anının fiyatıdır; mevcut rezervasyon döndürülürken (idempotent tekrar, GET, commit, release) güncel fiyat okunur. Fiyatın sipariş için anlık görüntüsünü saklamak **order-service'in sorumluluğundadır**. |
+| `unitPrice` | Kitabın **okunduğu andaki** fiyatı; kitap yanıtlarındaki `priceAmount` ile aynı biçimde JSON sayısı, her zaman 2 ondalık (`130` → `130.00`). İstemci kayan nokta yerine ondalık tiple (ör. `BigDecimal`) okumalı. Yeni rezervasyonda rezervasyon anının fiyatıdır; mevcut rezervasyon döndürülürken (idempotent tekrar, GET, commit, release) güncel fiyat okunur. Fiyatın sipariş için anlık görüntüsünü saklamak **order-service'in sorumluluğundadır**. |
 
 ## Uçlar
 

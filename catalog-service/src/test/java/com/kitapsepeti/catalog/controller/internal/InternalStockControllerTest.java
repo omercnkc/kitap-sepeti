@@ -38,10 +38,10 @@ class InternalStockControllerTest extends InternalStockTestSupport {
 			.andExpect(jsonPath("$.expiresAt").value("2026-01-01T10:15:00Z"))
 			.andExpect(jsonPath("$.items", hasSize(2)))
 			.andExpect(jsonPath("$.items[?(@.bookId=='" + a + "')].quantity").value(2))
-			.andExpect(jsonPath("$.items[?(@.bookId=='" + a + "')].unitPrice").value("149.90"))
+			.andExpect(jsonPath("$.items[?(@.bookId=='" + a + "')].unitPrice").value(149.90))
 			.andExpect(jsonPath("$.items[?(@.bookId=='" + a + "')].currency").value("TRY"))
 			.andExpect(jsonPath("$.items[?(@.bookId=='" + b + "')].quantity").value(1))
-			.andExpect(jsonPath("$.items[?(@.bookId=='" + b + "')].unitPrice").value("89.50"))
+			.andExpect(jsonPath("$.items[?(@.bookId=='" + b + "')].unitPrice").value(89.50))
 			.andExpect(jsonPath("$.items[*].title", containsInAnyOrder("Kitap 1", "Kitap 2")));
 
 		assertThat(reservedOf(a)).isEqualTo(2);
@@ -326,7 +326,7 @@ class InternalStockControllerTest extends InternalStockTestSupport {
 			.andExpect(jsonPath("$.items[0].bookId").value(a.toString()))
 			.andExpect(jsonPath("$.items[0].title").value("Kitap 1"))
 			.andExpect(jsonPath("$.items[0].quantity").value(3))
-			.andExpect(jsonPath("$.items[0].unitPrice").value("12.00"))
+			.andExpect(jsonPath("$.items[0].unitPrice").value(12.00))
 			.andExpect(jsonPath("$.items[0].currency").value("TRY"));
 
 		commit(orderId).andExpect(status().isOk());

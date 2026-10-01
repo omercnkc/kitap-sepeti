@@ -174,6 +174,9 @@ class OpenApiDocsTest extends ApiTestSupport {
 			.containsEntry("minimum", -100_000).containsEntry("maximum", 100_000);
 		assertThat(docs.<Map<String, Object>>read("$.components.schemas.PageResponseBookSummaryResponse.properties"))
 			.containsOnlyKeys("items", "page", "size", "totalElements", "totalPages");
+		assertThat(docs.<String>read("$.components.schemas.ReservationItem.properties.unitPrice.type"))
+			.isEqualTo(docs.<String>read("$.components.schemas.BookSummaryResponse.properties.priceAmount.type"))
+			.isEqualTo("number");
 	}
 
 	@Test

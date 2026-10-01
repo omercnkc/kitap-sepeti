@@ -264,7 +264,7 @@ public class StockReservationTransactions {
 		List<ReservationResponse.Item> items = lines.stream().map(line -> {
 			Book book = books.get(line.bookId());
 			return new ReservationResponse.Item(line.bookId(), book.getTitle(), line.quantity(),
-					book.getPriceAmount().setScale(2, RoundingMode.UNNECESSARY).toPlainString(), book.getCurrency());
+					book.getPriceAmount().setScale(2, RoundingMode.UNNECESSARY), book.getCurrency());
 		}).toList();
 		return new ReservationResponse(orderId, status, expiresAt, items);
 	}
