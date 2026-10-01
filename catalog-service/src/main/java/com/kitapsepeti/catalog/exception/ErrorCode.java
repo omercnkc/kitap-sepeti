@@ -25,6 +25,7 @@ public enum ErrorCode {
 	ISBN_ALREADY_EXISTS(HttpStatus.CONFLICT, Level.INFO, "ISBN is already registered."),
 	RESOURCE_IN_USE(HttpStatus.CONFLICT, Level.INFO, "Resource is referenced by other records and cannot be deleted."),
 	CONCURRENT_MODIFICATION(HttpStatus.CONFLICT, Level.INFO, "Resource was modified by another request; reload and retry."),
+	AUTHENTICATION_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, Level.WARN, "Authentication service is temporarily unavailable; retry later."),
 	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, Level.ERROR, "An unexpected error occurred.");
 
 	private final HttpStatus status;

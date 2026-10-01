@@ -4,9 +4,11 @@ import java.util.Arrays;
 
 import com.kitapsepeti.catalog.security.ProblemDetailAccessDeniedHandler;
 import com.kitapsepeti.catalog.security.ProblemDetailAuthenticationEntryPoint;
+import com.kitapsepeti.catalog.security.ProblemDetailAuthenticationFailureHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.ObjectPostProcessor;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -15,7 +17,9 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.util.matcher.OrRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
@@ -34,7 +38,8 @@ public class SecurityConfig {
 	@Bean
 	public SecurityFilterChain securityFilterChain(HttpSecurity http,
 			ProblemDetailAuthenticationEntryPoint authenticationEntryPoint,
-			ProblemDetailAccessDeniedHandler accessDeniedHandler) throws Exception {
+			ProblemDetailAccessDeniedHandler accessDeniedHandler,
+			ProblemDetailAuthenticationFailureHandler authenticationFailureHandler) throws Exception {
 		http
 			.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 			// Cookie tabanlı oturum olmadığı için CSRF koruması gereksiz.
@@ -50,12 +55,13 @@ public class SecurityConfig {
 				// Servisler arası uçlar; kendi kimlik doğrulaması gelene kadar kullanıcı token'ıyla bile kapalı.
 				.requestMatchers("/internal/**").denyAll()
 				.anyRequest().authenticated())
-			// Geçersiz/süresi dolmuş token da aynı ProblemDetail entry point'ine düşer.
+			// Geçersiz/süresi dolmuş token da aynı ProblemDetail entry point'ine düşer; JWKS'e ulaşılamazsa 503.
 			.oauth2ResourceServer(rs -> rs
 				.bearerTokenResolver(bearerTokenResolver())
 				.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
 				.authenticationEntryPoint(authenticationEntryPoint)
-				.accessDeniedHandler(accessDeniedHandler))
+				.accessDeniedHandler(accessDeniedHandler)
+				.withObjectPostProcessor(failureHandlerOf(authenticationFailureHandler)))
 			// Token hiç yoksa ExceptionTranslationFilter bu handler'ları kullanır;
 			// filtre hataları controller advice'a ulaşmadığı için 401/403 gövdesini bunlar yazar.
 			.exceptionHandling(ex -> ex
@@ -73,6 +79,21 @@ public class SecurityConfig {
 		converter.setJwtGrantedAuthoritiesConverter(authorities);
 		converter.setPrincipalClaimName("sub");
 		return converter;
+	}
+
+	/**
+	 * Resource server DSL'inde failure handler ayarı yok; configurer BearerTokenAuthenticationFilter'ı
+	 * {@code postProcess}'ten geçirdiği için handler burada bağlanır (entry point ayarından sonra çalışır).
+	 */
+	private static ObjectPostProcessor<BearerTokenAuthenticationFilter> failureHandlerOf(
+			AuthenticationFailureHandler failureHandler) {
+		return new ObjectPostProcessor<>() {
+			@Override
+			public <O extends BearerTokenAuthenticationFilter> O postProcess(O filter) {
+				filter.setAuthenticationFailureHandler(failureHandler);
+				return filter;
+			}
+		};
 	}
 
 	/**

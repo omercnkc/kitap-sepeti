@@ -84,6 +84,15 @@ class SecurityRulesTest extends ApiTestSupport {
 	}
 
 	@Test
+	void tamperedSignatureIsRejected() throws Exception {
+		String token = TestJwt.admin(SUBJECT);
+		int signatureStart = token.lastIndexOf('.') + 1;
+		char first = token.charAt(signatureStart);
+		assertInvalidToken(token.substring(0, signatureStart) + (first == 'A' ? 'B' : 'A')
+				+ token.substring(signatureStart + 1));
+	}
+
+	@Test
 	void unsignedAlgNoneTokenIsRejected() throws Exception {
 		assertInvalidToken(TestJwt.unsignedAdmin(SUBJECT));
 	}
