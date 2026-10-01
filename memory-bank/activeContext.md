@@ -325,7 +325,7 @@
   - `spring-boot:run "-Dspring-boot.run.arguments=--logging.level..."` ve `LOGGING_LEVEL_ORG_FLYWAYDB` env ile Flyway DEBUG log'u gelmedi (çözülmedi).
   - Commit `297c9bc` (+ memory-bank `68841c7`), push edildi.
 
-- catalog-service admin yazma uçları: yayınevi, yazar, kategori (128 test yeşil; henüz commit edilmedi; kitap admin/stok/outbox/OpenAPI YOK):
+- catalog-service admin yazma uçları: yayınevi, yazar, kategori (128 test yeşil; commit `52194f4` + memory-bank `912215b`, push edildi):
   - `controller/admin/`: AdminPublisherController, AdminAuthorController (`/api/admin/{publishers,authors}`: GET liste, POST 201 + Location,
     GET/PATCH/DELETE `/{id}`), AdminCategoryController (+ `PUT /{id}/parent`). Yetki SecurityConfig'teki `/api/admin/**` ADMIN kuralından.
   - Servisler `@Transactional` (okumalar readOnly): PublisherAdminService, AuthorAdminService, CategoryAdminService. Ortak yardımcılar
@@ -351,9 +351,52 @@
     `AdminAuthorControllerTest` (4), `AdminCategoryControllerTest` (6).
   - Uçtan uca (compose user-service + local seed) a–g geçti; deneme kayıtları silindi, seed sayıları değişmedi. user_db'de e2e kullanıcıları kalıyor (önceki adımlardaki gibi).
 
+- catalog-service kitap admin uçları + stok düzeltme + outbox olayları (177 test yeşil; henüz commit edilmedi; RabbitMQ/relay,
+  internal stok uçları (reserve/commit/release), OpenAPI YOK; migration'a dokunulmadı):
+  - `controller/admin/AdminBookController` `/api/admin/books`: GET liste (`?status=draft|published|archived`, büyük/küçük harf duyarsız,
+    tanınmayan → 400; sıra updatedAt desc, id desc; size 1–100), GET `/{id}` (her durum), POST (201 + Location, her zaman DRAFT + TRY,
+    olay yok), PATCH `/{id}` (version zorunlu), POST `/{id}/publish`, POST `/{id}/archive` (200) ve DELETE `/{id}` (204) = aynı arşivleme
+    (fiziksel silme yok), POST `/{id}/stock-adjustments {delta}`.
+  - KURAL: `Book.stockQuantity/reservedQuantity` `@Column(updatable = false)`, setter YOK; yalnızca insert'te (ctor
+    `Book(title, publisher, price, initialStock)`). Değişiklik yalnızca `BookRepository.adjustStock` (JPQL `@Modifying(flushAutomatically,
+    clearAutomatically)`: `set stockQuantity = stockQuantity + :delta where id = :id and stockQuantity + :delta >= reservedQuantity`).
+    JPQL bulk update versiyonu ve updated_at'i DEĞİŞTİRMEZ (bilinçli: stok admin formunun parçası değil). 0 satır → existsById ? 409
+    STOCK_BELOW_RESERVED : 404. `BookStockColumnsTest` Hibernate UPDATE SQL'inde stok kolonlarının olmadığını ve araya giren rezerv
+    değişikliğinin ezilmediğini doğrular (mutasyonla kırıldığı görüldü).
+  - Optimistic lock: istemci `version` ≠ entity → `StaleVersionException` (409 CONCURRENT_MODIFICATION), hiçbir şey yazılmaz;
+    istek içi yarışı Hibernate `@Version` yakalar. Değiştiren işlemler (PATCH/publish/archive) kitabı `findForUpdateById`
+    (`@Lock(PESSIMISTIC_WRITE)`) ile okur → eşzamanlı stok düzeltmesi bekler, olaydaki inStock/durum tutarlı.
+  - Olaylar: `service/OutboxService` (user-service kopyası, MANDATORY), `service/BookEventFactory`, payload record'ları
+    `service/event/BookUpsertedEvent` / `BookRemovedEvent` (eventVersion 1). aggregate_type `book` (user-service `user` gibi küçük harf),
+    event_type `BookUpserted` / `BookRemoved` (PascalCase). Planlanan routing key'ler `book.upserted` / `book.removed` (relay yok;
+    `EventRoutingKeys` catalog'da henüz yok). V1 SQL yorumundaki 'Book'/'BookPublished' örnekleri eski; migration değiştirilmedi.
+    BookUpserted: publish (DRAFT/ARCHIVED → PUBLISHED), PUBLISHED kitapta her PATCH, PUBLISHED kitapta inStock değişen stok düzeltmesi.
+    BookRemoved: PUBLISHED → ARCHIVED. Zaten yayında/arşivde = değişiklik ve olay yok. publishedAt yalnızca null ise atanır.
+    Payload'da stok/rezerv/version/status YOK; priceAmount metin ("149.90"), `categoryIdsWithAncestors` (`CategoryForest.withAncestors`).
+    PATCH'te olay flush'tan ÖNCE yazılır: flush'taki ISBN çakışması outbox satırını da geri alır (testte `insert into outbox` SQL'i görülüyor).
+  - inStock geçişi: güncellenmiş satırdan `available` ve `available - delta` karşılaştırılır (satır kilitli; ayrı ön okuma yok).
+  - Yayın koşulları: ≥1 yazar, ≥1 kategori, fiyat > 0; değilse 409 BOOK_NOT_PUBLISHABLE, detail "... Missing: at least one author, ..." (değer yok).
+  - Doğrulama: `validation/Isbns` (normalize: tire/boşluk sil, x → X; ISBN-10/13 checksum; yalnızca ASCII rakam) + `@Isbn`; `@HttpUrl`
+    (mutlak http/https + host). ikisi de null/"" geçerli. ISBN tekliği yalnızca DB'de (`uk_books_isbn` → ISBN_ALREADY_EXISTS; ön kontrol YOK).
+    Fiyat `@DecimalMin(0) @Digits(10,2)` → serviste `setScale(2)`. description ≤ 10.000 karakter (spec'e EK; TEXT 64 KB).
+    authorIds/categoryIds ≤ 20, olmayan id → 400 alanlı (id söylenmez). Create'te boş opsiyonel metin = null; PATCH'te "" = temizle.
+    PATCH'te status/stok alanları Jackson tarafından sessizce yok sayılır.
+  - Yeni: `ErrorCode.BOOK_NOT_PUBLISHABLE`, `STOCK_BELOW_RESERVED` (409, INFO); `BookStatus.value()`/`fromParameter`; `WebConfig`
+    BookStatus converter'ı; `Book.getAvailableQuantity()`; DTO'lar Create/UpdateBookRequest, StockAdjustmentRequest, AdminBookListRequest,
+    AdminBookResponse, AdminBookSummaryResponse; `mapper/AdminBookMapper`.
+  - Uyarlanan eski testler: ErrorProbeController overbooked (`initialStock = -1` → aynı CHECK 409), CatalogRepositoryTest (stok 10 ctor ile;
+    CHECK testi `-1` ile, aynı `ck_books_reserved_le_stock` beklentisi), BookControllerTest (stok ctor ile, rezerv JDBC UPDATE ile).
+  - Test altyapısı: `support/SqlCapture` (Hibernate `StatementInspector`, application-test.yml `session_factory.statement_inspector`,
+    yalnızca start/stop arasında kaydeder); `ApiTestSupport` artık `outbox`'ı da temizler. Yeni testler: AdminBookControllerTest (20),
+    BookStockColumnsTest (2), IsbnsTest (15), HttpUrlValidatorTest (12).
+  - Uçtan uca (local seed + compose user-service, ADMIN token): a–g geçti. Yerel catalog_db'de 2 arşivlenmiş e2e kitabı ve 6 outbox
+    satırı (published_at NULL) kaldı; seed published sayısı 11.
+
 ## Sonraki adımlar
-- catalog-service: kitap admin uçları, stok uçları, outbox,
+- catalog-service: outbox relay (RabbitMQ, `EventRoutingKeys`), internal stok uçları (reserve/commit/release),
   springdoc, actuator, Dockerfile + compose servisi (`USER_SERVICE_JWKS_URI` compose'ta user-service adına).
+- Backlog: yayınevi/yazar/kategori yeniden adlandırılınca yayındaki kitaplar için olay ÜRETİLMİYOR; Search servisi gelince
+  yeniden indeksleme (ya da bu değişikliklerde etkilenen kitaplar için BookUpserted) gerekecek.
 - Docker adımının commit'i (kullanıcı isteyince), logout, e-posta/parola değiştirme, consumer servisler, CORS.
 - Açık konular: DataSourceHealthIndicator stack trace gürültüsü; CI pipeline yok (drift testi yalnızca yerel `mvnw test`'te).
 - Açık konu: outbox'ta yayınlanmış satırların temizliği (retention) yok; bilinmeyen event_type kuyruğun başını tıkar.

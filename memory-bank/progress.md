@@ -22,10 +22,14 @@
   Commit `297c9bc`.
 - catalog-service admin yazma uçları: yayınevi/yazar/kategori CRUD (`/api/admin/**`, ADMIN), addan Türkçe slug üretimi,
   kategori taşıma (`PUT /api/admin/categories/{id}/parent`, döngü → 409 CATEGORY_CYCLE), kullanımdaki kaydı silme → 409 RESOURCE_IN_USE.
-  128 test yeşil. Henüz commit edilmedi.
+  Commit `52194f4`.
+- catalog-service kitap admin: `/api/admin/books` liste/detay/oluştur/PATCH (istemci versiyonu zorunlu)/publish/archive/DELETE(=arşiv),
+  koşullu stok düzeltme (`stock-adjustments`), ISBN normalizasyon + checksum, `BookUpserted`/`BookRemoved` outbox olayları
+  (`docs/events/book-upserted.md`, `book-removed.md`). Stok kolonları entity'den yazılamaz. 177 test yeşil. Henüz commit edilmedi.
 
 ## Yapılacaklar
-- catalog-service: kitap admin uçları, stok uçları, outbox, springdoc, actuator, Dockerfile + compose servisi.
+- catalog-service: outbox relay (RabbitMQ), internal stok uçları (reserve/commit/release), springdoc, actuator, Dockerfile + compose servisi.
+- Search için: yayınevi/yazar/kategori yeniden adlandırması yayındaki kitaplar için olay üretmiyor → yeniden indeksleme gerekecek.
 - Docker/Actuator adımının commit'i.
 - Logout, e-posta/parola değiştirme, CORS.
 - Diğer servisler (katalog, sepet, sipariş vb. — henüz kararlaştırılmadı) ve olay consumer'ları.
@@ -37,4 +41,6 @@
 - MySQL CHECK ihlali (3819, HY000) JdbcTemplate'te `UncategorizedSQLException` olur; JPA yolunda ise
   `DataIntegrityViolationException` (Hibernate çevirir). catalog-service'te CHECK'e dokunan yazımlar JPA üzerinden yapılmalı.
 - Outbox'ta yayınlanmış satırlar temizlenmiyor; bilinmeyen `event_type` kuyruğun başını tıkar.
+- catalog-service outbox'ı henüz yayınlanmıyor (relay yok); satırlar `published_at = NULL` birikir.
+- Stok taşması: `initialStock` üst sınırı yok; INT sınırına yakın stokta `+delta` MySQL out-of-range → 500 (pratikte olası değil).
 - DB kapalıyken `DataSourceHealthIndicator` her health çağrısında WARN + uzun stack trace yazıyor (log gürültüsü).

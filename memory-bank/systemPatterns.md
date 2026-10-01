@@ -70,6 +70,13 @@
 - Benzersizlik: ön kontrol (`existsBy...`) + DB kısıtı son savunma (DbConstraints aynı kodu verir). Otomatik "-2" eki YOK.
 - Silme/güncellemede `flush()` servis içinde: kısıt ihlali transaction açıkken oluşur, handler eşler. "Kullanımda" kontrolü DB FK'sına bırakılır.
 - Ağaç değişikliği (kategori taşıma) tüm kategori satırlarını `FOR UPDATE` ile okuyup bellekte (`CategoryForest`) kontrol eder.
+- Kitap: stok/rezerv entity'den ASLA yazılmaz (`updatable = false`, setter yok); yalnızca koşullu `@Modifying` UPDATE
+  (`flushAutomatically` + `clearAutomatically`). Sayaç tipi, eşzamanlı değişen kolonlar için aynı kalıp.
+- Optimistic lock istemciden: PATCH gövdesinde `version` zorunlu, eşit değilse 409 ve yazma yok; ek olarak `@Version`.
+  Değiştiren kitap işlemleri satırı `PESSIMISTIC_WRITE` ile okur (olay içeriği eşzamanlı stok değişikliğiyle tutarlı olsun).
+- Olay yazımı: değişiklikler uygulanır → `outboxService.append` → `flush()`. Flush hatası (UNIQUE vb.) olayı da geri alır.
+  Yalnızca yayındaki kitap olay üretir; durum geçişi olmayan tekrar (publish/archive) değişiklik ve olay üretmez.
+- Benzersizlik ISBN'de yalnızca DB kısıtıyla (ön kontrol yok); slug'larda ön kontrol + DB.
 
 ## Örnek veri (local profil)
 - `db/seed/R__*.sql` repeatable migration, yalnızca `application-local.yml` `spring.flyway.locations`'a ekler; varsayılan/test profili yüklemez.
@@ -92,6 +99,9 @@
 - Üretici kuyruk tanımlamaz; consumer kendi kuyruğunu declare/bind eder. Yeni olay tipi = `EventRoutingKeys`'e
   routing key + `docs/events/<olay>.md`.
 - Worker testlerde varsayılan kapalı (`app.outbox.enabled: false`); açan test ayrı context kurar.
+- Adlandırma: `aggregate_type` küçük harf varlık adı (`user`, `book`); `event_type` PascalCase geçmiş zaman/olgu (`UserRegistered`,
+  `BookUpserted`, `BookRemoved`); routing key `<varlık>.<olay>` küçük harf (`user.registered`, `book.upserted`, `book.removed`).
+  Payload record'u `service/event/<Olay>Event` (`TYPE`, `VERSION`, ilk alan `eventVersion`). Payload'a iç sayaç/versiyon/durum konmaz.
 
 ## API dokümanı (OpenAPI)
 - Yeni uç: `@Tag` (sınıf), `@Operation(operationId, summary)`, başarı kodu `@ApiResponse` ile; uca özel hata
