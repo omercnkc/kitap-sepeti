@@ -510,14 +510,45 @@
     `OpenApiDocsTest`: unitPrice tipi = priceAmount tipi = number. `InternalStockControllerTest` unitPrice beklentileri sayı.
   - Kapsam dışı bırakıldı: `BookUpserted` olayındaki `priceAmount` hâlâ metin (docs/events/book-upserted.md).
 
+- Adım 11 — catalog Docker + compose; CATALOG-SERVICE TAMAMLANDI (270 test yeşil = 262 + 8; user-service 83; commit `b128320` (A doküman) + `9443b82` (B), push edildi;
+  migration, .env, .env.example, user-service davranışı değişmedi):
+  - A (BookUpserted priceAmount sayıya) İPTAL, kullanıcı kararı: outbox `payload` kolonu MySQL `JSON`; MySQL kesirli sayıyı DOUBLE
+    saklar (`CAST('{"a":149.90}' AS JSON)` → `149.9`, `130.00` → `130.0`, JSON_TYPE DOUBLE) → mesajda HTTP ile birebir biçim
+    migration'sız mümkün değil. Metin kaldı; `docs/events/book-upserted.md`'ye neden paragrafı, `BookUpsertedEvent` javadoc'una sebep.
+  - Actuator (yoktu, compose healthcheck için eklendi): pom `spring-boot-starter-actuator`, application.yml `management.*` user-service ile
+    birebir (yalnızca health, show-details never, probes, liveness = livenessState, readiness = readinessState + db; discovery kapalı),
+    SecurityConfig permitAll `GET /actuator/health`, `/actuator/health/**`. `config/ActuatorHealthTest` (8, user-service uyarlaması;
+    token'la diğer actuator uçları 404). springdoc `packages-to-scan` sayesinde sözleşme dosyası değişmedi.
+  - `catalog-service/Dockerfile`: user-service ile aynı (temurin 21 jdk/jre, go-offline + cache mount, `-DskipTests`, layered extract,
+    `app` 10001, aynı JAVA_TOOL_OPTIONS), EXPOSE 8082. İmaj 595 MB. İçerik kontrolü: .env, *.pem, secrets, src, pom, mvnw,
+    application-test.yml yok; jar'da `application-local.yml` + `db/seed/R__dev_seed_catalog.sql` var (yalnızca local profilde kullanılır).
+  - KIRIK BULUNDU + DÜZELTİLDİ: kök POM'a `catalog-service` modülü (cd5d670) eklendikten sonra user-service Dockerfile'ı da build
+    olmuyordu ("Child module /workspace/catalog-service does not exist"; çalışan imaj 29 Eylül'den). İki Dockerfile da artık iki modülün
+    pom'unu kopyalıyor. user-service yeniden build edildi: adımlar koştu, runtime katmanları byte-aynı → imaj kimliği değişmedi.
+  - Compose `catalog-service`: `8082:8082` (user-service gibi 127.0.0.1'siz), env tek tek (`CATALOG_DB_HOST=mysql`, CATALOG_DB_USER/
+    PASSWORD, RABBITMQ_* user-service ile aynı biçim, `USER_SERVICE_JWKS_URI=http://user-service:8081/.well-known/jwks.json`,
+    `CATALOG_INTERNAL_KEY_ORDER_SHA256`), secret yok (user-service de DB şifresini env ile alıyor; secret yalnızca JWT anahtarları),
+    profil yok (default → seed yok; volume'daki 2 R__ satırı `repeatable:missing` ile yok sayılıyor, "validated 3 migrations"),
+    depends_on mysql + rabbitmq `service_healthy`, user-service yok, healthcheck curl readiness, mem_limit 768m.
+  - `.dockerignore` ve `.env.example` değişmedi (gerekenler zaten vardı). `docs/docker.md` yeni (catalog env'leri, Swagger, health).
+  - Uçtan uca (compose): public 200, swagger 200, ADMIN (Docker user-service token'ı; JWKS compose ağından) 200, internal 404/401,
+    410 rezerve→release stok 2/0→2/1→2/0 + değişmez 0, 403 stok 0→1→0 iki BookUpserted (published_at dolu, priceAmount STRING "89.90").
+    RabbitMQ stop: healthy, düzeltmeler 200, 2 satır bekledi; start → 0. user-service stop: public/readiness 200, admin önbellek
+    süresince 200, ~5 dk sonra 503 AUTHENTICATION_UNAVAILABLE (cause=UnknownHostException); start → 200. restart: migration yok,
+    veri yerinde. Loglar: ERROR/stack trace 0; beklenen WARN'lar (internal 401, broker yokken outbox retry, 503); sır/token/e-posta yok,
+    ama Spring AMQP INFO bağlantı satırında RabbitMQ kullanıcı adı geçiyor (user-service'te de aynı) → backlog.
+  - Yerel veri: user_db'de 1 yeni e2e (ADMIN) kullanıcısı; catalog_db'de 410 için 1 released rezervasyon + 403 için 4 BookUpserted.
+
 ## Sonraki adımlar
 - order-service (rezervasyon istemcisi; fiyat anlık görüntüsü kendisinde; `RESERVATION_RELEASED` → ödeme iadesi telafisi; süre dolumu
-  olayı yok, GET ile sorgulanır; istemci `docs/api/catalog-service.openapi.json`'dan). catalog: actuator, Dockerfile + compose servisi
-  (`USER_SERVICE_JWKS_URI`, `RABBITMQ_HOST` ve `CATALOG_INTERNAL_KEY_ORDER_SHA256` compose'ta).
+  olayı yok, GET ile sorgulanır; istemci `docs/api/catalog-service.openapi.json`'dan). Compose'a eklenirken catalog'a
+  `http://catalog-service:8082` ve `.env` `ORDER_INTERNAL_API_KEY` ile bağlanır.
+- Backlog: `BookUpserted.priceAmount` sayıya geçecekse outbox payload kolonunu metin tipine çeviren yeni migration gerekir.
+- Backlog: Spring AMQP `CachingConnectionFactory` INFO satırı RabbitMQ kullanıcı adını yazıyor (iki serviste); logger WARN'a çekilebilir.
 - Backlog: yayınevi/yazar/kategori yeniden adlandırılınca yayındaki kitaplar için olay ÜRETİLMİYOR; Search servisi gelince
   yeniden indeksleme (ya da bu değişikliklerde etkilenen kitaplar için BookUpserted) gerekecek.
 - Backlog: admin PATCH'te bilinmeyen alanlar (stok, status) sessizce yok sayılıyor; ileride 400 düşünülebilir.
-- Docker adımının commit'i (kullanıcı isteyince), logout, e-posta/parola değiştirme, consumer servisler, CORS.
+- Logout, e-posta/parola değiştirme, consumer servisler, CORS.
 - Açık konular: DataSourceHealthIndicator stack trace gürültüsü; CI pipeline yok (drift testi yalnızca yerel `mvnw test`'te).
 - Açık konu (user-service VE catalog-service): outbox'ta yayınlanmış satırların temizliği (retention) yok; bilinmeyen event_type
   kuyruğun başını tıkar (her turda WARN, sonraki satırlar bekler).

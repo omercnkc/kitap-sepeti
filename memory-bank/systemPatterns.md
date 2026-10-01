@@ -173,13 +173,18 @@
   `List.of()`) `@Schema(requiredMode = REQUIRED)`; emin olunmayan/NULL olabilen alan işaretlenmez, nullable işareti de konmaz
   (user-service gibi: opsiyonel = `required` dışında). Yeni response alanında bu karar verilmeli; `OpenApiRequiredFieldsTest`
   gerçek yanıtları şemaya karşı kontrol eder (yeni 2xx şeması ekleyince o teste de örnek çağrı eklenmeli, yoksa kırılır).
-- Para alanları JSON'da sayı: `BigDecimal`, scale 2 (`setScale(2)`), Jackson varsayılanı; metne çevirme (olay payload'ları hariç).
+- Para alanları JSON'da sayı: `BigDecimal`, scale 2 (`setScale(2)`), Jackson varsayılanı; metne çevirme. İstisna: outbox
+  olay payload'larında para METİN (`"149.90"`), çünkü payload MySQL `JSON` kolonunda durur ve MySQL kesirli sayıyı DOUBLE'a çevirip
+  sondaki sıfırları atar (`149.90` → `149.9`).
 
 ## Container (servis başına)
 - `<servis>/Dockerfile`, build context = repo kökü (kök pom + mvnw gerekir). Çok aşamalı: pom'lar → `go-offline`
   (cache mount) → src → `package -DskipTests` → layered extract → JRE runtime, sabit UID/GID 10001 non-root.
 - Sırlar image'a girmez (`.dockerignore`); compose'ta env yalnızca tek tek, anahtar dosyaları compose `secrets`.
 - Readiness'a yalnızca isteği karşılamak için şart olan bağımlılık (DB) girer; mesaj broker'ı girmez (outbox tamponlar).
+  Diğer servisler de girmez ve compose'ta onlara `depends_on` konmaz (catalog → user-service JWKS tembel; kapalıyken 503).
+- Servis içi adresler compose servis adıyla (`mysql`, `rabbitmq`, `http://user-service:8081`); profil verilmez (local seed yalnızca
+  `spring-boot:run` ile). Her servis: Actuator health (yalnızca health expose) + compose healthcheck `curl` readiness, `mem_limit 768m`.
 
 ## Yeni servis eklerken (KULLANICI KURALI)
 Kullanıcı, her yeni serviste kök `pom.xml`'in kontrol edilip gerekiyorsa
@@ -189,3 +194,5 @@ Kök POM'un başındaki "YENİ SERVİS EKLERKEN KONTROL LİSTESİ" takip edilir:
 2. Servis POM'unun `<parent>`'ını kök POM yap, miras alınanları sil.
 3. Yeni kütüphane ailesi varsa versiyonu `<properties>`'e, BOM'u `<dependencyManagement>`'a.
 4. Tüm servislerde ortak olan bağımlılığı kök `<dependencies>`'e taşı.
+5. (Docker) Mevcut TÜM `<servis>/Dockerfile`'lara yeni modülün `pom.xml` COPY satırını ekle; Maven reaktörü kökteki her
+   `<module>`'ün pom'unu ister, yoksa her servisin imaj build'i kırılır. Ardından tüm imajları build ederek doğrula.

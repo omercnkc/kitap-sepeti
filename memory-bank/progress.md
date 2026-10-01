@@ -2,7 +2,10 @@
 
 ## Çalışanlar
 - GitHub reposu bağlı; multi-module Maven yapısı (kök parent POM + `user-service`).
-- Docker Compose: MySQL 8.4 (`user_db`) + RabbitMQ 4 + user-service (non-root image, compose secrets, healthcheck).
+- Docker Compose: MySQL 8.4 (`user_db` + `catalog_db`) + RabbitMQ 4 + user-service (non-root image, compose secrets,
+  healthcheck) + catalog-service (aynı imaj kalıbı, readiness yalnızca DB). Kullanım: `docs/docker.md`.
+- **catalog-service: TAMAMLANDI** (Adım 1–11: şema, public okuma, admin CRUD, kitap yaşam döngüsü + stok, outbox olayları,
+  internal stok rezervasyonu + süre dolumu, OpenAPI + drift testi, actuator, Docker + compose). 270 test yeşil.
 - user-service: Flyway V1 şeması, entity/repository, RS256 JWT + JWKS, kayıt/giriş/refresh (rotation),
   Resource Server + `/api/me` + adres CRUD, RFC 9457 hata altyapısı, outbox worker (publisher confirms,
   SKIP LOCKED), OpenAPI 3 dokümanı + Swagger UI + `docs/api/user-service.openapi.json` (drift testi ile korunur),
@@ -43,13 +46,17 @@
 - catalog-service Adım 10b: rezervasyon `unitPrice` JSON sayı (`priceAmount` ile aynı biçim, 2 ondalık); tüm response şemalarında
   her zaman dolu alanlar `required` (opsiyonel: kitap isbn/description/pageCount/coverUrl/publishedAt, kategori parentId).
   `OpenApiRequiredFieldsTest` gerçek yanıtları şemaya karşı doğrular. 262 test yeşil. Commit `3c40d4d`, push edildi.
+- catalog-service Adım 11: Actuator (user-service ile aynı: yalnızca health, readiness = readinessState + db), `catalog-service/Dockerfile`
+  (user-service kalıbı), compose `catalog-service` (8082, healthcheck, user-service'e bağımlılık yok), `docs/docker.md`.
+  `BookUpserted.priceAmount` metin kaldı (MySQL JSON kolonu sayıyı DOUBLE'a çevirip sondaki sıfırları atıyor; doküman güncellendi).
+  270 test yeşil. Commit `b128320` + `9443b82`, push edildi.
 
 ## Yapılacaklar
 - order-service (catalog rezervasyon istemcisi).
-- catalog-service: actuator, Dockerfile + compose servisi.
 - Search için: yayınevi/yazar/kategori yeniden adlandırması yayındaki kitaplar için olay üretmiyor → yeniden indeksleme gerekecek.
 - Backlog: admin PATCH'te bilinmeyen alanlar (stok, status) sessizce yok sayılıyor; ileride 400 düşünülebilir.
-- Docker/Actuator adımının commit'i.
+- Backlog: Spring AMQP `CachingConnectionFactory` INFO satırı ("Created new connection … amqp://<kullanıcı>@rabbitmq") RabbitMQ
+  kullanıcı adını loga yazıyor (parola yok; user-service ve catalog-service). İstenirse o logger WARN'a çekilebilir.
 - Logout, e-posta/parola değiştirme, CORS.
 - Diğer servisler (katalog, sepet, sipariş vb. — henüz kararlaştırılmadı) ve olay consumer'ları.
 - CI pipeline (testler + image build).
@@ -68,4 +75,8 @@
 - Süre dolumu görevi tutarsız bir siparişi (kitap rezervi < adet) her turda yeniden dener ve her seferinde WARN yazar; elle düzeltilene
   kadar o sipariş `held` kalır.
 - Tıkanan süre dolumu siparişleri kuyruğun başını tıkayabilir (batch dolarsa), outbox'taki tanınmayan event_type sorunuyla birlikte çözülecek.
-- catalog `/v3/api-docs` ve Swagger UI her profilde açık (`SPRINGDOC_ENABLED=false` ile kapanır); internal uç şekilleri de görünür.
+- catalog `/v3/api-docs` ve Swagger UI her profilde açık (compose dahil; `SPRINGDOC_ENABLED=false` ile kapanır); internal uç şekilleri de görünür.
+- catalog JWKS önbelleği 5 dk: user-service kapandıktan sonra admin uçları önbellek süresi boyunca 200, sonra 503 (Gateway fazı backlog'u).
+- `BookUpserted.priceAmount` metin, HTTP'deki `priceAmount` sayı (outbox payload kolonu MySQL JSON; sayı DOUBLE'a dönüşür).
+  Sayıya geçmek için payload kolonunu metin tipine çeviren yeni migration + `eventVersion` kararı gerekir.
+- Kök POM'a yeni `<module>` eklenince her servisin Dockerfile'ına o modülün `pom.xml` COPY satırı eklenmeli (yoksa imaj build'i kırılır).

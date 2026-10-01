@@ -34,6 +34,12 @@
   book_categories, stock_reservations, outbox. Aynı kurallar (BINARY(16) uygulama UUID'si, DATETIME(6) UTC, utf8mb4_0900_ai_ci,
   isimlendirilmiş pk_/uk_/fk_/ck_/ix_ kısıtları). Fiyat DECIMAL(12,2) + currency CHAR(3) 'TRY'.
 - catalog-service: port 8082, çalıştırma `.\mvnw.cmd -pl catalog-service spring-boot:run`, testler `.\mvnw.cmd -pl catalog-service -am test`.
+  Container: `docker compose build catalog-service` + `docker compose up -d` (imaj `kitapsepeti/catalog-service:local`, 595 MB;
+  yerel `spring-boot:run` ile aynı anda çalışamaz). Health `/actuator/health/{liveness,readiness}`. Ayrıntı: `docs/docker.md`.
+  Container'da profil yok → seed yüklenmez; seed'li yerel deneme için `spring-boot:run -Dspring-boot.run.profiles=local`.
+- PowerShell 5.1: `docker compose stop ...` gibi stderr'e ilerleme yazan komutlar `$ErrorActionPreference='Stop'` altında
+  NativeCommandError ile script'i keser → `cmd /c "docker compose stop x 2>&1"`. `docker run ... sh -c '...'` içinde çift tırnak
+  kaybolur; `find` parantezleri `\(` `\)` ile yazılır.
 - Servisler arası anahtar (`.env`): `ORDER_INTERNAL_API_KEY` (order-service'in göndereceği ham anahtar, 32 bayt base64url) ve
   `CATALOG_INTERNAL_KEY_ORDER_SHA256` (aynı anahtarın SHA-256 hex'i; catalog yalnızca bunu okur). İkisi birlikte üretilir/değişir;
   ham anahtar hiçbir çıktıya yazılmaz (doğrulama yalnızca uzunluk + "hash eşleşiyor" boolean'ı ile). Sözleşme `docs/api/catalog-internal-stock.md`.
