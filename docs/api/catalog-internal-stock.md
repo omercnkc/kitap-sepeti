@@ -5,6 +5,11 @@ kullanım içindir; gateway/istemci üzerinden açılmamalıdır.
 
 Taban yol: `/internal/stock/reservations` (catalog-service, varsayılan port `8082`).
 
+Makine tarafından okunur sözleşme: [`catalog-service.openapi.json`](catalog-service.openapi.json) (OpenAPI 3.1,
+"Internal – Stock" tag'i; çalışan serviste `/v3/api-docs` ve `/swagger-ui.html`). Dosya `OpenApiContractTest` ile
+koda karşı denetlenir; güncellemek için:
+`.\mvnw.cmd -pl catalog-service test "-Dtest=OpenApiContractTest" "-Dopenapi.contract.update=true"`.
+
 ## Kimlik doğrulama
 
 Her istekte servis anahtarı başlıkta gönderilir:

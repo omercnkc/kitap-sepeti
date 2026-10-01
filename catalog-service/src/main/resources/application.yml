@@ -43,7 +43,24 @@ spring:
           # Açık anahtar ilk doğrulamada çekilir ve önbelleğe alınır; açılışta istek atılmaz.
           jwk-set-uri: ${USER_SERVICE_JWKS_URI:http://localhost:8081/.well-known/jwks.json}
 
+springdoc:
+  # Testte bileşen taramasına giren /test/** ve güvenlik deneme uçları (security/exception paketleri) dokümana girmez.
+  packages-to-scan: com.kitapsepeti.catalog.controller
+  paths-to-match: /api/**, /internal/**
+  # Uçlarda produces yazılmadığı için başarı yanıtları aksi halde */* görünür.
+  default-produces-media-type: application/json
+  # docs/api/catalog-service.openapi.json diff'leri sıralama gürültüsü içermesin.
+  writer-with-order-by-keys: true
+  api-docs:
+    enabled: ${SPRINGDOC_ENABLED:true}
+  swagger-ui:
+    enabled: ${SPRINGDOC_ENABLED:true}
+    tags-sorter: alpha
+    operations-sorter: method
+
 app:
+  # Maven resource filtering ile pom'daki sürüm yazılır (OpenAPI info.version).
+  version: "@project.version@"
   jwt:
     issuer: kitapsepeti-user-service
   # Exchange user-service ile ortaktır; ad değişirse iki serviste birlikte değişmeli.

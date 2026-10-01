@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 import com.kitapsepeti.catalog.validation.ValidPriceRange;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -17,14 +18,15 @@ import jakarta.validation.constraints.Min;
  */
 @ValidPriceRange
 public record BookSearchRequest(
-		UUID categoryId,
+		@Schema(description = "Kategori; alt kategorilerdeki kitaplar da dahil") UUID categoryId,
 		UUID publisherId,
 		UUID authorId,
 		@DecimalMin("0") BigDecimal minPrice,
-		@DecimalMin("0") BigDecimal maxPrice,
-		BookSort sort,
-		@Min(0) Integer page,
-		@Min(1) @Max(50) Integer size) {
+		@Schema(description = "`minPrice` ile birlikte verilirse ondan küçük olamaz") @DecimalMin("0") BigDecimal maxPrice,
+		@Schema(type = "string", allowableValues = { "newest", "price_asc", "price_desc", "title_asc" },
+				defaultValue = "newest", description = "Büyük/küçük harf duyarsız") BookSort sort,
+		@Schema(defaultValue = "0") @Min(0) Integer page,
+		@Schema(defaultValue = "20") @Min(1) @Max(50) Integer size) {
 
 	public static final int DEFAULT_SIZE = 20;
 

@@ -49,6 +49,7 @@ public class SecurityConfig {
 			.logout(AbstractHttpConfigurer::disable)
 			.authorizeHttpRequests(auth -> auth
 				.requestMatchers(HttpMethod.GET, PUBLIC_GET_PATHS).permitAll()
+				.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
 				// Hata yanıtları /error'a yönlendirilir; kapalı olursa her hata 401'e dönüşür.
 				.requestMatchers("/error").permitAll()
 				.requestMatchers("/api/admin/**").hasRole("ADMIN")
