@@ -12,6 +12,10 @@ docker compose ps        # mysql, rabbitmq, user-service, catalog-service → he
 Volume'ları silen `docker compose down -v` veritabanını ve kuyrukları da siler; durdurmak için `docker compose stop`.
 Yerelde `spring-boot:run` ile açık bir servis varsa aynı portu kullandığı için önce o kapatılmalı.
 
+Host portları yalnızca `127.0.0.1`'e bağlıdır (8081, 8082, 3306, 5672, 15672, adminer 8090): makinenin kendisinden
+`localhost` ile erişilir, ağdaki başka cihazlardan erişilemez. Container'lar birbirine compose ağı üzerinden servis
+adıyla bağlanır (`mysql:3306`, `rabbitmq:5672`, `user-service:8081`); bu bağlama etkilenmez.
+
 ## catalog-service
 
 | | |
