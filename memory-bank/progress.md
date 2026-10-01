@@ -25,10 +25,15 @@
   Commit `52194f4`.
 - catalog-service kitap admin: `/api/admin/books` liste/detay/oluştur/PATCH (istemci versiyonu zorunlu)/publish/archive/DELETE(=arşiv),
   koşullu stok düzeltme (`stock-adjustments`), ISBN normalizasyon + checksum, `BookUpserted`/`BookRemoved` outbox olayları
-  (`docs/events/book-upserted.md`, `book-removed.md`). Stok kolonları entity'den yazılamaz. 177 test yeşil. Henüz commit edilmedi.
+  (`docs/events/book-upserted.md`, `book-removed.md`). Stok kolonları entity'den yazılamaz. 177 test yeşil. Commit `366c465`.
+- catalog-service outbox relay: user-service worker'ının kopyası; `book.upserted` / `book.removed` routing key'leriyle ortak
+  `kitapsepeti.events` exchange'ine yayın (tanım user-service ile birebir). Gerçek broker kesintisi testi dahil 194 test yeşil.
+  Henüz commit edilmedi.
+  (Kapatılan bilinen sorun: "catalog-service outbox'ı henüz yayınlanmıyor".)
 
 ## Yapılacaklar
-- catalog-service: outbox relay (RabbitMQ), internal stok uçları (reserve/commit/release), springdoc, actuator, Dockerfile + compose servisi.
+- catalog-service: internal stok uçları (reserve/commit/release), springdoc, actuator, Dockerfile + compose servisi.
+- `docs/events/book-*.md` içindeki "relay yok" durum notunu güncelle.
 - Search için: yayınevi/yazar/kategori yeniden adlandırması yayındaki kitaplar için olay üretmiyor → yeniden indeksleme gerekecek.
 - Docker/Actuator adımının commit'i.
 - Logout, e-posta/parola değiştirme, CORS.
@@ -40,7 +45,7 @@
 ## Bilinen sorunlar
 - MySQL CHECK ihlali (3819, HY000) JdbcTemplate'te `UncategorizedSQLException` olur; JPA yolunda ise
   `DataIntegrityViolationException` (Hibernate çevirir). catalog-service'te CHECK'e dokunan yazımlar JPA üzerinden yapılmalı.
-- Outbox'ta yayınlanmış satırlar temizlenmiyor; bilinmeyen `event_type` kuyruğun başını tıkar.
-- catalog-service outbox'ı henüz yayınlanmıyor (relay yok); satırlar `published_at = NULL` birikir.
-- Stok taşması: `initialStock` üst sınırı yok; INT sınırına yakın stokta `+delta` MySQL out-of-range → 500 (pratikte olası değil).
+- Outbox'ta yayınlanmış satırlar temizlenmiyor; bilinmeyen `event_type` kuyruğun başını tıkar (user-service ve catalog-service).
+- Stok taşması: `initialStock` ≤ 1.000.000, düzeltme |delta| ≤ 100.000; INT sınırına ancak çok sayıda düzeltmeyle yaklaşılır,
+  o zaman `+delta` MySQL out-of-range → 500 (pratikte olası değil).
 - DB kapalıyken `DataSourceHealthIndicator` her health çağrısında WARN + uzun stack trace yazıyor (log gürültüsü).

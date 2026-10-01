@@ -351,7 +351,7 @@
     `AdminAuthorControllerTest` (4), `AdminCategoryControllerTest` (6).
   - Uçtan uca (compose user-service + local seed) a–g geçti; deneme kayıtları silindi, seed sayıları değişmedi. user_db'de e2e kullanıcıları kalıyor (önceki adımlardaki gibi).
 
-- catalog-service kitap admin uçları + stok düzeltme + outbox olayları (177 test yeşil; henüz commit edilmedi; RabbitMQ/relay,
+- catalog-service kitap admin uçları + stok düzeltme + outbox olayları (177 test yeşil; commit `366c465`; RabbitMQ/relay,
   internal stok uçları (reserve/commit/release), OpenAPI YOK; migration'a dokunulmadı):
   - `controller/admin/AdminBookController` `/api/admin/books`: GET liste (`?status=draft|published|archived`, büyük/küçük harf duyarsız,
     tanınmayan → 400; sıra updatedAt desc, id desc; size 1–100), GET `/{id}` (her durum), POST (201 + Location, her zaman DRAFT + TRY,
@@ -360,7 +360,9 @@
   - KURAL: `Book.stockQuantity/reservedQuantity` `@Column(updatable = false)`, setter YOK; yalnızca insert'te (ctor
     `Book(title, publisher, price, initialStock)`). Değişiklik yalnızca `BookRepository.adjustStock` (JPQL `@Modifying(flushAutomatically,
     clearAutomatically)`: `set stockQuantity = stockQuantity + :delta where id = :id and stockQuantity + :delta >= reservedQuantity`).
-    JPQL bulk update versiyonu ve updated_at'i DEĞİŞTİRMEZ (bilinçli: stok admin formunun parçası değil). 0 satır → existsById ? 409
+    JPQL bulk update versiyonu DEĞİŞTİRMEZ (bilinçli: stok admin formunun parçası değil). updated_at ise DEĞİŞİR: `@UpdateTimestamp`
+    bulk UPDATE'te çalışmaz ama kolonun `ON UPDATE CURRENT_TIMESTAMP(6)` tanımı değer değiştiren her UPDATE'te DB saatini yazar
+    (`BookStockColumnsTest.adjustStockRefreshesUpdatedAtThroughDatabaseDefault`; 0 satırlık ayarlama dokunmaz). 0 satır → existsById ? 409
     STOCK_BELOW_RESERVED : 404. `BookStockColumnsTest` Hibernate UPDATE SQL'inde stok kolonlarının olmadığını ve araya giren rezerv
     değişikliğinin ezilmediğini doğrular (mutasyonla kırıldığı görüldü).
   - Optimistic lock: istemci `version` ≠ entity → `StaleVersionException` (409 CONCURRENT_MODIFICATION), hiçbir şey yazılmaz;
@@ -368,8 +370,8 @@
     (`@Lock(PESSIMISTIC_WRITE)`) ile okur → eşzamanlı stok düzeltmesi bekler, olaydaki inStock/durum tutarlı.
   - Olaylar: `service/OutboxService` (user-service kopyası, MANDATORY), `service/BookEventFactory`, payload record'ları
     `service/event/BookUpsertedEvent` / `BookRemovedEvent` (eventVersion 1). aggregate_type `book` (user-service `user` gibi küçük harf),
-    event_type `BookUpserted` / `BookRemoved` (PascalCase). Planlanan routing key'ler `book.upserted` / `book.removed` (relay yok;
-    `EventRoutingKeys` catalog'da henüz yok). V1 SQL yorumundaki 'Book'/'BookPublished' örnekleri eski; migration değiştirilmedi.
+    event_type `BookUpserted` / `BookRemoved` (PascalCase). Routing key'ler `book.upserted` / `book.removed` (relay sonraki adımda
+    eklendi, aşağıya bkz.). V1 SQL yorumundaki 'Book'/'BookPublished' örnekleri eski; migration değiştirilmedi.
     BookUpserted: publish (DRAFT/ARCHIVED → PUBLISHED), PUBLISHED kitapta her PATCH, PUBLISHED kitapta inStock değişen stok düzeltmesi.
     BookRemoved: PUBLISHED → ARCHIVED. Zaten yayında/arşivde = değişiklik ve olay yok. publishedAt yalnızca null ise atanır.
     Payload'da stok/rezerv/version/status YOK; priceAmount metin ("149.90"), `categoryIdsWithAncestors` (`CategoryForest.withAncestors`).
@@ -392,12 +394,38 @@
   - Uçtan uca (local seed + compose user-service, ADMIN token): a–g geçti. Yerel catalog_db'de 2 arşivlenmiş e2e kitabı ve 6 outbox
     satırı (published_at NULL) kaldı; seed published sayısı 11.
 
+- catalog-service outbox relay (194 test yeşil; henüz commit edilmedi; user-service'e dokunulmadı, ortak modül yok):
+  - user-service worker'ının birebir kopyası (`com.kitapsepeti.catalog`): `outbox/OutboxRelay` (DB kesintisinde tek satır WARN dahil),
+    `OutboxPublisher`, `OutboxProperties`, `OutboxPublishException`, `EventRoutingKeys` (`BookUpserted → book.upserted`,
+    `BookRemoved → book.removed`; bilinmeyen tip → IllegalStateException → WARN + tur durur = kuyruk bloklanır, user-service ile aynı),
+    `config/RabbitConfig` (yalnızca exchange; kuyruk yok), `config/SchedulingConfig`, `config/ClockConfig` (catalog'da Clock bean'i yoktu).
+  - Exchange tanımı user-service ile AYNI: `new TopicExchange(props.exchange(), true, false)` — `kitapsepeti.events`, topic, durable,
+    autoDelete false, argümansız. Fark broker'da PRECONDITION_FAILED → `EventsExchangeCompatibilityTest` (önce user-service tanımıyla
+    declare + Catalog declare hatasız; negatif kontrol: durable=false → PRECONDITION_FAILED).
+  - Mesaj: messageId = outbox id, type = event_type, application/json + UTF-8, timestamp = created_at, PERSISTENT, header
+    `aggregateType`/`aggregateId`. `application.yml` `spring.rabbitmq.*` + `app.outbox.*` user-service ile aynı anahtar/değerler.
+  - `CreateBookRequest.initialStock` `@Max(1_000_000)`.
+  - Test altyapısı: RabbitMQ konteyneri ayrı `RabbitTestcontainersConfiguration`'da (ApiTestSupport, CatalogServiceApplicationTests,
+    JwksFlowTest, JwksOutageTest import eder; JPA/JDBC dilim testleri etmez → her dilim context'inde boşuna broker açılmaz).
+    application-test.yml: `app.outbox.enabled: false`, `spring.rabbitmq.username/password: test` (ServiceConnection ezer).
+  - Testler: `OutboxRelayIT` (sözleşme özellikleri + payload, BookRemoved yalnızca `book.removed` kuyruğunda, publish→PATCH→archive sırası,
+    hata batch'i durdurur), `OutboxRelayBrokerOutageIT` (GERÇEK kesinti: kendi RabbitMQ'su sabit host portunda; stop → her turda tek
+    satır WARN `Send failed (AmqpConnectException)`, ERROR/stack trace yok; yeni konteyner aynı portta → satırlar sırayla yayınlanır),
+    `OutboxDisabledTest` (relay/SchedulingConfig/scheduled processor/TaskScheduler bean'i yok), `EventsExchangeCompatibilityTest`,
+    `OutboxRelayDatabaseFailureTest`, `OutboxRelayUnknownEventTypeTest`, `OutboxSkipLockedTest`, `EventRoutingKeysTest`,
+    BookStockColumnsTest (+updated_at), AdminBookControllerTest (initialStock 1_000_001 → 400, 1_000_000 → 201).
+  - Uçtan uca: açılışta 6 bekleyen satır ~0,2 sn'de yayınlandı; broker'da tek `kitapsepeti.events`, 2 bağlantı (user-service + catalog);
+    seed kitap 403 stok 0 → +5 (inStock değişti) → yeni BookUpserted ~1 sn'de yayınlandı; yeni user-service kaydı UserRegistered
+    yayınlandı. Yerel catalog_db'de kitap 403 stoğu artık 5 (seed'de 0); user_db'de 2 yeni e2e kullanıcısı.
+
 ## Sonraki adımlar
-- catalog-service: outbox relay (RabbitMQ, `EventRoutingKeys`), internal stok uçları (reserve/commit/release),
-  springdoc, actuator, Dockerfile + compose servisi (`USER_SERVICE_JWKS_URI` compose'ta user-service adına).
+- catalog-service: internal stok uçları (reserve/commit/release), springdoc, actuator, Dockerfile + compose servisi
+  (`USER_SERVICE_JWKS_URI` ve `RABBITMQ_HOST` compose'ta servis adlarına).
+- `docs/events/book-upserted.md` / `book-removed.md` "henüz relay yok" notu güncellenmeli (bu adımda docs/ kapsam dışıydı).
 - Backlog: yayınevi/yazar/kategori yeniden adlandırılınca yayındaki kitaplar için olay ÜRETİLMİYOR; Search servisi gelince
   yeniden indeksleme (ya da bu değişikliklerde etkilenen kitaplar için BookUpserted) gerekecek.
 - Docker adımının commit'i (kullanıcı isteyince), logout, e-posta/parola değiştirme, consumer servisler, CORS.
 - Açık konular: DataSourceHealthIndicator stack trace gürültüsü; CI pipeline yok (drift testi yalnızca yerel `mvnw test`'te).
-- Açık konu: outbox'ta yayınlanmış satırların temizliği (retention) yok; bilinmeyen event_type kuyruğun başını tıkar.
+- Açık konu (user-service VE catalog-service): outbox'ta yayınlanmış satırların temizliği (retention) yok; bilinmeyen event_type
+  kuyruğun başını tıkar (her turda WARN, sonraki satırlar bekler).
 - Yeni servisler eklendikçe kök POM kontrol listesini uygula (bkz. systemPatterns.md).

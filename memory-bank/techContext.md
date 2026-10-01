@@ -36,7 +36,8 @@
 - catalog-service: port 8082, çalıştırma `.\mvnw.cmd -pl catalog-service spring-boot:run`, testler `.\mvnw.cmd -pl catalog-service -am test`.
 - Mesajlaşma: RabbitMQ 4 (`rabbitmq:4-management`, container `kitapsepeti-rabbitmq`, AMQP 5672,
   Management UI/API yalnızca `127.0.0.1:15672`). Kullanıcı `.env`'deki `RABBITMQ_USER`/`RABBITMQ_PASSWORD`.
-  user-service olayları `kitapsepeti.events` (topic) exchange'ine outbox worker ile yayınlar; sözleşmeler `docs/events/`.
+  user-service ve catalog-service olayları `kitapsepeti.events` (topic) exchange'ine outbox worker ile yayınlar;
+  sözleşmeler `docs/events/`. Exchange'i iki servis de açılışta declare eder (tanım aynı olmalı).
 - API dokümanı: springdoc-openapi 3.1.1 (Boot 4 hattı). Çalışırken `http://localhost:8081/swagger-ui.html` ve
   `/v3/api-docs` (OpenAPI 3.1.0); `SPRINGDOC_ENABLED=false` ile ikisi de kapanır. HTTP sözleşmeleri `docs/api/`
   (`user-service.openapi.json` = `/v3/api-docs` çıktısı; node ile `JSON.stringify(d, null, 2)` + BOM'suz yazıldı).

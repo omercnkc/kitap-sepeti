@@ -99,6 +99,13 @@
 - Üretici kuyruk tanımlamaz; consumer kendi kuyruğunu declare/bind eder. Yeni olay tipi = `EventRoutingKeys`'e
   routing key + `docs/events/<olay>.md`.
 - Worker testlerde varsayılan kapalı (`app.outbox.enabled: false`); açan test ayrı context kurar.
+- Tüm servisler aynı `kitapsepeti.events` exchange'ine yayınlar; her serviste tanım BİREBİR aynı olmalı
+  (`new TopicExchange(name, true, false)`, argümansız). Farklı durable/autoDelete/argüman → broker PRECONDITION_FAILED
+  ile kanalı kapatır. Ortak modül yok: worker sınıfları servis başına kopya (user-service ↔ catalog-service).
+- catalog testlerinde RabbitMQ konteyneri ayrı `RabbitTestcontainersConfiguration`; tam context açan testler import eder,
+  dilim testleri (`@DataJpaTest`, `@JdbcTest`) etmez.
+- JPQL/SQL bulk UPDATE `@UpdateTimestamp`/`@Version`'ı atlar; `updated_at` yine de kolonun `ON UPDATE CURRENT_TIMESTAMP(6)`
+  tanımıyla DB saatine güncellenir (değer değiştiren her UPDATE'te).
 - Adlandırma: `aggregate_type` küçük harf varlık adı (`user`, `book`); `event_type` PascalCase geçmiş zaman/olgu (`UserRegistered`,
   `BookUpserted`, `BookRemoved`); routing key `<varlık>.<olay>` küçük harf (`user.registered`, `book.upserted`, `book.removed`).
   Payload record'u `service/event/<Olay>Event` (`TYPE`, `VERSION`, ilk alan `eventVersion`). Payload'a iç sayaç/versiyon/durum konmaz.
