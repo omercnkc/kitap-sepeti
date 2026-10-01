@@ -73,6 +73,19 @@
   değilse `IllegalStateException` (500 + ERROR), durum geçişi toplu JPQL `transition(orderId, from, to)` (updated_at DB ON UPDATE ile).
 - `expiresAt = clock.instant() + app.stock.reservation-ttl` (`StockProperties`, 15m), MICROS'a kesilir (DATETIME(6) → 201 ve tekrar 200 aynı gövde).
 - Olay: yayındaki kitabın `available > 0` değeri değiştiyse `BookUpserted` (rezerv: son kopyalar; iptal: 0 → >0). Onay olay üretmez.
+- **DEĞİŞMEZ:** her kitapta `reserved_quantity = SUM(quantity WHERE status = 'held')`. Rezervi değiştiren her yol (reserve/commit/
+  release/süre dolumu, seed) bunu korumalı. Test yardımcısı `support/StockInvariant` (`VIOLATIONS_SQL` yalnızca tutarsız kitapları
+  döndürür; `assertHolds(jdbc)`); eşzamanlılık/süre dolumu testlerinin sonunda ve DevSeedMigrationTest'te çağrılır.
+- Süre dolumu (`service/ReservationExpiryJob`, `app.stock.expiry.{enabled,interval,batch-size}` = true/30s/100; test profilinde kapalı,
+  testler `releaseExpired()`'ı doğrudan çağırır): aday siparişler kilitsiz native sorgu (`status='held' AND expires_at < now`,
+  GROUP BY order_id, en eski MIN(expires_at) önce, LIMIT; `ix_stock_reservations_status_expires` range). Her sipariş ayrı transaction:
+  `lockByOrderIdAndStatusSkipLocked` (JPQL + PESSIMISTIC_WRITE + `jakarta.persistence.lock.timeout = -2` → `FOR UPDATE SKIP LOCKED`);
+  boşsa ya da kilitlenen sayı `countByOrderIdAndStatus(HELD)`'den azsa (kısmi kilit = eşzamanlı onay/iptal) sipariş atlanır; kilitten
+  sonra süre yeniden kontrol edilir. Bırakma iptal ucuyla ORTAK `StockReservationTransactions.releaseHeld` (aynı kilit sırası, koşullu
+  UPDATE, olay kuralı). Hata: sipariş hatası → o sipariş geri alınır, tek satır WARN (orderId + sınıf adı), tur sürer;
+  `DataAccessResourceFailureException`/`TransactionException` (veya aday okuması hatası) → tek satır WARN, tur biter. ≥1 sipariş
+  bırakıldıysa tur sonunda tek INFO. Yeni olay türü YOK; commit süreye bakmaz (held ise onaylanır).
+- `SchedulingConfig` `AnyNestedCondition`: outbox VEYA süre dolumu açıksa `@EnableScheduling`.
 - Hata altyapısı user-service ile aynı yapıda KOPYA (ortak modül yok; Cart servisi gelince çıkarılacak). İki servisteki
   `ProblemDetails`/`GlobalExceptionHandler`/security handler değişiklikleri elle senkron tutulmalı.
 - DB kısıt → ErrorCode eşlemesi tek yerde: `exception/DbConstraints.classify` (Hibernate kind + normalize ad + MySQL hata kodu).
@@ -108,6 +121,8 @@
 - `db/seed/R__*.sql` repeatable migration, yalnızca `application-local.yml` `spring.flyway.locations`'a ekler; varsayılan/test profili yüklemez.
 - Idempotent: sabit UUID + `INSERT ... AS new ON DUPLICATE KEY UPDATE col = new.col` (`VALUES()` deprecated).
 - Varsayılan profilde `ignore-migration-patterns: "*:future,repeatable:missing"` şart (seed'li DB'de validate düşmesin).
+- Seed'de rezervli kitap varsa toplamı tutan `held` `stock_reservations` satırları da seed'de olmalı (sabit id/orderId,
+  `expires_at` 2099 → süre dolumu bırakmaz); yeniden çalıştırma kitap ve rezervasyonu birlikte seed durumuna döndürür.
 
 ## Test
 - catalog API testleri `ApiTestSupport`'u extend eder: gerçek HTTP JWKS (JDK HttpServer) + `TestJwt` ile imzalı token.

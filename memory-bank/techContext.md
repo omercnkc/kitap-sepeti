@@ -38,6 +38,10 @@
   `CATALOG_INTERNAL_KEY_ORDER_SHA256` (aynı anahtarın SHA-256 hex'i; catalog yalnızca bunu okur). İkisi birlikte üretilir/değişir;
   ham anahtar hiçbir çıktıya yazılmaz (doğrulama yalnızca uzunluk + "hash eşleşiyor" boolean'ı ile). Sözleşme `docs/api/catalog-internal-stock.md`.
 - PowerShell tuzağı: değişken adları büyük/küçük harf DUYARSIZ (`$c` ile `$C` aynı değişken).
+- Test tuzağı: JdbcTemplate'e `java.sql.Timestamp` verilirse Connector/J DATETIME'a JVM saat diliminde (UTC+3) yazar; Hibernate ise
+  UTC (`hibernate.jdbc.time_zone`). Karşılaştırılacak zamanı JDBC ile yazarken `LocalDateTime.ofInstant(instant, ZoneOffset.UTC)` kullan.
+- Kısa TTL ile yerel deneme: `.\mvnw.cmd -pl catalog-service spring-boot:run "-Dspring-boot.run.profiles=local"
+  "-Dspring-boot.run.arguments=--app.stock.reservation-ttl=20s"` (görev ~30 sn'de bir çalışır).
 - Mesajlaşma: RabbitMQ 4 (`rabbitmq:4-management`, container `kitapsepeti-rabbitmq`, AMQP 5672,
   Management UI/API yalnızca `127.0.0.1:15672`). Kullanıcı `.env`'deki `RABBITMQ_USER`/`RABBITMQ_PASSWORD`.
   user-service ve catalog-service olayları `kitapsepeti.events` (topic) exchange'ine outbox worker ile yayınlar;

@@ -419,8 +419,8 @@
     yayınlandı. Yerel catalog_db'de kitap 403 stoğu artık 5 (seed'de 0); user_db'de 2 yeni e2e kullanıcısı.
   - Commit `c03c0de` (+ memory-bank `dca4f75`), push edildi.
 
-- catalog-service internal stok uçları + servisler arası API anahtarı (225 test yeşil; henüz commit edilmedi; migration, user-service,
-  docker-compose'a dokunulmadı; süre dolumu işi YOK — Adım 9):
+- catalog-service internal stok uçları + servisler arası API anahtarı (225 test yeşil; commit `958a708` + memory-bank `8a56ed8`, push edildi;
+  migration, user-service, docker-compose'a dokunulmadı; süre dolumu Adım 9'da eklendi):
   - Uçlar (`controller/internal/InternalStockController`, `/internal/stock/reservations`): POST (yeni 201 + Location, aynı küme 200,
     farklı küme 409 RESERVATION_MISMATCH), POST `/{orderId}/commit`, POST `/{orderId}/release`, GET `/{orderId}`. Sözleşme
     `docs/api/catalog-internal-stock.md`. Kimlik: `X-Internal-Api-Key` (kalıp systemPatterns.md "Servisler arası kimlik").
@@ -440,9 +440,28 @@
     Yerel catalog_db'de 410 için 1 released + 1 committed rezervasyon satırı ve 4 yeni outbox satırı; user_db'de 2 yeni e2e kullanıcısı.
   - `docs/events/book-*.md`: "relay yok" notu kaldırıldı, rezervasyon tetikleyicileri eklendi.
 
+- Adım 9 — rezervasyon süre dolumu + seed tutarlılığı (248 test yeşil = 225 + 23; user-service 83; commit `e18960a`, push edildi; migration,
+  user-service, docker-compose, .env'ye dokunulmadı; yeni olay türü yok, commit'in süre davranışı aynı):
+  - Ana kod: `service/ReservationExpiryJob` (yeni), `StockProperties` (+ iç `Expiry` record), `SchedulingConfig` (AnyNestedCondition),
+    `StockReservationRepository` (+ `findExpiredHeldOrderIds` native, `lockByOrderIdAndStatusSkipLocked`, `countByOrderIdAndStatus`),
+    `StockReservationTransactions` (+ `findExpiredOrderIds`, `releaseExpired(orderId, now)`; `release()` gövdesi ortak `releaseHeld`'e
+    taşındı). application.yml `app.stock.expiry` (true/30s/100), application-test.yml `enabled: false`. Kalıp: systemPatterns.md.
+  - Seed: sipariş 601 (402×2, 404×2) ve 602 (402×1, 406×1) `held`, `expires_at` 2099-12-31, id 501–504; ON DUPLICATE KEY UPDATE.
+  - Testler: `ReservationExpiryJobTest` (12: süre dolumu + BookUpserted, tek INFO, dokunulmayanlar, tam TTL anında bırakmama,
+    sonrasında commit 409 / release 200, görevden önce commit, kilit yarışı [ayrı thread TransactionTemplate + `FOR UPDATE` latch'le
+    tutulur → atlanır, bırakılınca sonraki tur], kısmi kilit, SQL'de `skip locked`, 150 sipariş → 100 + 50 en eski önce, hata izolasyonu,
+    commit + görev 20 tur `runConcurrently`), `ReservationExpiryJobFailureTest` (5, Mockito; DB yok → tek WARN tur biter),
+    `ReservationExpiryDisabledTest` (4; context'te bean yok + ApplicationContextRunner koşulları), `DevSeedExpiryTest` (1),
+    DevSeedMigrationTest (+1 test: yeniden çalıştırma released rezervasyonu ve rezervi birlikte geri getirir; değişmez kontrolü).
+    `runConcurrently` InternalStockTestSupport'a taşındı; InternalStockConcurrencyTest'in 4 senaryosu sonunda değişmez kontrolü.
+  - Uçtan uca (local, TTL 20 sn): seed yeniden uygulandı, değişmez 0 (öncesinde 402/404/406 tutarsızdı); EXPLAIN aday sorgusu
+    `ix_stock_reservations_status_expires` range; 403 admin +1 → rezerve (inStock false) → ~15 sn sonra görev bıraktı (tek INFO,
+    BookUpserted inStock=true yayınlandı) → commit 409 RESERVATION_RELEASED; normal TTL ile yeniden açılıp 403 −1 ile seed değerine (0)
+    döndü, değişmez 0. Yerel catalog_db: 403 için 1 released rezervasyon + outbox satırları; user_db'de 2 yeni e2e kullanıcısı.
+
 ## Sonraki adımlar
-- order-service (rezervasyon istemcisi; fiyat anlık görüntüsü kendisinde). catalog: süresi dolan `held` rezervasyonları serbest bırakan
-  zamanlanmış iş (Adım 9; `ix_stock_reservations_status_expires` hazır), springdoc, actuator, Dockerfile + compose servisi
+- order-service (rezervasyon istemcisi; fiyat anlık görüntüsü kendisinde; `RESERVATION_RELEASED` → ödeme iadesi telafisi; süre dolumu
+  olayı yok, GET ile sorgulanır). catalog: springdoc, actuator, Dockerfile + compose servisi
   (`USER_SERVICE_JWKS_URI`, `RABBITMQ_HOST` ve `CATALOG_INTERNAL_KEY_ORDER_SHA256` compose'ta).
 - Backlog: yayınevi/yazar/kategori yeniden adlandırılınca yayındaki kitaplar için olay ÜRETİLMİYOR; Search servisi gelince
   yeniden indeksleme (ya da bu değişikliklerde etkilenen kitaplar için BookUpserted) gerekecek.
