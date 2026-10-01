@@ -27,6 +27,15 @@ spring:
     # local profilinde uygulanan dev seed (repeatable) bu profilde bulunmaz; doğrulama onun yüzünden düşmesin.
     # Versioned migration'lar için eksik/değişmiş kontrolü aynen geçerli.
     ignore-migration-patterns: "*:future,repeatable:missing"
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER}
+    password: ${RABBITMQ_PASSWORD}
+    # Broker kapalıyken outbox turu amqp-client'ın 60 sn'lik varsayılanında asılı kalmasın.
+    connection-timeout: 5s
+    # Her mesaj için broker onayı (ack/nack) CorrelationData future'ı ile beklenir.
+    publisher-confirm-type: correlated
   security:
     oauth2:
       resourceserver:
@@ -37,6 +46,13 @@ spring:
 app:
   jwt:
     issuer: kitapsepeti-user-service
+  # Exchange user-service ile ortaktır; ad değişirse iki serviste birlikte değişmeli.
+  outbox:
+    enabled: true
+    exchange: kitapsepeti.events
+    poll-interval: 2s
+    batch-size: 50
+    confirm-timeout: 5s
 
 logging:
   level:

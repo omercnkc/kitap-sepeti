@@ -18,14 +18,14 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 /**
- * API testlerinin ortak tabanı: tam uygulama bağlamı, MockMvc ve Testcontainers MySQL.
+ * API testlerinin ortak tabanı: tam uygulama bağlamı, MockMvc, Testcontainers MySQL ve RabbitMQ.
  * Token'lar user-service'in test anahtarıyla imzalanır; doğrulayıcı açık anahtarı gerçek bir HTTP JWKS
  * ucundan çeker (bütün alt sınıflar aynı bağlamı ve aynı sunucuyu paylaşır).
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Import(TestcontainersConfiguration.class)
+@Import({ TestcontainersConfiguration.class, RabbitTestcontainersConfiguration.class })
 public abstract class ApiTestSupport {
 
 	private static final JwksServer JWKS = JwksServer.start(TestJwt.publicJwksJson());

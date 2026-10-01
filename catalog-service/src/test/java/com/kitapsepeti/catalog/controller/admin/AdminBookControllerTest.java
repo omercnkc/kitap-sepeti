@@ -235,7 +235,15 @@ class AdminBookControllerTest extends ApiTestSupport {
 		negativeStock.put("initialStock", -1);
 		assertInvalidField(send(post(BASE), negativeStock), "initialStock");
 
+		Map<String, Object> hugeStock = validBook();
+		hugeStock.put("initialStock", 1_000_001);
+		assertInvalidField(send(post(BASE), hugeStock), "initialStock");
+
 		assertThat(bookCount()).isZero();
+
+		Map<String, Object> maxStock = validBook();
+		maxStock.put("initialStock", 1_000_000);
+		assertThat(stockOf(create(maxStock))).isEqualTo(1_000_000);
 	}
 
 	// --- 5. Yayınlama

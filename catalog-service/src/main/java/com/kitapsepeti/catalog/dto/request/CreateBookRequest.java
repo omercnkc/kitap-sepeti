@@ -9,6 +9,7 @@ import com.kitapsepeti.catalog.validation.Isbn;
 import com.kitapsepeti.catalog.validation.Isbns;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -27,7 +28,7 @@ public record CreateBookRequest(
 		@Positive Integer pageCount,
 		@HttpUrl @Size(max = 500) String coverUrl,
 		@NotNull @DecimalMin("0") @Digits(integer = 10, fraction = 2) BigDecimal priceAmount,
-		@PositiveOrZero Integer initialStock,
+		@PositiveOrZero @Max(1_000_000) Integer initialStock,
 		@Size(max = 20) Set<@NotNull UUID> authorIds,
 		@Size(max = 20) Set<@NotNull UUID> categoryIds) {
 

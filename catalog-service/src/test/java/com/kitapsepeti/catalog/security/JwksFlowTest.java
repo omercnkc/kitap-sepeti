@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.util.UUID;
 
+import com.kitapsepeti.catalog.RabbitTestcontainersConfiguration;
 import com.kitapsepeti.catalog.TestcontainersConfiguration;
 import com.kitapsepeti.catalog.support.JwksServer;
 import com.kitapsepeti.catalog.support.TestJwt;
@@ -28,7 +29,7 @@ import org.springframework.test.web.servlet.MockMvc;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Import(TestcontainersConfiguration.class)
+@Import({ TestcontainersConfiguration.class, RabbitTestcontainersConfiguration.class })
 class JwksFlowTest {
 
 	private static final JwksServer JWKS = JwksServer.start(TestJwt.publicJwksJson());

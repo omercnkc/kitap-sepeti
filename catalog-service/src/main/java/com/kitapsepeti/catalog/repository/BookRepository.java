@@ -47,8 +47,9 @@ public interface BookRepository extends JpaRepository<Book, UUID>, JpaSpecificat
 
 	/**
 	 * Stoğu tek koşullu UPDATE ile değiştirir; sonuç rezervin altına inecekse satır güncellenmez. Okuma-yazma
-	 * arası yarış yoktur (kontrol ve yazma aynı ifadede, satır kilidi altında). Versiyon ve updated_at
-	 * değişmez: stok, admin düzenleme formunun parçası değildir.
+	 * arası yarış yoktur (kontrol ve yazma aynı ifadede, satır kilidi altında). Versiyon değişmez: stok, admin
+	 * düzenleme formunun parçası değildir. updated_at ise kolonun {@code ON UPDATE CURRENT_TIMESTAMP(6)} tanımıyla
+	 * DB saatine güncellenir ({@code @UpdateTimestamp} bulk UPDATE'te çalışmaz; satır güncellenmezse dokunulmaz).
 	 * Önce bekleyen değişiklikler flush edilir, sonra persistence context temizlenir (bayat stok okunmasın).
 	 * @return etkilenen satır sayısı: 1 başarılı; 0 kitap yok veya stok rezervin altına inerdi
 	 */

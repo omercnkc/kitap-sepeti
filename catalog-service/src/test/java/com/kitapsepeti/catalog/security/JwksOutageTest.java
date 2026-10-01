@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.util.UUID;
 
+import com.kitapsepeti.catalog.RabbitTestcontainersConfiguration;
 import com.kitapsepeti.catalog.TestcontainersConfiguration;
 import com.kitapsepeti.catalog.exception.ErrorCode;
 import com.kitapsepeti.catalog.support.JwksServer;
@@ -40,7 +41,7 @@ import org.springframework.test.web.servlet.MockMvc;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Import(TestcontainersConfiguration.class)
+@Import({ TestcontainersConfiguration.class, RabbitTestcontainersConfiguration.class })
 @ExtendWith(OutputCaptureExtension.class)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class JwksOutageTest {

@@ -97,6 +97,31 @@ class BookStockColumnsTest extends ApiTestSupport {
 			.doesNotContain("version");
 	}
 
+	/**
+	 * JPQL bulk UPDATE {@code @UpdateTimestamp}'i atlar, ama kolondaki {@code ON UPDATE CURRENT_TIMESTAMP(6)}
+	 * değer değiştiren her UPDATE'te çalışır: başarılı ayarlama updated_at'i DB saatine çeker; koşulu
+	 * tutmayan (0 satır) ayarlama dokunmaz.
+	 */
+	@Test
+	void adjustStockRefreshesUpdatedAtThroughDatabaseDefault() {
+		String past = "2020-01-01 00:00:00.000000";
+		jdbc.update("UPDATE books SET updated_at = ? WHERE id = UUID_TO_BIN(?)", past, bookId.toString());
+
+		Integer increased = tx.execute(status -> bookRepository.adjustStock(bookId, 5));
+
+		assertThat(increased).isEqualTo(1);
+		assertThat(column("CAST(updated_at AS CHAR)")).isNotEqualTo(past);
+		assertThat(column("updated_at > NOW(6) - INTERVAL 1 MINUTE")).isEqualTo("1");
+		assertThat(column("version")).isEqualTo("0");
+
+		jdbc.update("UPDATE books SET updated_at = ?, reserved_quantity = 15 WHERE id = UUID_TO_BIN(?)", past,
+				bookId.toString());
+		Integer belowReserved = tx.execute(status -> bookRepository.adjustStock(bookId, -1));
+
+		assertThat(belowReserved).isZero();
+		assertThat(column("CAST(updated_at AS CHAR)")).isEqualTo(past);
+	}
+
 	private String column(String name) {
 		return jdbc.queryForObject("SELECT " + name + " FROM books WHERE id = UUID_TO_BIN(?)", String.class,
 				bookId.toString());
