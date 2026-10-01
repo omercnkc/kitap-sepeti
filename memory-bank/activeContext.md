@@ -290,9 +290,42 @@
     kapanınca önbellekten 200), `exception/DbConstraintsTest` (4, context'siz), SecurityRulesTest'e bozuk imza testi.
     `support/JwksServer`: `start(json, port)`, `freePort()`, statik `jwkSetUri(port)`.
   - Uçtan uca: user-service kapalı + catalog yeniden başlatılmış → 503 AUTHENTICATION_UNAVAILABLE; user-service healthy → aynı token 404.
+  - Commit `320d8fc` (+ memory-bank `5676f4c`), push edildi.
+
+- catalog-service public okuma uçları + local seed (89 test yeşil; henüz commit edilmedi; admin yazma/stok/outbox/OpenAPI YOK,
+  metin arama YOK — Search Service'in işi):
+  - Uçlar: GET `/api/books` (sayfalı liste), GET `/api/books/{id}` (yalnızca PUBLISHED), GET `/api/categories` (ağaç). Entity dönmez.
+  - DTO'lar `dto/response` (record): PageResponse(items, page, size, totalElements, totalPages), Publisher/Author/CategoryRef(id, name, slug),
+    BookSummaryResponse, BookDetailResponse (+ isbn, description, pageCount, publishedAt, categories), CategoryTreeResponse.
+    `inStock = stock - reserved > 0`; stok/rezerv/version/status/timestamp yanıtta YOK. authors/categories Türkçe ada göre sıralı.
+  - `dto/request/BookSearchRequest` (record, `@ModelAttribute` constructor binding): wrapper tipler + compact ctor default'ları
+    (sort NEWEST, page 0, size 20); `@DecimalMin(0)` fiyatlar, `@Min(0)` page, size 1–50; sınıf seviyesi `validation/ValidPriceRange`
+    (ihlal `minPrice` alanına yazılır). `BookSort` NEWEST/PRICE_ASC/PRICE_DESC/TITLE_ASC; `config/WebConfig` Converter'ı büyük/küçük
+    harf duyarsız (Spring'in varsayılan enum çevirisi duyarlı). Her sıralamada ikincil `id`.
+  - Hata kodları: query'de bozuk UUID/sayı/bilinmeyen sort → binding hatası → 400 VALIDATION_FAILED, errors[{field, "invalid value"}]
+    (girilen değer yanıtta yok). Path'te bozuk UUID → TypeMismatch → 400 MALFORMED_REQUEST.
+  - `service/BookQueryService` + `repository/BookSpecifications`: PUBLISHED + publisher eşitlik + author/category EXISTS alt sorgusu
+    (JOIN değil → kopya satır yok, count basit). categoryId alt kategorileri kapsar (`service/CategoryForest`, bellekte; bilinmeyen id →
+    boş sonuç). `BookRepository.findAll(Specification, Pageable)` override'ı `@EntityGraph("publisher")` (count sorgusuna uygulanmaz).
+    `hibernate.default_batch_fetch_size: 50` → liste = 3 SQL (sayfa+publisher JOIN, count, yazar batch IN), yazar sayısından bağımsız.
+  - `CategoryQueryService.tree()`: tek `findAll`, bellekte ağaç, her seviye Türkçe ada göre (`mapper/NameOrder.TURKISH` = tr Collator;
+    `String.compareTo` Ç'yi E'den sonraya koyar).
+  - Seed: `db/seed/R__dev_seed_catalog.sql` (repeatable), yalnızca `application-local.yml` (`spring.flyway.locations` + db/seed).
+    Sabit UUID'ler `01920000-0000-7000-8000-000000000NNN` (yayınevi 1xx, yazar 2xx, kategori 3xx, kitap 4xx) + `INSERT ... AS new
+    ON DUPLICATE KEY UPDATE`. 3 yayınevi, 5 yazar, 6 kategori (Edebiyat > Roman/Öykü, Bilim > Popüler Bilim, Çocuk), 14 kitap
+    (11 published; 402 stock=reserved, 403 stock=0; 412-413 draft; 414 archived). Dosyadan silinen bağ (book_authors) yeniden çalıştırmada silinmez.
+  - TUZAK: local'de seed uygulanmış DB varsayılan profilde açılınca Flyway "Detected applied migration not resolved locally: dev seed catalog"
+    ile düşüyordu → `application.yml` `spring.flyway.ignore-migration-patterns: "*:future,repeatable:missing"` (versioned kontrolü aynen).
+    `DevSeedMigrationTest` deseni application.yml'den okuyup doğrular.
+  - Flyway aynı checksum'lı repeatable'ı yeniden çalıştırmaz; seed idempotentliği dosyanın doğrudan yeniden çalıştırılmasıyla test edilir
+    (`ScriptUtils`; yerelde `docker cp` + container içinde `mysql --default-character-set=utf8mb4 < /tmp/seed.sql`).
+  - Test profili: `hibernate.generate_statistics: true` (StatisticalLoggingSessionEventListener WARN'a çekildi). Testler:
+    `controller/BookControllerTest` (20), `controller/CategoryControllerTest` (2), `seed/DevSeedMigrationTest` (2, Spring'siz, kendi container'ı).
+  - PowerShell konsolu yanıt JSON'undaki Türkçe karakterleri `�` gösterir; baytlar doğru UTF-8 (C3 87 = Ç).
+  - `spring-boot:run "-Dspring-boot.run.arguments=--logging.level..."` ve `LOGGING_LEVEL_ORG_FLYWAYDB` env ile Flyway DEBUG log'u gelmedi (çözülmedi).
 
 ## Sonraki adımlar
-- catalog-service: servis + API (admin CRUD, public okuma),
+- catalog-service: admin yazma uçları (CRUD), stok uçları, outbox,
   springdoc, actuator, Dockerfile + compose servisi (`USER_SERVICE_JWKS_URI` compose'ta user-service adına).
 - Docker adımının commit'i (kullanıcı isteyince), logout, e-posta/parola değiştirme, consumer servisler, CORS.
 - Açık konular: DataSourceHealthIndicator stack trace gürültüsü; CI pipeline yok (drift testi yalnızca yerel `mvnw test`'te).

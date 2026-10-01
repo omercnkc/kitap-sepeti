@@ -15,11 +15,14 @@
 - catalog-service hata altyapısı (user-service kopyası + Catalog kodları/kısıt eşlemesi) ve OAuth2 Resource Server
   (user-service JWKS, RS256 + iss + exp, lazy JWKS); commit `c6cee96`.
 - catalog-service JWKS kesintisi: token'lı korumalı istek 503 AUTHENTICATION_UNAVAILABLE ProblemDetail (eskiden 500);
-  DbConstraints birim testleri. 65 test yeşil. Henüz commit edilmedi.
+  DbConstraints birim testleri. Commit `320d8fc`.
   (Kapatılan bilinen sorun: "JWKS erişilemezken 500, Boot varsayılan JSON".)
+- catalog-service public okuma: GET `/api/books` (filtre: kategori+alt kategoriler, yayınevi, yazar, fiyat aralığı; 4 sıralama; sayfa),
+  GET `/api/books/{id}`, GET `/api/categories` (ağaç). Liste 3 SQL. Local profilde idempotent örnek veri (`db/seed`).
+  89 test yeşil. Henüz commit edilmedi.
 
 ## Yapılacaklar
-- catalog-service: servis + API, springdoc, actuator, Dockerfile + compose servisi.
+- catalog-service: admin yazma uçları, stok uçları, outbox, springdoc, actuator, Dockerfile + compose servisi.
 - Docker/Actuator adımının commit'i.
 - Logout, e-posta/parola değiştirme, CORS.
 - Diğer servisler (katalog, sepet, sipariş vb. — henüz kararlaştırılmadı) ve olay consumer'ları.
