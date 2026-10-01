@@ -204,9 +204,7 @@ class CatalogRepositoryTest {
 
 	@Test
 	void savesReservationAndFindsItByOrderAndBook() {
-		Book book = newBook("Kitap");
-		book.setStockQuantity(10);
-		bookRepository.save(book);
+		Book book = bookRepository.save(newBook("Kitap", 10));
 		UUID orderId = UUID.randomUUID();
 		Instant expiresAt = Instant.now().plus(15, ChronoUnit.MINUTES);
 		reservationRepository.saveAndFlush(new StockReservation(book, orderId, 2, expiresAt));
@@ -230,9 +228,9 @@ class CatalogRepositoryTest {
 
 	@Test
 	void checkViolationIsTranslatedToDataIntegrityViolation() {
-		Book book = newBook("Kitap");
-		book.setStockQuantity(1);
-		book.setReservedQuantity(2);
+		// Stok setter'ı yok; negatif başlangıç stoğu (rezerv 0) da aynı CHECK'i ihlal eder. MySQL birden çok
+		// ihlalde yalnızca birini (ada göre ilkini) raporlar: ck_books_reserved_le_stock < ck_books_stock_non_negative.
+		Book book = newBook("Kitap", -1);
 
 		Throwable thrown = catchThrowable(() -> bookRepository.saveAndFlush(book));
 
@@ -289,7 +287,11 @@ class CatalogRepositoryTest {
 	}
 
 	private Book newBook(String title) {
-		return new Book(title, savePublisher("p-" + UUID.randomUUID()), new BigDecimal("99.90"));
+		return newBook(title, 0);
+	}
+
+	private Book newBook(String title, int initialStock) {
+		return new Book(title, savePublisher("p-" + UUID.randomUUID()), new BigDecimal("99.90"), initialStock);
 	}
 
 	private int countLinks(String table, UUID bookId) {

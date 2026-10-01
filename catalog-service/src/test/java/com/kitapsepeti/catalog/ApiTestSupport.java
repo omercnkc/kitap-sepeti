@@ -45,6 +45,7 @@ public abstract class ApiTestSupport {
 
 	@BeforeEach
 	void cleanDatabase() {
+		jdbc.update("DELETE FROM outbox");
 		jdbc.update("DELETE FROM book_authors");
 		jdbc.update("DELETE FROM book_categories");
 		jdbc.update("DELETE FROM stock_reservations");

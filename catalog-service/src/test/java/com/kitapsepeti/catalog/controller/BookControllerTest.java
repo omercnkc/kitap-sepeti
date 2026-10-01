@@ -273,9 +273,9 @@ class BookControllerTest extends ApiTestSupport {
 
 	@Test
 	void inStockReflectsSellableQuantity() throws Exception {
-		save(withStock(book("Stokta", "10.00"), 5, 0));
-		save(withStock(book("Tamamı Rezerve", "20.00"), 3, 3));
-		save(withStock(book("Stoksuz", "30.00"), 0, 0));
+		save(book("Stokta", "10.00", 5));
+		setReserved(save(book("Tamamı Rezerve", "20.00", 3)), 3);
+		save(book("Stoksuz", "30.00", 0));
 
 		mockMvc.perform(get("/api/books?sort=price_asc"))
 			.andExpect(status().isOk())
@@ -315,15 +315,24 @@ class BookControllerTest extends ApiTestSupport {
 	}
 
 	private Book book(String title, String price) {
-		Book book = new Book(title, publisher, new BigDecimal(price));
+		return book(title, price, 1);
+	}
+
+	private Book book(String title, String price, int stock) {
+		Book book = new Book(title, publisher, new BigDecimal(price), stock);
 		book.setStatus(BookStatus.PUBLISHED);
 		book.setPublishedAt(NOW);
-		book.setStockQuantity(1);
 		return book;
 	}
 
 	private Book save(Book book) {
 		return bookRepository.save(book);
+	}
+
+	/** Rezerv entity üzerinden yazılamaz (updatable=false); kayıttan sonra doğrudan SQL ile verilir. */
+	private void setReserved(Book book, int reserved) {
+		jdbc.update("UPDATE books SET reserved_quantity = ? WHERE id = UUID_TO_BIN(?)", reserved,
+				book.getId().toString());
 	}
 
 	private static Book withStatus(Book book, BookStatus status) {
@@ -338,12 +347,6 @@ class BookControllerTest extends ApiTestSupport {
 
 	private static Book withPublishedAt(Book book, Instant publishedAt) {
 		book.setPublishedAt(publishedAt);
-		return book;
-	}
-
-	private static Book withStock(Book book, int stock, int reserved) {
-		book.setStockQuantity(stock);
-		book.setReservedQuantity(reserved);
 		return book;
 	}
 

@@ -80,9 +80,7 @@ class ErrorProbeController {
 	@PostMapping("/books/overbooked")
 	@Transactional
 	UUID createOverbookedBook() {
-		Book book = new Book("Kitap", newPublisher(), new BigDecimal("10.00"));
-		book.setStockQuantity(1);
-		book.setReservedQuantity(2);
+		Book book = new Book("Kitap", newPublisher(), new BigDecimal("10.00"), -1);
 		return bookRepository.saveAndFlush(book).getId();
 	}
 

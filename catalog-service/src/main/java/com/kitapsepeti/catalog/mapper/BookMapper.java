@@ -36,22 +36,22 @@ public final class BookMapper {
 	}
 
 	/** Satılabilir stok = stok - rezerv. */
-	static boolean inStock(Book book) {
-		return book.getStockQuantity() - book.getReservedQuantity() > 0;
+	public static boolean inStock(Book book) {
+		return book.getAvailableQuantity() > 0;
 	}
 
-	private static PublisherRef toRef(Publisher publisher) {
+	static PublisherRef toRef(Publisher publisher) {
 		return new PublisherRef(publisher.getId(), publisher.getName(), publisher.getSlug());
 	}
 
-	private static List<AuthorRef> authorRefs(Collection<Author> authors) {
+	static List<AuthorRef> authorRefs(Collection<Author> authors) {
 		return authors.stream()
 			.sorted(Comparator.comparing(Author::getName, NameOrder.TURKISH).thenComparing(Author::getSlug))
 			.map(author -> new AuthorRef(author.getId(), author.getName(), author.getSlug()))
 			.toList();
 	}
 
-	private static List<CategoryRef> categoryRefs(Collection<Category> categories) {
+	static List<CategoryRef> categoryRefs(Collection<Category> categories) {
 		return categories.stream()
 			.sorted(Comparator.comparing(Category::getName, NameOrder.TURKISH).thenComparing(Category::getSlug))
 			.map(category -> new CategoryRef(category.getId(), category.getName(), category.getSlug()))

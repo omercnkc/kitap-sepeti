@@ -26,6 +26,8 @@ public enum ErrorCode {
 	RESOURCE_IN_USE(HttpStatus.CONFLICT, Level.INFO, "Resource is referenced by other records and cannot be deleted."),
 	CONCURRENT_MODIFICATION(HttpStatus.CONFLICT, Level.INFO, "Resource was modified by another request; reload and retry."),
 	CATEGORY_CYCLE(HttpStatus.CONFLICT, Level.INFO, "Category cannot be moved under itself or its descendants."),
+	BOOK_NOT_PUBLISHABLE(HttpStatus.CONFLICT, Level.INFO, "Book does not meet the requirements for publishing."),
+	STOCK_BELOW_RESERVED(HttpStatus.CONFLICT, Level.INFO, "Stock cannot be reduced below the reserved quantity."),
 	AUTHENTICATION_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, Level.WARN, "Authentication service is temporarily unavailable; retry later."),
 	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, Level.ERROR, "An unexpected error occurred.");
 

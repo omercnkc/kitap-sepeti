@@ -81,13 +81,16 @@ public class Book {
 	@Column(name = "currency", nullable = false, length = 3)
 	private String currency = "TRY";
 
-	@Setter
-	@Column(name = "stock_quantity", nullable = false)
+	/**
+	 * Yalnızca insert'te yazılır; sonrasında entity üzerinden ASLA güncellenmez (Hibernate UPDATE'ine girmez).
+	 * Değişiklik yalnızca koşullu toplu UPDATE ile yapılır ({@code BookRepository#adjustStock}); böylece
+	 * eşzamanlı bir admin düzenlemesi stok/rezerv değerini eski haliyle ezemez.
+	 */
+	@Column(name = "stock_quantity", nullable = false, updatable = false)
 	private int stockQuantity = 0;
 
-	/** Aktif ('held') rezervasyonların toplamı; {@code stockQuantity}'yi aşamaz. */
-	@Setter
-	@Column(name = "reserved_quantity", nullable = false)
+	/** Aktif ('held') rezervasyonların toplamı; {@code stockQuantity}'yi aşamaz. Stok ile aynı kural. */
+	@Column(name = "reserved_quantity", nullable = false, updatable = false)
 	private int reservedQuantity = 0;
 
 	/** DB'de küçük harf ('draft'/'published'/'archived'); varsayılan Java'da da verilir, DB default'una güvenilmez. */
@@ -127,9 +130,20 @@ public class Book {
 
 	/** Zorunlu alanlarla yeni kitap; status=DRAFT, currency="TRY", stok ve rezerv 0 başlar. */
 	public Book(String title, Publisher publisher, BigDecimal priceAmount) {
+		this(title, publisher, priceAmount, 0);
+	}
+
+	/** Başlangıç stoğuyla yeni kitap; rezerv 0 başlar. Stok yalnızca burada (insert) verilebilir. */
+	public Book(String title, Publisher publisher, BigDecimal priceAmount, int initialStock) {
 		this.title = title;
 		this.publisher = publisher;
 		this.priceAmount = priceAmount;
+		this.stockQuantity = initialStock;
+	}
+
+	/** Satılabilir stok = stok - rezerv. */
+	public int getAvailableQuantity() {
+		return this.stockQuantity - this.reservedQuantity;
 	}
 
 }

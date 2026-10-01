@@ -8,6 +8,9 @@ spring:
       hibernate:
         # Sorgu sayısı testleri için (Statistics.getPrepareStatementCount); yalnızca test profilinde.
         generate_statistics: true
+        # Üretilen SQL'i doğrulayan testler için (ör. stok kolonlarının UPDATE'e girmemesi); kayıt varsayılan kapalı.
+        session_factory:
+          statement_inspector: com.kitapsepeti.catalog.support.SqlCapture
 
 logging:
   level:

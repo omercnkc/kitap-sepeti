@@ -33,7 +33,7 @@ public class OutboxEvent {
 	@Column(name = "id", nullable = false, updatable = false)
 	private UUID id;
 
-	/** Olayın ait olduğu varlık türü, ör. "Book". */
+	/** Olayın ait olduğu varlık türü, küçük harf: ör. "book". */
 	@Column(name = "aggregate_type", nullable = false, updatable = false, length = 64)
 	private String aggregateType;
 
@@ -41,7 +41,7 @@ public class OutboxEvent {
 	@Column(name = "aggregate_id", nullable = false, updatable = false)
 	private UUID aggregateId;
 
-	/** Olay adı, ör. "BookPublished". */
+	/** Olay adı, PascalCase: ör. "BookUpserted". */
 	@Column(name = "event_type", nullable = false, updatable = false, length = 64)
 	private String eventType;
 

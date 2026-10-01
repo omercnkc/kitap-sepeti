@@ -2,6 +2,7 @@ package com.kitapsepeti.catalog.service;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
@@ -76,6 +77,18 @@ final class CategoryForest {
 			Category current = pending.pop();
 			if (ids.add(current.getId())) {
 				childrenOf(current).forEach(pending::push);
+			}
+		}
+		return ids;
+	}
+
+	/** Verilen kategoriler ve tüm ataları (kök dahil); ağaçta olmayan id'ler atlanır. */
+	Set<UUID> withAncestors(Collection<UUID> categoryIds) {
+		Set<UUID> ids = new LinkedHashSet<>();
+		for (UUID categoryId : categoryIds) {
+			Category current = this.byId.get(categoryId);
+			while (current != null && ids.add(current.getId())) {
+				current = (current.getParent() != null) ? this.byId.get(current.getParent().getId()) : null;
 			}
 		}
 		return ids;
