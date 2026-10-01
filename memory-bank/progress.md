@@ -28,12 +28,15 @@
   (`docs/events/book-upserted.md`, `book-removed.md`). Stok kolonları entity'den yazılamaz. 177 test yeşil. Commit `366c465`.
 - catalog-service outbox relay: user-service worker'ının kopyası; `book.upserted` / `book.removed` routing key'leriyle ortak
   `kitapsepeti.events` exchange'ine yayın (tanım user-service ile birebir). Gerçek broker kesintisi testi dahil 194 test yeşil.
-  Henüz commit edilmedi.
+  Commit `c03c0de`.
   (Kapatılan bilinen sorun: "catalog-service outbox'ı henüz yayınlanmıyor".)
+- catalog-service internal stok rezervasyonu: `/internal/stock/reservations` reserve (ya hep ya hiç, idempotent `orderId`) / commit /
+  release / GET; servisler arası `X-Internal-Api-Key` (SHA-256 özetle doğrulama, ayrı security zinciri); inStock değişince BookUpserted.
+  Eşzamanlılık testleri dahil 225 test yeşil. Henüz commit edilmedi.
 
 ## Yapılacaklar
-- catalog-service: internal stok uçları (reserve/commit/release), springdoc, actuator, Dockerfile + compose servisi.
-- `docs/events/book-*.md` içindeki "relay yok" durum notunu güncelle.
+- order-service (catalog rezervasyon istemcisi).
+- catalog-service: süresi dolan rezervasyonları serbest bırakan iş (Adım 9), springdoc, actuator, Dockerfile + compose servisi.
 - Search için: yayınevi/yazar/kategori yeniden adlandırması yayındaki kitaplar için olay üretmiyor → yeniden indeksleme gerekecek.
 - Docker/Actuator adımının commit'i.
 - Logout, e-posta/parola değiştirme, CORS.
@@ -49,3 +52,6 @@
 - Stok taşması: `initialStock` ≤ 1.000.000, düzeltme |delta| ≤ 100.000; INT sınırına ancak çok sayıda düzeltmeyle yaklaşılır,
   o zaman `+delta` MySQL out-of-range → 500 (pratikte olası değil).
 - DB kapalıyken `DataSourceHealthIndicator` her health çağrısında WARN + uzun stack trace yazıyor (log gürültüsü).
+- Süresi dolan `held` rezervasyonlar otomatik serbest bırakılmıyor (Adım 9); o zamana kadar stok rezervde kalır.
+- Seed'deki `reserved_quantity` değerleri (402, 404, 406) karşılık gelen `stock_reservations` satırı olmadan; bu rezervler
+  hiçbir siparişle serbest bırakılamaz (yalnızca local dev verisi).

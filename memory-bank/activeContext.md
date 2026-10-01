@@ -417,11 +417,33 @@
   - Uçtan uca: açılışta 6 bekleyen satır ~0,2 sn'de yayınlandı; broker'da tek `kitapsepeti.events`, 2 bağlantı (user-service + catalog);
     seed kitap 403 stok 0 → +5 (inStock değişti) → yeni BookUpserted ~1 sn'de yayınlandı; yeni user-service kaydı UserRegistered
     yayınlandı. Yerel catalog_db'de kitap 403 stoğu artık 5 (seed'de 0); user_db'de 2 yeni e2e kullanıcısı.
+  - Commit `c03c0de` (+ memory-bank `dca4f75`), push edildi.
+
+- catalog-service internal stok uçları + servisler arası API anahtarı (225 test yeşil; henüz commit edilmedi; migration, user-service,
+  docker-compose'a dokunulmadı; süre dolumu işi YOK — Adım 9):
+  - Uçlar (`controller/internal/InternalStockController`, `/internal/stock/reservations`): POST (yeni 201 + Location, aynı küme 200,
+    farklı küme 409 RESERVATION_MISMATCH), POST `/{orderId}/commit`, POST `/{orderId}/release`, GET `/{orderId}`. Sözleşme
+    `docs/api/catalog-internal-stock.md`. Kimlik: `X-Internal-Api-Key` (kalıp systemPatterns.md "Servisler arası kimlik").
+  - Yeni ErrorCode'lar (409/INFO): INSUFFICIENT_STOCK, BOOK_NOT_AVAILABLE (ikisi `bookIds` uzantısıyla, `StockUnavailableException`),
+    RESERVATION_MISMATCH, RESERVATION_RELEASED, RESERVATION_COMMITTED. `DbConstraints.isViolated(ex, ad)`. `ProblemDetailResponses` public.
+  - Kurallar ve kilit sırası: systemPatterns.md "Stok rezervasyonu". `ReserveStockRequest` (items 1–50, quantity 1–100; tekrar eden bookId
+    serviste → 400 `items`), `ReservationResponse` (status küçük harf, items bookId sıralı, unitPrice metin).
+  - ORDER SÖZLEŞME NOTU: `unitPrice` okunduğu anki fiyat; mevcut rezervasyon döndürülürken GÜNCEL fiyat okunur → fiyat anlık görüntüsü
+    order-service'in işi. Süresi geçmiş `held` hâlâ onaylanabilir (temizlik işi yok). 500 = işlem geri alındı, tekrar güvenli.
+    Rezervasyon idempotency anahtarı `orderId`; order-service yeniden denemede aynı kalemleri göndermeli.
+  - `.env`: `ORDER_INTERNAL_API_KEY` + `CATALOG_INTERNAL_KEY_ORDER_SHA256` üretildi (değer hiçbir yere yazılmadı); `.env.example` boş + yorum.
+  - Değişen eski test: `SecurityRulesTest.internalPathRejectsEvenAdminJwt` (403 → 401; ayrı zincir). `ApiTestSupport` artık `MutableClockConfiguration` import eder.
+  - Yeni testler: InternalAuthTest (5), InternalStockControllerTest (14), InternalStockConcurrencyTest (4: 10 sipariş/3 kopya → 3×201 + 7×409;
+    aynı sipariş 5 eşzamanlı → 1×201 + 4×200; ters sıra [A,B]/[B,A] 20 tur; commit+release+reserve aynı kitaplarda 20 tur), InternalApiKeysTest (5,
+    ApplicationContextRunner), InternalApiKeyAuthenticationFilterTest (3).
+  - Uçtan uca (local seed): yayında stoğu tam 1 olan seed kitap yoktu → kitap 410 (stok 2) admin ile −1, akış a–g, sonra +2 ile 2/0'a döndü.
+    Yerel catalog_db'de 410 için 1 released + 1 committed rezervasyon satırı ve 4 yeni outbox satırı; user_db'de 2 yeni e2e kullanıcısı.
+  - `docs/events/book-*.md`: "relay yok" notu kaldırıldı, rezervasyon tetikleyicileri eklendi.
 
 ## Sonraki adımlar
-- catalog-service: internal stok uçları (reserve/commit/release), springdoc, actuator, Dockerfile + compose servisi
-  (`USER_SERVICE_JWKS_URI` ve `RABBITMQ_HOST` compose'ta servis adlarına).
-- `docs/events/book-upserted.md` / `book-removed.md` "henüz relay yok" notu güncellenmeli (bu adımda docs/ kapsam dışıydı).
+- order-service (rezervasyon istemcisi; fiyat anlık görüntüsü kendisinde). catalog: süresi dolan `held` rezervasyonları serbest bırakan
+  zamanlanmış iş (Adım 9; `ix_stock_reservations_status_expires` hazır), springdoc, actuator, Dockerfile + compose servisi
+  (`USER_SERVICE_JWKS_URI`, `RABBITMQ_HOST` ve `CATALOG_INTERNAL_KEY_ORDER_SHA256` compose'ta).
 - Backlog: yayınevi/yazar/kategori yeniden adlandırılınca yayındaki kitaplar için olay ÜRETİLMİYOR; Search servisi gelince
   yeniden indeksleme (ya da bu değişikliklerde etkilenen kitaplar için BookUpserted) gerekecek.
 - Docker adımının commit'i (kullanıcı isteyince), logout, e-posta/parola değiştirme, consumer servisler, CORS.

@@ -47,6 +47,32 @@
   JWKS kesintisine dayanıklı önbellek yok (Gateway fazı backlog'u).
 - URL kuralları sırası önemli: public GET (books, categories) → /error → /api/admin/** ADMIN → /internal/** denyAll →
   authenticated. Public GET'lerde BearerTokenResolver Authorization'ı okumaz (aynı PathPattern listesi, `PUBLIC_GET_PATHS`).
+- Servisler arası kimlik (KALIP): `/internal/**` AYRI `SecurityFilterChain` (`config/InternalSecurityConfig`, `@Order(1)`,
+  `securityMatcher("/internal/**")`, stateless, csrf/basic/form/logout/anonymous kapalı, resource server YOK → kullanıcı JWT'si
+  ADMIN dahil 401). `security/internal/InternalApiKeyAuthenticationFilter` (BEAN DEĞİL — bean olursa Boot onu tüm isteklere
+  servlet filtresi olarak da kaydeder) `X-Internal-Api-Key`'in UTF-8 SHA-256'sını tüm istemci özetleriyle
+  `MessageDigest.isEqual` ile karşılaştırır (hep tüm liste gezilir); eşleşme → principal = istemci adı, `ROLE_INTERNAL_SERVICE`,
+  INFO `Internal request METHOD path client=<ad>`. Yok/yanlış → `InternalApiKeyAuthenticationEntryPoint`: 401 UNAUTHORIZED,
+  `WWW-Authenticate: ApiKey realm="internal"`, tek WARN satırı (method + path). Anahtar/özet ASLA loglanmaz.
+  Yapılandırma `app.internal-auth.clients[{name, key-sha256}]` (yalnızca özet; boş = istemci kapalı). Format doğrulaması
+  bağlamada DEĞİL `InternalApiKeys` ctor'unda (fail-fast `IllegalStateException`, mesajda özellik + istemci adı, değer YOK —
+  Boot'un bind failure analyzer'ı değeri yansıtabilirdi; yanlışlıkla ham anahtar girilirse sızmasın). `Client.toString` özeti maskeler.
+  Ana zincirdeki `/internal/** denyAll` ek savunma olarak kalır. Yeni istemci = listeye yeni `{name, key-sha256}` + `.env` özeti.
+
+## Stok rezervasyonu (catalog-service internal)
+- Dış servis (`StockReservationService`) BİLEREK transactional değil; iç `StockReservationTransactions` `@Transactional(READ_COMMITTED)`.
+  Aynı siparişin eşzamanlı isteği `uk_stock_reservations_order_book` ile düşerse (veya stok yarışında StockUnavailable) iç transaction
+  tamamen geri alınır, dış katman yeni transaction'da mevcut rezervasyonu okuyup idempotent yanıt verir (user-service refresh kalıbı).
+- Stok yalnızca tek koşullu `@Modifying` UPDATE'lerle (`BookRepository.reserve/commitReserved/releaseReserved`); önce-oku-sonra-yaz YOK,
+  versiyon artmaz. Ya hep ya hiç: tüm kalemler denenir, hatalılar toplanır, sonra exception → rollback. Hata nedeni ayrı okumayla
+  (yok/yayında değil → BOOK_NOT_AVAILABLE öncelikli; diğerleri INSUFFICIENT_STOCK), `bookIds` yalnızca seçilen koddaki kitaplar.
+- Kilit sırası: kitaplar HER ZAMAN `LOCK_ORDER` (UUID işaretsiz msb→lsb = DB BINARY(16) sırası; `UUID.compareTo` işaretli, FARKLI) ile.
+  Rezervde önce kitap UPDATE'leri sonra rezervasyon INSERT'leri (FK kontrolünün S kilidi zaten tutulan X kilidiyle çakışmaz);
+  onay/iptalde önce rezervasyon satırları `FOR UPDATE`, sonra kitaplar. READ COMMITTED → gap lock yok, FOR UPDATE yalnızca bulunan satırları kilitler.
+- Onay/iptal: satırlar düz record'a kopyalanır (bulk UPDATE'lerin `clearAutomatically`'si entity'leri koparır), kitap UPDATE'i 1 satır
+  değilse `IllegalStateException` (500 + ERROR), durum geçişi toplu JPQL `transition(orderId, from, to)` (updated_at DB ON UPDATE ile).
+- `expiresAt = clock.instant() + app.stock.reservation-ttl` (`StockProperties`, 15m), MICROS'a kesilir (DATETIME(6) → 201 ve tekrar 200 aynı gövde).
+- Olay: yayındaki kitabın `available > 0` değeri değiştiyse `BookUpserted` (rezerv: son kopyalar; iptal: 0 → >0). Onay olay üretmez.
 - Hata altyapısı user-service ile aynı yapıda KOPYA (ortak modül yok; Cart servisi gelince çıkarılacak). İki servisteki
   `ProblemDetails`/`GlobalExceptionHandler`/security handler değişiklikleri elle senkron tutulmalı.
 - DB kısıt → ErrorCode eşlemesi tek yerde: `exception/DbConstraints.classify` (Hibernate kind + normalize ad + MySQL hata kodu).
@@ -85,6 +111,9 @@
 
 ## Test
 - catalog API testleri `ApiTestSupport`'u extend eder: gerçek HTTP JWKS (JDK HttpServer) + `TestJwt` ile imzalı token.
+  `support/MutableClock` (`@Primary`, override değil) varsayılan sistem saati; test `fixAt`/`advance` ile sabitler, her test başında
+  sıfırlanır → ek context açılmaz. Internal uçlar `support/InternalTestKeys` (test-only ham anahtar; özeti application-test.yml'de).
+  Eşzamanlılık testleri: ExecutorService + iki CountDownLatch (hazır/başla), MockMvc gerçek thread'lerden.
   JWKS çağrı sayısını ölçen test ayrı context ister (kendi sunucusu).
 - Repository testleri: `@DataJpaTest` + `@AutoConfigureTestDatabase(replace = NONE)` +
   `@Import(TestcontainersConfiguration.class)`; Flyway test container'ında çalışır.
