@@ -20,6 +20,10 @@ app:
   # Worker arka planda outbox satırlarını kilitleyip yayınlamasın; yalnızca relay testleri açar.
   outbox:
     enabled: false
+  # Görev testte zamanlayıcıyla çalışmaz; testler turu doğrudan çağırır.
+  stock:
+    expiry:
+      enabled: false
   # Yalnızca testte geçerli anahtarın özeti (ham hali InternalTestKeys'te); .env'deki gerçek özet kullanılmaz.
   internal-auth:
     clients:

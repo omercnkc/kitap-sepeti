@@ -33,7 +33,7 @@ X-Internal-Api-Key: <ham anahtar>
 - Stok kontrolü tek koşullu UPDATE ile yapılır (yalnızca yayındaki kitap ve `stok − rezerv ≥ adet`); eşzamanlı
   isteklerde fazla satış olmaz.
 - Rezervasyon süresi `app.stock.reservation-ttl` (varsayılan 15 dk): `expiresAt = şimdi + süre`. Süresi dolan
-  rezervasyonları serbest bırakan iş **henüz yok**; süresi geçmiş ama hâlâ `held` olan rezervasyon onaylanabilir.
+  rezervasyonlar arka planda serbest bırakılır; bkz. [Süre dolumu](#süre-dolumu).
 - Kalemler yanıtta ve işlemde `bookId`'ye göre sıralıdır (istekteki sıra önemsizdir).
 - Yayındaki bir kitabın `inStock` değeri değişirse aynı transaction'da `BookUpserted` olayı yazılır
   (bkz. [book-upserted.md](../events/book-upserted.md)). Onay olay üretmez.
@@ -119,6 +119,22 @@ stoğu yetmeyen kitap varsa kod `BOOK_NOT_AVAILABLE` olur ve `bookIds` yalnızca
 ### `GET /internal/stock/reservations/{orderId}` — oku
 
 `200` + hal; yoksa `404 RESOURCE_NOT_FOUND`.
+
+## Süre dolumu
+
+- Rezervasyon süresi (TTL) **15 dakikadır**. `held` rezervasyon `expiresAt`'e kadar onaylanmazsa catalog-service onu
+  kendisi serbest bırakır: rezerv geri verilir, durum `released` olur — `release` ucunun yaptığının aynısı (yayındaki
+  kitabın `inStock` değeri değişirse `BookUpserted` yazılır).
+- Bunu yapan görev yaklaşık **30 saniyede bir** çalışır (`app.stock.expiry.interval`, tur başına en fazla
+  `app.stock.expiry.batch-size` = 100 sipariş). Bu yüzden serbest bırakma TTL'den **biraz sonra** olur; `expiresAt`
+  kesin bir kesim anı değildir.
+- Süresi geçmiş ama görev henüz dokunmamış (`held`) bir rezervasyon **hâlâ onaylanabilir** (`commit` → `200`).
+- Görev önce davranırsa `commit` → `409 RESERVATION_RELEASED` döner. Bu durumda order-service ödemeyi **iade ederek**
+  telafi etmelidir (stok başkasına ayrılmış olabilir; aynı siparişle yeniden rezervasyon `200` + `released` hal döner).
+- O an onaylanan veya iptal edilen bir sipariş görev tarafından beklenmeden atlanır ve sonraki turda yeniden
+  değerlendirilir; aynı siparişte onay ile süre dolumundan **yalnızca biri** kazanır.
+- Ayrı bir "süre doldu" olayı **yoktur**. order-service durumu öğrenmek için
+  `GET /internal/stock/reservations/{orderId}` ucunu sorgulayabilir (`status: "released"`).
 
 ## Hata kodları
 

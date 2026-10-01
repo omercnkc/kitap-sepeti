@@ -1,5 +1,6 @@
 package com.kitapsepeti.catalog.controller.internal;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
@@ -11,6 +12,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import com.kitapsepeti.catalog.ApiTestSupport;
 import com.kitapsepeti.catalog.entity.Publisher;
@@ -124,6 +131,33 @@ abstract class InternalStockTestSupport extends ApiTestSupport {
 	@SuppressWarnings("unchecked")
 	Map<String, Object> payload(Map<String, Object> outboxRow) {
 		return jsonMapper.readValue(outboxRow.get("payload").toString(), Map.class);
+	}
+
+	/** Görevler ayrı thread'lerde; hepsi hazır olunca tek latch ile aynı anda başlatılır. Sonuçlar görev sırasıyla. */
+	static <T> List<T> runConcurrently(List<Callable<T>> tasks) throws Exception {
+		ExecutorService pool = Executors.newFixedThreadPool(tasks.size());
+		try {
+			CountDownLatch ready = new CountDownLatch(tasks.size());
+			CountDownLatch start = new CountDownLatch(1);
+			List<Future<T>> futures = new ArrayList<>();
+			for (Callable<T> task : tasks) {
+				futures.add(pool.submit(() -> {
+					ready.countDown();
+					start.await();
+					return task.call();
+				}));
+			}
+			assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+			start.countDown();
+			List<T> results = new ArrayList<>();
+			for (Future<T> future : futures) {
+				results.add(future.get(60, TimeUnit.SECONDS));
+			}
+			return results;
+		}
+		finally {
+			pool.shutdownNow();
+		}
 	}
 
 	private int intColumn(String column, UUID bookId) {

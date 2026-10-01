@@ -5,6 +5,10 @@
 --
 -- İçerik: 3 yayınevi, 5 yazar, kategori ağacı (Edebiyat > Roman, Öykü; Bilim > Popüler Bilim; Çocuk),
 -- 14 kitap: 11 published (ikisi stoksuz: biri stock = reserved, biri stock = 0), 2 draft, 1 archived.
+-- Kitaplardaki her rezerv, toplamı reserved_quantity'ye eşit 'held' rezervasyon satırlarıyla karşılanır
+-- (değişmez: reserved_quantity = SUM(quantity WHERE status = 'held')). Bu satırlar 2099'a kadar geçerlidir;
+-- süre dolumu görevi bunları bırakmaz. Yeniden çalıştırma kitapları ve seed rezervasyonlarını birlikte seed
+-- durumuna döndürür; seed kitaplarında seed dışı 'held' rezervasyon varsa değişmez bozulur.
 
 INSERT INTO publishers (id, name, slug) VALUES
     (UUID_TO_BIN('01920000-0000-7000-8000-000000000101'), 'Deniz Yayınları', 'deniz-yayinlari'),
@@ -81,6 +85,19 @@ ON DUPLICATE KEY UPDATE isbn = new.isbn, title = new.title, description = new.de
     publisher_id = new.publisher_id, page_count = new.page_count, cover_url = new.cover_url,
     price_amount = new.price_amount, currency = new.currency, stock_quantity = new.stock_quantity,
     reserved_quantity = new.reserved_quantity, status = new.status, published_at = new.published_at;
+
+-- Rezervli kitapların 'held' satırları: 402 = 2 + 1, 404 = 2, 406 = 1. Sipariş 601: 402 + 404; sipariş 602: 402 + 406.
+INSERT INTO stock_reservations (id, book_id, order_id, quantity, status, expires_at) VALUES
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000501'), UUID_TO_BIN('01920000-0000-7000-8000-000000000402'),
+     UUID_TO_BIN('01920000-0000-7000-8000-000000000601'), 2, 'held', '2099-12-31 00:00:00.000000'),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000502'), UUID_TO_BIN('01920000-0000-7000-8000-000000000404'),
+     UUID_TO_BIN('01920000-0000-7000-8000-000000000601'), 2, 'held', '2099-12-31 00:00:00.000000'),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000503'), UUID_TO_BIN('01920000-0000-7000-8000-000000000402'),
+     UUID_TO_BIN('01920000-0000-7000-8000-000000000602'), 1, 'held', '2099-12-31 00:00:00.000000'),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000504'), UUID_TO_BIN('01920000-0000-7000-8000-000000000406'),
+     UUID_TO_BIN('01920000-0000-7000-8000-000000000602'), 1, 'held', '2099-12-31 00:00:00.000000') AS new
+ON DUPLICATE KEY UPDATE book_id = new.book_id, order_id = new.order_id, quantity = new.quantity,
+    status = new.status, expires_at = new.expires_at;
 
 -- Birden çok yazarlı: 402, 404, 406, 408.
 INSERT INTO book_authors (book_id, author_id) VALUES

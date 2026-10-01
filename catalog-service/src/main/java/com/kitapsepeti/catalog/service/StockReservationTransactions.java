@@ -52,6 +52,9 @@ public class StockReservationTransactions {
 		.comparing(UUID::getMostSignificantBits, Long::compareUnsigned)
 		.thenComparing(UUID::getLeastSignificantBits, Long::compareUnsigned);
 
+	/** Süresi dolmamış veya başka transaction'da işlenen sipariş için {@link #releaseExpired} sonucu. */
+	private static final int NOT_RELEASED = 0;
+
 	private final StockReservationRepository reservationRepository;
 
 	private final BookRepository bookRepository;
@@ -148,6 +151,48 @@ public class StockReservationTransactions {
 			throw new ReservationCommittedException();
 		}
 		List<Line> held = held(lines);
+		Map<UUID, Book> books = releaseHeld(orderId, held);
+		List<Line> released = withStatus(lines, ReservationStatus.RELEASED);
+		return (held.size() == lines.size()) ? response(orderId, released, books) : response(orderId, released);
+	}
+
+	/**
+	 * Süre dolumu görevi için: siparişin süresi dolmuş 'held' satırlarını serbest bırakır. Satırlar
+	 * {@code SKIP LOCKED} ile kilitlenir; biri bile başka bir transaction'da (onay/iptal) kilitliyse sipariş bu turda
+	 * atlanır. Kilitten sonra süre yeniden kontrol edilir.
+	 * @return serbest bırakılan satır sayısı; atlandıysa 0
+	 */
+	public int releaseExpired(UUID orderId, Instant now) {
+		List<Line> held = linesOf(
+				this.reservationRepository.lockByOrderIdAndStatusSkipLocked(orderId, ReservationStatus.HELD));
+		if (held.isEmpty()) {
+			return NOT_RELEASED;
+		}
+		// Kısmi kilit: onay/iptal satırların bir kısmını almış olabilir; kısmen bırakmak siparişi karışık duruma sokar.
+		if (held.size() != this.reservationRepository.countByOrderIdAndStatus(orderId, ReservationStatus.HELD)) {
+			return NOT_RELEASED;
+		}
+		if (held.stream().anyMatch(line -> !line.expiresAt().isBefore(now))) {
+			return NOT_RELEASED;
+		}
+		releaseHeld(orderId, held);
+		return held.size();
+	}
+
+	/** Süresi dolmuş 'held' satırı olan siparişler (kilitsiz), en eski önce. */
+	@Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED)
+	public List<UUID> findExpiredOrderIds(Instant now, int limit) {
+		return this.reservationRepository.findExpiredHeldOrderIds(now, limit).stream().map(UUID::fromString).toList();
+	}
+
+	/**
+	 * İptal ucunun ve süre dolumu görevinin ortak işi. {@code held} satırları çağıran kilitlemiş olmalı ve
+	 * {@link #LOCK_ORDER} sıralı olmalı. Rezerv koşullu UPDATE ile geri verilir (rezerv adetten azsa
+	 * {@code IllegalStateException}), satırlar 'released' olur, yayındaki kitabın inStock'u değiştiyse
+	 * {@code BookUpserted} yazılır.
+	 * @return siparişin kitapları (güncel halleriyle)
+	 */
+	private Map<UUID, Book> releaseHeld(UUID orderId, List<Line> held) {
 		for (Line line : held) {
 			if (this.bookRepository.releaseReserved(line.bookId(), line.quantity()) != 1) {
 				throw inconsistent("release", orderId, line.bookId());
@@ -155,12 +200,12 @@ public class StockReservationTransactions {
 		}
 		this.reservationRepository.transition(orderId, ReservationStatus.HELD, ReservationStatus.RELEASED);
 
-		Map<UUID, Book> books = booksById(lines.stream().map(Line::bookId).toList());
+		Map<UUID, Book> books = booksById(held.stream().map(Line::bookId).toList());
 		for (Line line : held) {
 			Book book = books.get(line.bookId());
 			appendIfInStockChanged(book, book.getAvailableQuantity() - line.quantity());
 		}
-		return response(orderId, withStatus(lines, ReservationStatus.RELEASED), books);
+		return books;
 	}
 
 	/** Satır yoksa 404. Satırlar kilitli; kitaplar dönen sırayla (LOCK_ORDER) güncellenmeli. */

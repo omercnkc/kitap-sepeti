@@ -6,13 +6,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 
 import com.jayway.jsonpath.JsonPath;
+import com.kitapsepeti.catalog.support.StockInvariant;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletResponse;
 
@@ -46,6 +42,7 @@ class InternalStockConcurrencyTest extends InternalStockTestSupport {
 		}
 		assertThat(reservedOf(book)).isEqualTo(3);
 		assertThat(reservationCount()).isEqualTo(3);
+		StockInvariant.assertHolds(jdbc);
 	}
 
 	// --- 10. Aynı sipariş aynı anda birden çok kez
@@ -71,6 +68,7 @@ class InternalStockConcurrencyTest extends InternalStockTestSupport {
 		}
 		assertThat(rowsOf(orderId)).hasSize(1);
 		assertThat(reservedOf(book)).isEqualTo(2);
+		StockInvariant.assertHolds(jdbc);
 	}
 
 	// --- 11. Ters sırada aynı kitaplar: deadlock olmamalı
@@ -90,6 +88,7 @@ class InternalStockConcurrencyTest extends InternalStockTestSupport {
 		assertThat(reservedOf(a)).isEqualTo(40);
 		assertThat(reservedOf(b)).isEqualTo(40);
 		assertThat(reservationCount()).isEqualTo(80);
+		StockInvariant.assertHolds(jdbc);
 	}
 
 	@Test
@@ -113,32 +112,7 @@ class InternalStockConcurrencyTest extends InternalStockTestSupport {
 		assertThat(reservedOf(a)).isEqualTo(20);
 		assertThat(stockOf(b)).isEqualTo(80);
 		assertThat(reservedOf(b)).isEqualTo(20);
-	}
-
-	private static <T> List<T> runConcurrently(List<Callable<T>> tasks) throws Exception {
-		ExecutorService pool = Executors.newFixedThreadPool(tasks.size());
-		try {
-			CountDownLatch ready = new CountDownLatch(tasks.size());
-			CountDownLatch start = new CountDownLatch(1);
-			List<Future<T>> futures = new ArrayList<>();
-			for (Callable<T> task : tasks) {
-				futures.add(pool.submit(() -> {
-					ready.countDown();
-					start.await();
-					return task.call();
-				}));
-			}
-			assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
-			start.countDown();
-			List<T> results = new ArrayList<>();
-			for (Future<T> future : futures) {
-				results.add(future.get(60, TimeUnit.SECONDS));
-			}
-			return results;
-		}
-		finally {
-			pool.shutdownNow();
-		}
+		StockInvariant.assertHolds(jdbc);
 	}
 
 }

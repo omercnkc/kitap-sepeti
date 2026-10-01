@@ -7,7 +7,10 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 
+import com.kitapsepeti.catalog.support.StockInvariant;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.output.MigrateResult;
 import org.junit.jupiter.api.AfterAll;
@@ -77,10 +80,38 @@ class DevSeedMigrationTest {
 				WHERE status = 'published' AND stock_quantity > 0 AND stock_quantity = reserved_quantity""")).isEqualTo(1);
 		assertThat(count("SELECT COUNT(*) FROM books WHERE title = 'Sessiz Ağaçların Şarkısı'"))
 			.as("Turkish characters survive the round trip").isEqualTo(1);
+		assertThat(count("SELECT COUNT(*) FROM stock_reservations")).isEqualTo(4);
+		assertThat(count("SELECT COUNT(DISTINCT order_id) FROM stock_reservations WHERE status = 'held'")).isEqualTo(2);
+		assertThat(count("SELECT COUNT(*) FROM stock_reservations WHERE expires_at <> '2099-12-31 00:00:00'"))
+			.isZero();
+		assertInvariantHolds();
 	}
 
 	@Test
 	@Order(2)
+	void rerunRestoresBooksAndReservationsTogether() throws Exception {
+		assertThat(flyway().migrate().success).isTrue();
+		// Sipariş 601 iptal edilmiş gibi: satırlar released, rezerv geri verilmiş.
+		execute("""
+				UPDATE stock_reservations SET status = 'released'
+				WHERE order_id = UUID_TO_BIN('01920000-0000-7000-8000-000000000601')""");
+		execute("UPDATE books SET reserved_quantity = 1 WHERE id = UUID_TO_BIN('01920000-0000-7000-8000-000000000402')");
+		execute("UPDATE books SET reserved_quantity = 0 WHERE id = UUID_TO_BIN('01920000-0000-7000-8000-000000000404')");
+		assertInvariantHolds();
+
+		try (Connection connection = connection()) {
+			ScriptUtils.executeSqlScript(connection, new ClassPathResource("db/seed/R__dev_seed_catalog.sql"));
+		}
+
+		assertThat(count("SELECT COUNT(*) FROM stock_reservations WHERE status = 'held'")).isEqualTo(4);
+		assertThat(count("""
+				SELECT reserved_quantity FROM books
+				WHERE id = UUID_TO_BIN('01920000-0000-7000-8000-000000000402')""")).isEqualTo(3);
+		assertInvariantHolds();
+	}
+
+	@Test
+	@Order(3)
 	void defaultProfileStartsOnDatabaseThatWasSeededInLocalProfile() {
 		assertThat(flyway().migrate().success).isTrue();
 
@@ -111,6 +142,24 @@ class DevSeedMigrationTest {
 
 	private static Connection connection() throws SQLException {
 		return DriverManager.getConnection(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
+	}
+
+	private static void assertInvariantHolds() throws SQLException {
+		try (Connection connection = connection(); Statement statement = connection.createStatement();
+				ResultSet violations = statement.executeQuery(StockInvariant.VIOLATIONS_SQL)) {
+			List<String> books = new ArrayList<>();
+			while (violations.next()) {
+				books.add(violations.getString("book_id") + " reserved=" + violations.getInt("reserved_quantity")
+						+ " held=" + violations.getInt("held_quantity"));
+			}
+			assertThat(books).as("books whose reserved_quantity differs from held reservations").isEmpty();
+		}
+	}
+
+	private static void execute(String sql) throws SQLException {
+		try (Connection connection = connection(); Statement statement = connection.createStatement()) {
+			statement.executeUpdate(sql);
+		}
 	}
 
 	private static long count(String sql) throws SQLException {
