@@ -21,7 +21,13 @@
   `docker compose --profile tools stop adminer`. Adres http://localhost:8090; giriş: System MySQL, Server `mysql`
   (localhost değil), Username `user_svc`, Password `.env`'deki `USER_DB_PASSWORD`, Database `user_db`. Salt okunur kullanım.
 - Terminalden DB: `docker compose exec mysql mysql -uuser_svc -p user_db` (parola istemi yazılanı göstermez).
-- Docker Desktop 29.x, Compose v5. Base image'lar `eclipse-temurin:21-jdk` / `21-jre` (Ubuntu 26.04).
+- Docker Desktop 29.x, Compose v5, buildx 0.37. Base image'lar `eclipse-temurin:21-jdk` / `21-jre` (Ubuntu 26.04).
+  Dockerfile'lar `COPY --parents` kullanır (frontend 1.20+ GA; `# syntax=docker/dockerfile:1` yeterli). maven-dependency-plugin
+  3.10.0 `go-offline` reaktör modülünü (common) uzaktan çözmeye çalışmaz.
+- Compose host portları YALNIZCA `127.0.0.1` (8081, 8082, 3306, 5672, 15672, adminer 8090): LAN'dan erişilmez, localhost'tan
+  erişilir; container'lar arası servis adıyla erişim etkilenmez.
+- Ortak kütüphane: `common/` (`kitap-sepeti-common`, düz jar). Servis testleri `-am` ile common'ı da derler:
+  `.\mvnw.cmd -pl catalog-service -am test`; yalnızca common: `.\mvnw.cmd -pl common test` (Docker gerekmez).
 - Windows PowerShell 5.1: `Invoke-WebRequest -SkipHttpErrorCheck` yok; 4xx için try/catch kullan.
 - Veritabanı: MySQL 8.4, kökteki `docker-compose.yml` ile (`container_name: kitapsepeti-mysql`, port 3306,
   volume `kitapsepeti_mysql_data`). Şifreler kökteki `.env`'de (git'e girmez), şablon `.env.example`.
@@ -48,8 +54,8 @@
   UTC (`hibernate.jdbc.time_zone`). Karşılaştırılacak zamanı JDBC ile yazarken `LocalDateTime.ofInstant(instant, ZoneOffset.UTC)` kullan.
 - Kısa TTL ile yerel deneme: `.\mvnw.cmd -pl catalog-service spring-boot:run "-Dspring-boot.run.profiles=local"
   "-Dspring-boot.run.arguments=--app.stock.reservation-ttl=20s"` (görev ~30 sn'de bir çalışır).
-- Mesajlaşma: RabbitMQ 4 (`rabbitmq:4-management`, container `kitapsepeti-rabbitmq`, AMQP 5672,
-  Management UI/API yalnızca `127.0.0.1:15672`). Kullanıcı `.env`'deki `RABBITMQ_USER`/`RABBITMQ_PASSWORD`.
+- Mesajlaşma: RabbitMQ 4 (`rabbitmq:4-management`, container `kitapsepeti-rabbitmq`, AMQP `127.0.0.1:5672`,
+  Management UI/API `127.0.0.1:15672`). Kullanıcı `.env`'deki `RABBITMQ_USER`/`RABBITMQ_PASSWORD`.
   user-service ve catalog-service olayları `kitapsepeti.events` (topic) exchange'ine outbox worker ile yayınlar;
   sözleşmeler `docs/events/`. Exchange'i iki servis de açılışta declare eder (tanım aynı olmalı).
 - API dokümanı: springdoc-openapi 3.1.1 (Boot 4 hattı). Çalışırken `http://localhost:8081/swagger-ui.html` ve

@@ -9,8 +9,52 @@
 - Servis POM'ları parent olarak kök POM'u gösterir; groupId/version/java.version
   ve versiyon numaraları servis POM'unda YAZILMAZ.
 - `spring-boot-maven-plugin` her çalıştırılabilir serviste ayrı tanımlanır
-  (parent'ta değil; ileride eklenecek ortak kütüphane modülleri repackage edilmesin diye).
+  (parent'ta değil; `common` kütüphane modülü repackage edilmesin diye).
 - Maven wrapper (`mvnw`, `mvnw.cmd`, `.mvn/`) kök dizindedir.
+
+## common modülü (`common/`, artifactId `kitap-sepeti-common`)
+- Düz kütüphane jar'ı (spring-boot-maven-plugin yok). Versiyonu kök `<dependencyManagement>`'ta `${project.version}`;
+  servis POM'unda versiyonsuz. Spring bağımlılıkları `<optional>true</optional>` (webmvc, validation, data-jpa,
+  security-oauth2-resource-server) → servise starter taşımaz; servis zaten kendi starter'larını ekler. Yeni dış bağımlılık YOK.
+- Auto-configuration YOK, component scan'e girmez (paket `com.kitapsepeti.common`, servislerin scan kökü dışında).
+  Bean'ler serviste açıkça: `@Import(ProblemDetailSecurityHandlers.class)` (401 entry point + 403 handler) ve gerekiyorsa `@Bean`.
+- `common.error`:
+  - `ErrorCode` arayüzü (`name()`, `status()`, `logLevel()`, `defaultDetail()`); `CommonErrorCode` enum'u (12 genel kod:
+    VALIDATION_FAILED, MALFORMED_REQUEST, UNAUTHORIZED, FORBIDDEN, NOT_FOUND, RESOURCE_NOT_FOUND, METHOD_NOT_ALLOWED,
+    NOT_ACCEPTABLE, UNSUPPORTED_MEDIA_TYPE, CONFLICT, AUTHENTICATION_UNAVAILABLE, INTERNAL_ERROR).
+  - Servise özel kodlar servisin enum'unda (`UserErrorCode`, `CatalogErrorCode`) + `public static final List<ErrorCode> API_CODES`:
+    OpenAPI `Problem.code` enum'unun SIRASI buradan (sözleşme dosyasıyla birebir). Yeni kod = enum'a + API_CODES'ta istenen yere;
+    `OpenApiDocsTest` liste = API_CODES ve küme = servis kodları ∪ ilgili ortak kodlar kontrolü yapar.
+  - `ApiException` (abstract, ErrorCode alır), `ResourceNotFoundException`, `ProblemDetails` (create/apply/log), `DbConstraints`
+    (genel kısım: `find`, `nameOf`, `normalize`, `isViolated`, `isRowReferenced` = FK + MySQL 1451). Kısıt adı → kod eşlemesi serviste
+    (catalog `exception/DbConstraintCodes`).
+  - `ProblemDetailExceptionHandler` (abstract, `ResponseEntityExceptionHandler`): tüm ortak handler'lar. Kanca: `addProperties(problem, ex)`
+    (ApiException'a ek alan, catalog: `errors`, `bookIds`), `classify(DataIntegrityViolationException)` (varsayılan CONFLICT +
+    `constraint=<ad>`). Logger `ClassUtils.getUserClass(getClass())` → servisteki `exception.GlobalExceptionHandler`
+    (`@RestControllerAdvice` alt sınıf) adıyla loglar; log kategorisi taşımadan önceki ile aynı.
+- `common.security`: `BearerChallenge`, `ProblemDetailResponses`, `ProblemDetailAuthenticationEntryPoint` /
+  `ProblemDetailAccessDeniedHandler` (bean DEĞİL; `ProblemDetailSecurityHandlers` kaydeder), `ProblemDetailAuthenticationFailureHandler`
+  (JWKS kesintisi → 503; `postProcessorFor(handler)` BearerTokenAuthenticationFilter'a bağlar), `JwtRoleConverters.roleClaim()`,
+  `BearerTokenResolvers` (`ignoringGet(paths)`, `ignoringUriPrefix(prefix)`, `ignoring(matcher)`), `JwkSetJwtDecoders.rs256(uri, issuer)`
+  (RS256 + iss/exp, RestTemplate 2 s / 3 s).
+- `common.security.internal`: `InternalAuthProperties`, `InternalApiKeys`, `InternalApiKeyAuthenticationFilter` (BEAN DEĞİL),
+  `InternalApiKeyAuthenticationEntryPoint`. Zincir (`InternalSecurityConfig`) serviste kalır.
+- Bu paketlerdeki sınıfların logger'ı artık `com.kitapsepeti.common.security(.internal).*` (mesaj metni aynı).
+- common'a GİRMEYEN: güvenlik kuralları/yollar (SecurityConfig), user-service'in kendi anahtarlı JwtDecoder'ı (RsaKeyConfig),
+  catalog JwtProperties, InternalSecurityConfig, outbox (ayrı adım; hâlâ servis başına kopya).
+
+### Yeni servis common'ı nasıl kullanır (tarif)
+1. Servis POM'una `com.kitapsepeti:kitap-sepeti-common` (versiyonsuz) ekle.
+2. `exception/<Servis>ErrorCode implements ErrorCode` (yalnızca servise özel kodlar) + `API_CODES` listesi (ortak + özel, doküman sırası).
+3. `exception/GlobalExceptionHandler extends ProblemDetailExceptionHandler` + `@RestControllerAdvice`; gerekirse `addProperties`/`classify` override.
+4. SecurityConfig: `@Import(ProblemDetailSecurityHandlers.class)`; entry point/access denied handler'ı enjekte et;
+   `JwtRoleConverters.roleClaim()`; public uçlar için `BearerTokenResolvers.ignoringGet(...)`.
+   Resource server ise `@Bean JwtDecoder` = `JwkSetJwtDecoders.rs256(jwkSetUri, issuer)` ve 503 için
+   `@Bean ProblemDetailAuthenticationFailureHandler` + `withObjectPostProcessor(ProblemDetailAuthenticationFailureHandler.postProcessorFor(h))`.
+5. Internal uç sunuyorsa: `@EnableConfigurationProperties(InternalAuthProperties.class)`, `new InternalApiKeys(props)`, filtreyi zincirde
+   `new` ile ekle (bean yapma), entry point'i `exceptionHandling`'e ver.
+6. `OpenApiConfig`: `code` enum'u `<Servis>ErrorCode.API_CODES.stream().map(ErrorCode::name).toList()`.
+7. Dockerfile: mevcut bir servisinkini kopyala, yalnızca servis adını ve `COPY --parents common/src <servis>/src ./` satırını uyarla.
 
 ## Entity kuralları (user-service)
 - `@Id UUID` + `@UuidGenerator(style = VERSION_7)` (BINARY(16)); zamanlar `Instant` +
@@ -49,7 +93,7 @@
   authenticated. Public GET'lerde BearerTokenResolver Authorization'ı okumaz (aynı PathPattern listesi, `PUBLIC_GET_PATHS`).
 - Servisler arası kimlik (KALIP): `/internal/**` AYRI `SecurityFilterChain` (`config/InternalSecurityConfig`, `@Order(1)`,
   `securityMatcher("/internal/**")`, stateless, csrf/basic/form/logout/anonymous kapalı, resource server YOK → kullanıcı JWT'si
-  ADMIN dahil 401). `security/internal/InternalApiKeyAuthenticationFilter` (BEAN DEĞİL — bean olursa Boot onu tüm isteklere
+  ADMIN dahil 401). `common.security.internal.InternalApiKeyAuthenticationFilter` (BEAN DEĞİL — bean olursa Boot onu tüm isteklere
   servlet filtresi olarak da kaydeder) `X-Internal-Api-Key`'in UTF-8 SHA-256'sını tüm istemci özetleriyle
   `MessageDigest.isEqual` ile karşılaştırır (hep tüm liste gezilir); eşleşme → principal = istemci adı, `ROLE_INTERNAL_SERVICE`,
   INFO `Internal request METHOD path client=<ad>`. Yok/yanlış → `InternalApiKeyAuthenticationEntryPoint`: 401 UNAUTHORIZED,
@@ -86,9 +130,10 @@
   `DataAccessResourceFailureException`/`TransactionException` (veya aday okuması hatası) → tek satır WARN, tur biter. ≥1 sipariş
   bırakıldıysa tur sonunda tek INFO. Yeni olay türü YOK; commit süreye bakmaz (held ise onaylanır).
 - `SchedulingConfig` `AnyNestedCondition`: outbox VEYA süre dolumu açıksa `@EnableScheduling`.
-- Hata altyapısı user-service ile aynı yapıda KOPYA (ortak modül yok; Cart servisi gelince çıkarılacak). İki servisteki
-  `ProblemDetails`/`GlobalExceptionHandler`/security handler değişiklikleri elle senkron tutulmalı.
-- DB kısıt → ErrorCode eşlemesi tek yerde: `exception/DbConstraints.classify` (Hibernate kind + normalize ad + MySQL hata kodu).
+- Hata altyapısı ve security handler'ları `common` modülünde (bkz. "common modülü"); serviste yalnızca `CatalogErrorCode`,
+  `GlobalExceptionHandler` alt sınıfı (optimistic lock handler'ı + `errors`/`bookIds` ek alanları) ve kısıt eşlemesi.
+- DB kısıt → ErrorCode eşlemesi tek yerde: `exception/DbConstraintCodes.classify` (Hibernate kind + normalize ad + MySQL hata kodu;
+  genel yardımcılar common `DbConstraints`'te).
   Yeni UNIQUE kısıt özel kod isterse `UNIQUE_CODES`'a eklenir; aksi halde CONFLICT.
 
 ## Okuma API'si (catalog-service)
@@ -145,7 +190,7 @@
 - Worker testlerde varsayılan kapalı (`app.outbox.enabled: false`); açan test ayrı context kurar.
 - Tüm servisler aynı `kitapsepeti.events` exchange'ine yayınlar; her serviste tanım BİREBİR aynı olmalı
   (`new TopicExchange(name, true, false)`, argümansız). Farklı durable/autoDelete/argüman → broker PRECONDITION_FAILED
-  ile kanalı kapatır. Ortak modül yok: worker sınıfları servis başına kopya (user-service ↔ catalog-service).
+  ile kanalı kapatır. Outbox henüz `common`'da DEĞİL: worker sınıfları servis başına kopya (user-service ↔ catalog-service; taşıma ayrı adım).
 - catalog testlerinde RabbitMQ konteyneri ayrı `RabbitTestcontainersConfiguration`; tam context açan testler import eder,
   dilim testleri (`@DataJpaTest`, `@JdbcTest`) etmez.
 - JPQL/SQL bulk UPDATE `@UpdateTimestamp`/`@Version`'ı atlar; `updated_at` yine de kolonun `ON UPDATE CURRENT_TIMESTAMP(6)`
@@ -180,6 +225,9 @@
 ## Container (servis başına)
 - `<servis>/Dockerfile`, build context = repo kökü (kök pom + mvnw gerekir). Çok aşamalı: pom'lar → `go-offline`
   (cache mount) → src → `package -DskipTests` → layered extract → JRE runtime, sabit UID/GID 10001 non-root.
+- Modül pom'ları `COPY --parents */pom.xml ./` (Dockerfile frontend ≥ 1.20, `# syntax=docker/dockerfile:1` yeterli): yeni modül
+  eklenince mevcut Dockerfile'lar DEĞİŞMEZ. Kaynak yalnızca servisin ve derlediği modüllerin: `COPY --parents common/src <servis>/src ./`
+  (diğer servislerin kaynağı imaja girmez). go-offline reaktör modülünü (common) uzaktan aramaz; src değişince go-offline katmanı cache'te kalır.
 - Sırlar image'a girmez (`.dockerignore`); compose'ta env yalnızca tek tek, anahtar dosyaları compose `secrets`.
 - Readiness'a yalnızca isteği karşılamak için şart olan bağımlılık (DB) girer; mesaj broker'ı girmez (outbox tamponlar).
   Diğer servisler de girmez ve compose'ta onlara `depends_on` konmaz (catalog → user-service JWKS tembel; kapalıyken 503).
@@ -194,5 +242,8 @@ Kök POM'un başındaki "YENİ SERVİS EKLERKEN KONTROL LİSTESİ" takip edilir:
 2. Servis POM'unun `<parent>`'ını kök POM yap, miras alınanları sil.
 3. Yeni kütüphane ailesi varsa versiyonu `<properties>`'e, BOM'u `<dependencyManagement>`'a.
 4. Tüm servislerde ortak olan bağımlılığı kök `<dependencies>`'e taşı.
-5. (Docker) Mevcut TÜM `<servis>/Dockerfile`'lara yeni modülün `pom.xml` COPY satırını ekle; Maven reaktörü kökteki her
-   `<module>`'ün pom'unu ister, yoksa her servisin imaj build'i kırılır. Ardından tüm imajları build ederek doğrula.
+5. Servis POM'una `kitap-sepeti-common`'ı (versiyonsuz) ekle; ortak bileşenleri `@Import`/`@Bean` ile kaydet
+   (tarif: "Yeni servis common'ı nasıl kullanır").
+6. (Docker) Servisin Dockerfile'ını mevcutlardan kopyala; modül pom'ları `COPY --parents */pom.xml` ile otomatik gelir, diğer
+   Dockerfile'lara satır eklenmez. Servise özel olan yalnızca src satırı (`common/src` + kendi `src`'si) ve servis adı.
+   Ardından tüm imajları build ederek doğrula.

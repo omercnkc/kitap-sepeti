@@ -539,7 +539,29 @@
     ama Spring AMQP INFO bağlantı satırında RabbitMQ kullanıcı adı geçiyor (user-service'te de aynı) → backlog.
   - Yerel veri: user_db'de 1 yeni e2e (ADMIN) kullanıcısı; catalog_db'de 410 için 1 released rezervasyon + 403 için 4 BookUpserted.
 
+- Cart Adım 0 — `common` modülü (A) + compose portları 127.0.0.1 (B); SAF YENİDEN DÜZENLEME (henüz commit edilmedi; A ve B ayrı
+  commit'lenecek; davranış/HTTP/log metni/OpenAPI değişmedi, `git diff docs/api` boş; migration, .env, outbox'a dokunulmadı):
+  - Testler: common 25 (yeni), user-service 83 (aynı), catalog-service 262 (270 − 8: InternalApiKeysTest 5 + filtre testi 3 common'a
+    taşındı; common'da 5 + 5 = 2 yeni: yanlış anahtar, sabit zamanlı karşılaştırma `mockStatic(MessageDigest, CALLS_REAL_METHODS)`).
+    Toplam 370 (önce 353).
+  - Yapı ve tarif: systemPatterns.md "common modülü". Servislerde kalan: `UserErrorCode`/`CatalogErrorCode` + API_CODES (sözleşme sırası),
+    `GlobalExceptionHandler` alt sınıfları, catalog `DbConstraintCodes` (eski DbConstraints; test `DbConstraintCodesTest`), SecurityConfig
+    kuralları, user-service RsaKeyConfig, catalog JwtProperties/InternalSecurityConfig, outbox.
+  - Sapmalar: (1) security handler + internal filtre/entry point logger adları `com.kitapsepeti.common.security(.internal).*` oldu
+    (mesaj metni aynı; GlobalExceptionHandler logger adı korundu). (2) `isViolated` iki serviste normalize semantiğinde birleşti
+    (son '.' sonrası, büyük/küçük harf duyarsız; gerçek kısıt adlarında fark yok). (3) `ResourceNotFoundException` iki serviste aynı
+    olduğu için common'a taşındı. (4) `JwtRoleConvertersTest`: Security 7 `FACTOR_BEARER` yetkisini de ekliyor (mevcut davranış).
+  - Dockerfile: `COPY --parents */pom.xml ./` + `COPY --parents common/src <servis>/src ./`. Değerlendirilen: modül başına açık satır
+    (eski; her yeni modülde tüm Dockerfile'lar değişir), Dockerfile başına `.dockerignore` (`<Dockerfile>.dockerignore`; her servis
+    için ayrı liste bakımı), `--parents` (seçildi). Cache denemesi: src değişince go-offline dahil 1–8. adımlar CACHED.
+  - B: compose mysql/rabbitmq/user-service/catalog-service host portları `127.0.0.1:` (adminer zaten öyleydi); `docs/docker.md` paragraf.
+    LAN IP'den 8081/8082/3306/5672/15672 kapalı, localhost açık. Port değişimi mysql/rabbitmq'yu yeniden oluşturdu, named volume'lar yerinde.
+  - Uçtan uca (compose): /api/me 200, public 200, admin 200 / token'sız 401 problem+json `Bearer`, internal anahtarsız/yanlış 401
+    `ApiKey realm="internal"`, anahtarla 404; user-service durdurulup catalog yeniden başlatılınca admin 503 AUTHENTICATION_UNAVAILABLE,
+    geri gelince 200. Loglarda .env sırları/JWT/e-posta/özel anahtar/stack trace 0.
+
 ## Sonraki adımlar
+- Cart Adım 0 commit'leri (A ve B ayrı), ardından Cart Adım 1 (ön koşul artık sağlanıyor: kökte `common`, iki servis kullanıyor).
 - order-service (rezervasyon istemcisi; fiyat anlık görüntüsü kendisinde; `RESERVATION_RELEASED` → ödeme iadesi telafisi; süre dolumu
   olayı yok, GET ile sorgulanır; istemci `docs/api/catalog-service.openapi.json`'dan). Compose'a eklenirken catalog'a
   `http://catalog-service:8082` ve `.env` `ORDER_INTERNAL_API_KEY` ile bağlanır.
@@ -556,4 +578,5 @@
   event_type sorunuyla birlikte çözülecek.
 - Açık konu (catalog OpenAPI): `/v3/api-docs` her profilde açık (user-service ile aynı) → internal uçların şekli de herkese görünür
   (sır yok); prod'da `SPRINGDOC_ENABLED=false` düşünülmeli.
-- Yeni servisler eklendikçe kök POM kontrol listesini uygula (bkz. systemPatterns.md).
+- Yeni servisler eklendikçe kök POM kontrol listesini uygula (bkz. systemPatterns.md; [5] common, [6] Dockerfile).
+- Ayrı adım: outbox kodunu (OutboxRelay/Publisher/Properties/RabbitConfig) common'a taşımak.

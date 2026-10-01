@@ -50,8 +50,14 @@
   (user-service kalıbı), compose `catalog-service` (8082, healthcheck, user-service'e bağımlılık yok), `docs/docker.md`.
   `BookUpserted.priceAmount` metin kaldı (MySQL JSON kolonu sayıyı DOUBLE'a çevirip sondaki sıfırları atıyor; doküman güncellendi).
   270 test yeşil. Commit `b128320` + `9443b82`, push edildi.
+- Cart Adım 0 (henüz commit edilmedi): `common` modülü (`kitap-sepeti-common`; ErrorCode arayüzü + CommonErrorCode, ProblemDetail
+  handler tabanı, DbConstraints genel kısmı, 401/403/503 handler'ları, rol dönüştürücü, BearerTokenResolver yardımcıları, JWKS
+  JwtDecoder yardımcısı, internal API anahtarı filtresi). İki servis ona geçti; sözleşmeler byte-aynı. Dockerfile'lar `COPY --parents`.
+  Compose host portları yalnızca 127.0.0.1. Testler: common 25, user-service 83, catalog-service 262.
 
 ## Yapılacaklar
+- Cart servisi (Adım 1+; common hazır).
+- Outbox kodunu common'a taşıma (ayrı adım; şu an servis başına kopya).
 - order-service (catalog rezervasyon istemcisi).
 - Search için: yayınevi/yazar/kategori yeniden adlandırması yayındaki kitaplar için olay üretmiyor → yeniden indeksleme gerekecek.
 - Backlog: admin PATCH'te bilinmeyen alanlar (stok, status) sessizce yok sayılıyor; ileride 400 düşünülebilir.
@@ -79,4 +85,4 @@
 - catalog JWKS önbelleği 5 dk: user-service kapandıktan sonra admin uçları önbellek süresi boyunca 200, sonra 503 (Gateway fazı backlog'u).
 - `BookUpserted.priceAmount` metin, HTTP'deki `priceAmount` sayı (outbox payload kolonu MySQL JSON; sayı DOUBLE'a dönüşür).
   Sayıya geçmek için payload kolonunu metin tipine çeviren yeni migration + `eventVersion` kararı gerekir.
-- Kök POM'a yeni `<module>` eklenince her servisin Dockerfile'ına o modülün `pom.xml` COPY satırı eklenmeli (yoksa imaj build'i kırılır).
+  (Kapatılan bilinen sorun: "yeni `<module>` için her Dockerfile'a pom COPY satırı" → `COPY --parents */pom.xml`.)
