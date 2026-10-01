@@ -323,9 +323,36 @@
     `controller/BookControllerTest` (20), `controller/CategoryControllerTest` (2), `seed/DevSeedMigrationTest` (2, Spring'siz, kendi container'ı).
   - PowerShell konsolu yanıt JSON'undaki Türkçe karakterleri `�` gösterir; baytlar doğru UTF-8 (C3 87 = Ç).
   - `spring-boot:run "-Dspring-boot.run.arguments=--logging.level..."` ve `LOGGING_LEVEL_ORG_FLYWAYDB` env ile Flyway DEBUG log'u gelmedi (çözülmedi).
+  - Commit `297c9bc` (+ memory-bank `68841c7`), push edildi.
+
+- catalog-service admin yazma uçları: yayınevi, yazar, kategori (128 test yeşil; henüz commit edilmedi; kitap admin/stok/outbox/OpenAPI YOK):
+  - `controller/admin/`: AdminPublisherController, AdminAuthorController (`/api/admin/{publishers,authors}`: GET liste, POST 201 + Location,
+    GET/PATCH/DELETE `/{id}`), AdminCategoryController (+ `PUT /{id}/parent`). Yetki SecurityConfig'teki `/api/admin/**` ADMIN kuralından.
+  - Servisler `@Transactional` (okumalar readOnly): PublisherAdminService, AuthorAdminService, CategoryAdminService. Ortak yardımcılar
+    package-private: `Slugs.forCreate` (verilen slug ya da addan üretilen; boş/uzunsa InvalidFieldException "slug"), `AdminPaging`
+    (Sort name asc, id asc). Liste `AdminPageRequest` (page >= 0, size 1–100, varsayılan 20).
+  - `service/SlugGenerator.fromName`: Türkçe harfler açıkça (ç ğ ı İ ö ş ü + büyükleri), sonra NFD + birleşik işaretleri at (é → e; spec'e EK),
+    `toLowerCase(ROOT)`, `[^a-z0-9]+` → "-", kenar "-" atılır. Harf/rakam yoksa "" döner.
+  - DTO'lar: Create/Update{Publisher,Author,Category}Request (name compact ctor'da `strip()` → `@NotBlank`/`@NullOrNotBlank` + `@Size`
+    kırpılmış değere uygulanır), MoveCategoryRequest(parentId; null/eksik = kök). `validation/Slug(max)` composed constraint
+    (@Pattern + @Size, `@OverridesAttribute` ile max), `validation/NullOrNotBlank` (user-service kopyası).
+  - PATCH: null = değiştirme; yalnızca ad değişirse slug korunur. Slug ön kontrolü `existsBySlug`; yarışta `uk_*_slug` → DbConstraints → aynı 409.
+    Güncelleme sonrası `flush()` (güncel `updatedAt` yanıta girsin).
+  - Silme: `delete` + `flush()` → FK 1451 servis içinde `DataIntegrityViolationException` → GlobalExceptionHandler → 409 RESOURCE_IN_USE
+    (log: `constraint=fk_books_publisher | fk_book_authors_author | fk_categories_parent | fk_book_categories_category`). Ön sorgu YOK.
+  - Kategori taşıma: `CategoryRepository.findAllForUpdate()` (`@Lock(PESSIMISTIC_WRITE)`, tüm satırlar FOR UPDATE) → `CategoryForest`
+    (yeni `find(id)`); yeni üst `subtreeIds(id)` içindeyse 409 CATEGORY_CYCLE. Sıra: id yok 404 → üst yok 400 parentId → döngü 409.
+    Kilit eşzamanlı iki taşımanın birbirini görmeden döngü kurmasını önler.
+  - Yeni hata altyapısı: `ErrorCode.CATEGORY_CYCLE` (409, INFO), `SlugAlreadyExistsException`, `CategoryCycleException`,
+    `InvalidFieldException(field, message)` → handler 400 VALIDATION_FAILED + `errors[{field, message}]` (değer yok).
+  - Admin listesi DB collation'ıyla (`utf8mb4_0900_ai_ci`, aksan duyarsız) sıralanır; public ağaç Türkçe Collator ile. "Ç" admin listede C ile karışık sıralanır.
+  - PATCH /categories gövdesindeki `parentId` sessizce yok sayılır (Jackson bilinmeyen alanı reddetmez); taşıma yalnızca PUT /parent.
+  - Testler: `service/SlugGeneratorTest` (12), `controller/admin/AdminAccessTest` (3), `AdminPublisherControllerTest` (14),
+    `AdminAuthorControllerTest` (4), `AdminCategoryControllerTest` (6).
+  - Uçtan uca (compose user-service + local seed) a–g geçti; deneme kayıtları silindi, seed sayıları değişmedi. user_db'de e2e kullanıcıları kalıyor (önceki adımlardaki gibi).
 
 ## Sonraki adımlar
-- catalog-service: admin yazma uçları (CRUD), stok uçları, outbox,
+- catalog-service: kitap admin uçları, stok uçları, outbox,
   springdoc, actuator, Dockerfile + compose servisi (`USER_SERVICE_JWKS_URI` compose'ta user-service adına).
 - Docker adımının commit'i (kullanıcı isteyince), logout, e-posta/parola değiştirme, consumer servisler, CORS.
 - Açık konular: DataSourceHealthIndicator stack trace gürültüsü; CI pipeline yok (drift testi yalnızca yerel `mvnw test`'te).

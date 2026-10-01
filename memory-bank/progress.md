@@ -19,10 +19,13 @@
   (Kapatılan bilinen sorun: "JWKS erişilemezken 500, Boot varsayılan JSON".)
 - catalog-service public okuma: GET `/api/books` (filtre: kategori+alt kategoriler, yayınevi, yazar, fiyat aralığı; 4 sıralama; sayfa),
   GET `/api/books/{id}`, GET `/api/categories` (ağaç). Liste 3 SQL. Local profilde idempotent örnek veri (`db/seed`).
-  89 test yeşil. Henüz commit edilmedi.
+  Commit `297c9bc`.
+- catalog-service admin yazma uçları: yayınevi/yazar/kategori CRUD (`/api/admin/**`, ADMIN), addan Türkçe slug üretimi,
+  kategori taşıma (`PUT /api/admin/categories/{id}/parent`, döngü → 409 CATEGORY_CYCLE), kullanımdaki kaydı silme → 409 RESOURCE_IN_USE.
+  128 test yeşil. Henüz commit edilmedi.
 
 ## Yapılacaklar
-- catalog-service: admin yazma uçları, stok uçları, outbox, springdoc, actuator, Dockerfile + compose servisi.
+- catalog-service: kitap admin uçları, stok uçları, outbox, springdoc, actuator, Dockerfile + compose servisi.
 - Docker/Actuator adımının commit'i.
 - Logout, e-posta/parola değiştirme, CORS.
 - Diğer servisler (katalog, sepet, sipariş vb. — henüz kararlaştırılmadı) ve olay consumer'ları.
