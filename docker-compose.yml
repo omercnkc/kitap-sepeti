@@ -85,6 +85,44 @@ services:
       start_period: 40s
     mem_limit: 768m
 
+  catalog-service:
+    build:
+      context: .
+      dockerfile: catalog-service/Dockerfile
+    image: kitapsepeti/catalog-service:local
+    container_name: kitapsepeti-catalog-service
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    # user-service'e bağımlılık yok: JWKS ilk admin isteğinde çekilir; user-service kapalıyken public uçlar 200,
+    # admin uçları 503 AUTHENTICATION_UNAVAILABLE döner.
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    # .env toplu verilmez (env_file yok); yalnızca gereken değişkenler. Profil verilmez: local profilindeki
+    # dev seed container'da uygulanmaz (volume'daki seed geçmişi ignore-migration-patterns ile yok sayılır).
+    environment:
+      CATALOG_DB_HOST: mysql
+      CATALOG_DB_PORT: "3306"
+      CATALOG_DB_USER: ${CATALOG_DB_USER}
+      CATALOG_DB_PASSWORD: ${CATALOG_DB_PASSWORD}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      USER_SERVICE_JWKS_URI: http://user-service:8081/.well-known/jwks.json
+      CATALOG_INTERNAL_KEY_ORDER_SHA256: ${CATALOG_INTERNAL_KEY_ORDER_SHA256}
+    # Readiness yalnızca DB'ye bakar; RabbitMQ veya user-service kapalıyken servis healthy kalır.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "--max-time", "4", "-o", "/dev/null", "http://localhost:8082/actuator/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    mem_limit: 768m
+
   # Opsiyonel geliştirme aracı (yalnızca bakmak için): docker compose --profile tools up -d adminer
   adminer:
     image: adminer:latest

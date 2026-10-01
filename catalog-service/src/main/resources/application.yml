@@ -93,3 +93,24 @@ server:
   error:
     include-stacktrace: never
     include-message: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+      # /actuator link listesi de kapalı; dışarıya yalnızca health açılır.
+      discovery:
+        enabled: false
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        # RabbitMQ ve user-service (JWKS) bilinçli olarak yok: ikisi kapalıyken de public okuma ve stok uçları çalışır,
+        # olaylar outbox'ta bekler.
+        readiness:
+          include: readinessState, db
