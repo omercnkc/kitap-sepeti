@@ -49,6 +49,12 @@
 - API dokümanı: springdoc-openapi 3.1.1 (Boot 4 hattı). Çalışırken `http://localhost:8081/swagger-ui.html` ve
   `/v3/api-docs` (OpenAPI 3.1.0); `SPRINGDOC_ENABLED=false` ile ikisi de kapanır. HTTP sözleşmeleri `docs/api/`
   (`user-service.openapi.json` = `/v3/api-docs` çıktısı; node ile `JSON.stringify(d, null, 2)` + BOM'suz yazıldı).
+  catalog-service: `http://localhost:8082/swagger-ui.html`, sözleşme `docs/api/catalog-service.openapi.json` (OpenApiContractTest yazar).
+  Admin denemesi: Authorize → bearerAuth'a user-service login `accessToken`'ı (role ADMIN); internal: internalApiKey'e `.env`
+  `ORDER_INTERNAL_API_KEY`.
+- PowerShell tuzağı (tekrar yaşandı): `.env`'yi okurken `-match '^\s*([A-Za-z_]...'` tr-TR'de adında `I` geçen satırları ATLAR
+  (`CATALOG_INTERNAL_KEY_ORDER_SHA256`, `RABBITMQ_USER`...) → internal istemci kapalı açılır, anahtarla da 401. Her zaman `-cmatch`.
+  Ayrıca `Invoke-WebRequest().Content` UTF-8 yanıtı yanlış çözer; karşılaştırma için `WebClient.DownloadData` + UTF8.GetString.
 - OS: Windows, shell: PowerShell
 
 ## Komutlar (kök dizinden)

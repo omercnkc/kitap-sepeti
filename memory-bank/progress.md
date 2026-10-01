@@ -37,10 +37,13 @@
   transaction + `FOR UPDATE SKIP LOCKED`, iptal ucuyla ortak `releaseHeld`). Seed'e rezervasyon satırları eklendi; değişmez
   `reserved_quantity = SUM(held)` testlerde kontrol ediliyor. 248 test yeşil. Commit `e18960a`, push edildi.
   (Kapatılan bilinen sorunlar: "süresi dolan held rezervasyonlar serbest bırakılmıyor", "seed'de satırsız rezerv".)
+- catalog-service OpenAPI (Adım 10): Swagger UI `http://localhost:8082/swagger-ui.html`, `bearerAuth` (admin) / `internalApiKey`
+  (internal) / public kilitsiz, tüm hatalar `application/problem+json` (`Problem`, rezervasyon 409'u `StockUnavailableProblem` + `bookIds`).
+  Sözleşme `docs/api/catalog-service.openapi.json` (19 path / 31 operasyon), drift testi ile korunur. 260 test yeşil. Henüz commit edilmedi.
 
 ## Yapılacaklar
 - order-service (catalog rezervasyon istemcisi).
-- catalog-service: springdoc, actuator, Dockerfile + compose servisi.
+- catalog-service: actuator, Dockerfile + compose servisi.
 - Search için: yayınevi/yazar/kategori yeniden adlandırması yayındaki kitaplar için olay üretmiyor → yeniden indeksleme gerekecek.
 - Docker/Actuator adımının commit'i.
 - Logout, e-posta/parola değiştirme, CORS.
@@ -60,3 +63,5 @@
   değişmez bozulur (yalnızca local dev verisi).
 - Süre dolumu görevi tutarsız bir siparişi (kitap rezervi < adet) her turda yeniden dener ve her seferinde WARN yazar; elle düzeltilene
   kadar o sipariş `held` kalır.
+- Tıkanan süre dolumu siparişleri kuyruğun başını tıkayabilir (batch dolarsa), outbox'taki tanınmayan event_type sorunuyla birlikte çözülecek.
+- catalog `/v3/api-docs` ve Swagger UI her profilde açık (`SPRINGDOC_ENABLED=false` ile kapanır); internal uç şekilleri de görünür.

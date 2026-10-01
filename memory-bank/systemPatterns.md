@@ -161,6 +161,14 @@
   otomatik girer. DTO alanlarına `@Schema(description, example)`; parola/sır `accessMode = WRITE_ONLY`.
 - Uç/DTO değişince `docs/api/<servis>.openapi.json` yeniden üretilir: `OpenApiContractTest` fark varsa kırılır;
   `-Dopenapi.contract.update=true` ile dosyayı yeniden yazar.
+- catalog-service farkı: erişim türü anotasyonla DEĞİL yol önekinden (`OpenApiConfig.accessRulesAndErrorResponses`; SecurityConfig ile
+  aynı kural: `/api/admin/` bearerAuth, `/internal/` internalApiKey, diğer `security: []`); global security yok. Yeni admin/internal uç
+  için güvenlik anotasyonu YAZMA; yalnızca `@Tag` (OpenApiConfig.TAG_* sabitleri) + `@Operation` + başarı/uca özel `@ApiResponse`
+  (yalnızca açıklama; customizer içeriği `Problem` yapar). Uca özel problem şeması gerekiyorsa `content = @Content(mediaType =
+  PROBLEM_JSON, schema = @Schema(ref = ...))` → korunur. `@ModelAttribute` sorgu nesnesine `@ParameterObject`; aynı adlı nested
+  record'lara `@Schema(name = ...)` (springdoc basit adla şema üretir, çakışanı sessizce ezer). Küçük harfli enum parametreleri
+  (`sort`, `status`) için `@Schema(type = "string", allowableValues = ...)`. Test-only controller'lar `packages-to-scan` ile dışarıda.
+  Catalog drift testi farkta değeri de gösterir ve üretilen dokümanı `target/openapi/` altına yazar.
 
 ## Container (servis başına)
 - `<servis>/Dockerfile`, build context = repo kökü (kök pom + mvnw gerekir). Çok aşamalı: pom'lar → `go-offline`

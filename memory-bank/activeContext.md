@@ -459,9 +459,41 @@
     BookUpserted inStock=true yayınlandı) → commit 409 RESERVATION_RELEASED; normal TTL ile yeniden açılıp 403 −1 ile seed değerine (0)
     döndü, değişmez 0. Yerel catalog_db: 403 için 1 released rezervasyon + outbox satırları; user_db'de 2 yeni e2e kullanıcısı.
 
+- Adım 10 — catalog-service OpenAPI (260 test yeşil = 248 + 12; user-service 83; henüz commit EDİLMEDİ; uç davranışı/yolu/alan adı/
+  durum kodu değişmedi, yalnızca anotasyon + springdoc; user-service sözleşmesi/testi, migration, compose, .env'ye dokunulmadı):
+  - `springdoc-openapi-starter-webmvc-ui` (sürüm kök POM'dan, 3.1.1). `application.yml` `springdoc.*` user-service ile aynı anahtarlar
+    + farklar: `packages-to-scan: com.kitapsepeti.catalog.controller` (src/test'teki `/test/errors/**` ve `*/ping` deneme controller'ları
+    component scan ile her test context'ine giriyor; paths-to-match tek başına `/api/books/ping`'i dışarıda bırakamaz) ve
+    `paths-to-match: /api/**, /internal/**`. `app.version: "@project.version@"`. SecurityConfig permitAll'a `/v3/api-docs/**`,
+    `/swagger-ui/**`, `/swagger-ui.html` eklendi; internal zinciri `securityMatcher("/internal/**")` olduğundan karışmıyor.
+  - `config/OpenApiConfig`: güvenlik şemaları `bearerAuth` (HTTP bearer JWT) + `internalApiKey` (apiKey, header `X-Internal-Api-Key`);
+    GLOBAL security YOK (user-service'ten farklı). Tek `OpenApiCustomizer accessRulesAndErrorResponses`: yol önekinden erişim
+    (`/api/admin/` → bearerAuth, `/internal/` → internalApiKey, diğer → `security: []`), standart hatalar addIfAbsent (girdi varsa 400,
+    admin 401 + `WWW-Authenticate: Bearer` / 403 / 503, internal 401 + `ApiKey realm="internal"`, `{` içeren yola 404, hepsine 500),
+    tüm 4xx/5xx içerik = yalnızca `application/problem+json` (uca özel problem+json şeması korunur), tag'ler ada göre sıralanır
+    (aksi halde controller tarama sırası). Şemalar `Problem` (code enum = `ErrorCode.values()`), `FieldError`,
+    `StockUnavailableProblem` (allOf Problem + `bookIds` uuid dizisi; yalnızca reserve 409).
+  - Controller'larda `@Tag` (Books, Categories, Admin – Books/Publishers/Authors/Categories, Internal – Stock; en-dash),
+    `@Operation(operationId, summary)`, başarı `@ApiResponse` (201 + Location, 204, reserve 201 + 200), uca özel 409/404 açıklamaları.
+    Sorgu nesnelerine `@ParameterObject` (yoksa tek `request` nesne parametresi çıkıyordu). İki nested `Item` record'u aynı şema adına
+    çakışıyordu → `@Schema(name = "ReserveStockItem" / "ReservationItem")`. DTO'larda `@Schema`: sort/status küçük harf enum + default,
+    page/size default, response status enum'ları, delta/version/items açıklamaları. Bean Validation kısıtları otomatik görünüyor.
+  - Sözleşme `docs/api/catalog-service.openapi.json`: 19 path / 31 operasyon. `OpenApiContractTest` (user-service uyarlaması,
+    ApiTestSupport'tan türer): fark → JSON Pointer + dosyadaki/üretilen değer (160 karakter), üretilen doküman
+    `catalog-service/target/openapi/catalog-service.openapi.json`, güncelleme komutu
+    `.\mvnw.cmd -pl catalog-service test "-Dtest=OpenApiContractTest" "-Dopenapi.contract.update=true"`.
+    `OpenApiDocsTest` (11): operasyon listesi birebir, public security boş + global yok, tüm admin bearerAuth (24), tüm internal
+    internalApiKey (4), reserve 409 → StockUnavailableProblem, code enum, tüm hata içerikleri problem+json, public kitap şemasında stok
+    sayısı yok, kısıt/enum'lar, gerçek 404 yanıtı Problem şekline uyuyor (`type` alanı yanıtta YOK), docs + swagger-ui anonim 200.
+  - Drift kanıtı: MoveCategoryRequest'e geçici alan → test kırıldı (`/components/schemas/MoveCategoryRequest/properties/tempDriftProbe
+    (dosyada yok)`), geri alındı → yeşil.
+  - Uçtan uca (local): swagger-ui + api-docs anonim 200; public GET 200; ADMIN token ile /api/admin/books 200; token'sız 401
+    problem+json `WWW-Authenticate: Bearer`; anahtarla rastgele orderId 404 RESOURCE_NOT_FOUND; anahtarsız 401 `ApiKey realm="internal"`.
+    Canlı `/v3/api-docs` = sözleşme dosyası (servers `/`). user_db'de 2 yeni e2e kullanıcısı.
+
 ## Sonraki adımlar
 - order-service (rezervasyon istemcisi; fiyat anlık görüntüsü kendisinde; `RESERVATION_RELEASED` → ödeme iadesi telafisi; süre dolumu
-  olayı yok, GET ile sorgulanır). catalog: springdoc, actuator, Dockerfile + compose servisi
+  olayı yok, GET ile sorgulanır; istemci `docs/api/catalog-service.openapi.json`'dan). catalog: actuator, Dockerfile + compose servisi
   (`USER_SERVICE_JWKS_URI`, `RABBITMQ_HOST` ve `CATALOG_INTERNAL_KEY_ORDER_SHA256` compose'ta).
 - Backlog: yayınevi/yazar/kategori yeniden adlandırılınca yayındaki kitaplar için olay ÜRETİLMİYOR; Search servisi gelince
   yeniden indeksleme (ya da bu değişikliklerde etkilenen kitaplar için BookUpserted) gerekecek.
@@ -469,4 +501,8 @@
 - Açık konular: DataSourceHealthIndicator stack trace gürültüsü; CI pipeline yok (drift testi yalnızca yerel `mvnw test`'te).
 - Açık konu (user-service VE catalog-service): outbox'ta yayınlanmış satırların temizliği (retention) yok; bilinmeyen event_type
   kuyruğun başını tıkar (her turda WARN, sonraki satırlar bekler).
+- Açık konu (catalog): tıkanan süre dolumu siparişleri kuyruğun başını tıkayabilir (batch dolarsa), outbox'taki tanınmayan
+  event_type sorunuyla birlikte çözülecek.
+- Açık konu (catalog OpenAPI): `/v3/api-docs` her profilde açık (user-service ile aynı) → internal uçların şekli de herkese görünür
+  (sır yok); prod'da `SPRINGDOC_ENABLED=false` düşünülmeli. Response şemalarında `required` yok (alanlar her zaman dolu olsa da).
 - Yeni servisler eklendikçe kök POM kontrol listesini uygula (bkz. systemPatterns.md).
