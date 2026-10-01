@@ -60,7 +60,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 		if (code == ErrorCode.UNAUTHORIZED) {
 			response.header(HttpHeaders.WWW_AUTHENTICATE, BearerChallenge.INVALID_TOKEN);
 		}
-		return response.body(ProblemDetails.create(code, ex.getDetail(), request));
+		ProblemDetail problem = ProblemDetails.create(code, ex.getDetail(), request);
+		if (ex instanceof InvalidFieldException invalidField) {
+			problem.setProperty("errors",
+					List.of(new FieldViolation(invalidField.getField(), invalidField.getFieldMessage())));
+		}
+		return response.body(problem);
 	}
 
 	/**

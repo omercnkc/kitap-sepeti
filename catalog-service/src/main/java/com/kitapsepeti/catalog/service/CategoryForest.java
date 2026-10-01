@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -48,6 +49,10 @@ final class CategoryForest {
 
 	static CategoryForest of(List<Category> categories) {
 		return new CategoryForest(categories);
+	}
+
+	Optional<Category> find(UUID categoryId) {
+		return Optional.ofNullable(this.byId.get(categoryId));
 	}
 
 	List<Category> roots() {
