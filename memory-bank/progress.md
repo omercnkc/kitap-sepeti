@@ -9,15 +9,20 @@
   Actuator liveness/readiness.
 - Testler Testcontainers (MySQL + RabbitMQ) ile; 83 test yeşil.
 - catalog-service iskeleti (port 8082): `catalog_db` + `catalog_svc` (init script `infra/mysql/init/10-catalog-db.sh`),
-  Hikari/Flyway bağlanıyor, context testi yeşil (1 test). Henüz tablo/uç yok, commit edilmedi.
+  Hikari/Flyway bağlanıyor.
+- catalog-service V1 şeması (8 tablo) yerel `catalog_db`'ye uygulandı (commit `b32141e`).
+- catalog-service entity + repository katmanı (validate geçiyor); 30 test yeşil (context 1 + şema kısıtları 14 +
+  repository 13 + transaction sınırı 2). Entity katmanı henüz commit edilmedi.
 
 ## Yapılacaklar
-- catalog-service: V1 şema, entity, API, security, springdoc, actuator, Dockerfile + compose servisi.
+- catalog-service: servis + hata işleyicisi, API, security, springdoc, actuator, Dockerfile + compose servisi.
 - Docker/Actuator adımının commit'i.
 - Logout, e-posta/parola değiştirme, CORS.
 - Diğer servisler (katalog, sepet, sipariş vb. — henüz kararlaştırılmadı) ve olay consumer'ları.
 - CI pipeline (testler + image build).
 
 ## Bilinen sorunlar
+- MySQL CHECK ihlali (3819, HY000) JdbcTemplate'te `UncategorizedSQLException` olur; JPA yolunda ise
+  `DataIntegrityViolationException` (Hibernate çevirir). catalog-service'te CHECK'e dokunan yazımlar JPA üzerinden yapılmalı.
 - Outbox'ta yayınlanmış satırlar temizlenmiyor; bilinmeyen `event_type` kuyruğun başını tıkar.
 - DB kapalıyken `DataSourceHealthIndicator` her health çağrısında WARN + uzun stack trace yazıyor (log gürültüsü).

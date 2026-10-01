@@ -194,8 +194,54 @@
     Parolayı göstermeden bağlanmak için: `"SQL;" | docker compose exec -T mysql sh -c 'MYSQL_PWD=$CATALOG_DB_PASSWORD mysql -ucatalog_svc'`.
   - Kökte hâlâ README yok (port haritası eklenmedi). Portlar: user-service 8081, catalog-service 8082, adminer 8090.
 
+- catalog-service V1 şeması (henüz commit edilmedi; entity/repository YOK): `V1__create_catalog_tables.sql` →
+  publishers, authors, categories (parent_id self-FK RESTRICT), books, book_authors, book_categories (book CASCADE,
+  diğer taraf RESTRICT), stock_reservations (book RESTRICT, order_id FK'sız, uk (order_id, book_id)), outbox (user-service ile aynı).
+  books: `version` (JPA @Version için), status küçük harf ('draft'|'published'|'archived'), 6 CHECK.
+  Yerel `catalog_db`'ye uygulandı (flyway_schema_history rank 1). Bundan sonra V1 DEĞİŞTİRİLMEZ.
+  - MySQL FK için index yoksa FK adıyla otomatik index açar (örn. books'ta `KEY fk_books_publisher`); entity'de/validate'te sorun değil.
+  - `ck_books_stock_non_negative` mantıken gereksiz: `reserved >= 0` ve `reserved <= stock` zaten `stock >= 0` demek.
+    Negatif stokta MySQL yalnızca bir ihlal raporlar ve CHECK'leri ada göre (alfabetik) değerlendirir →
+    `ck_books_reserved_le_stock` görünür. Kısıt yine de şemada tutuldu (spec).
+  - ÖNEMLİ: CHECK ihlali MySQL'de SQLSTATE HY000 / hata 3819. Spring JdbcTemplate bunu sınıflandıramaz →
+    `UncategorizedSQLException` (DataIntegrityViolationException DEĞİL). FK (1451/1452) ve UNIQUE (1062) doğru çevrilir
+    (`DataIntegrityViolationException` / `DuplicateKeyException`). JPA yolu için aşağıdaki entity notuna bak.
+  - Test: `schema/CatalogSchemaConstraintsTest` (`@JdbcTest` + `@AutoConfigureTestDatabase(NONE)` + Testcontainers,
+    paket `org.springframework.boot.jdbc.test.autoconfigure`); her test transaction'da, geri alınır. Kısıt adı mesajda doğrulanır.
+  - `db/migration/.gitkeep` artık gereksiz; adım kapsamı dışında kaldığı için silinmedi.
+  - Docker Desktop oturum başında kapalı olabiliyor: Testcontainers "Could not find a valid Docker environment" → 
+    `Start-Process "$env:LOCALAPPDATA\Programs\DockerDesktop\Docker Desktop.exe"`.
+
+- catalog-service entity + repository (henüz commit edilmedi; servis/controller/security YOK):
+  - `entity/`: Publisher, Author, Category (parent LAZY, children yok), Book, StockReservation, OutboxEvent (user-service'in
+    birebir kopyası), BookStatus/ReservationStatus + `AttributeConverter` (küçük harf, `@Convert` açıkça; autoApply yok).
+  - user-service kalıbı aynen: `@UuidGenerator(VERSION_7)`, `@CreationTimestamp`/`@UpdateTimestamp` + `Instant`,
+    `@Getter` + yalnızca değişebilir alanlarda `@Setter`, `@NoArgsConstructor(PROTECTED)` + zorunlu alanlı public ctor,
+    Java'da default değerler (status, currency 'TRY', stok/rezerv 0). equals/hashCode OVERRIDE EDİLMEZ (Object kimliği):
+    hashCode persist öncesi/sonrası sabit (testli). Bedeli: farklı persistence context'lerden gelen aynı satır eşit sayılmaz.
+  - Book: `@Version Long version` (yeni entity'de null → insert'te 0; Spring Data isNew de buna bakar),
+    `description` için `columnDefinition = "TEXT"` (validate TEXT ↔ varchar(255) uyuşmazlığı riskine karşı),
+    `@ManyToMany(LAZY)` Set<Author>/Set<Category> + `@JoinTable`, alan tanımında `new HashSet<>()`. Tek yönlü.
+  - StockReservation: book/orderId/quantity/expiresAt `updatable = false`, yalnızca status setter'lı.
+  - `BookRepository extends JpaRepository, JpaSpecificationExecutor`; `findWithDetailsById` `@EntityGraph(publisher, authors,
+    categories)` — iki koleksiyon Set olduğu için MultipleBagFetchException yok.
+  - JPA hata çevirisi (Hibernate 7 + MySQL 8.4, save+flush): CHECK/UNIQUE/FK üçü de TAM OLARAK
+    `DataIntegrityViolationException` (UNIQUE için `DuplicateKeyException` DEĞİL). `getCause()` =
+    `org.hibernate.exception.ConstraintViolationException`, `getKind()` = CHECK / UNIQUE / FOREIGN_KEY,
+    `getConstraintName()` = `ck_books_reserved_le_stock` / `publishers.uk_publishers_slug` (MySQL tablo önekli) /
+    `fk_books_publisher`. En özel neden: CHECK → `java.sql.SQLException`, diğerleri `SQLIntegrityConstraintViolationException`.
+    → Hata işleyicisi `ConstraintViolationException.getKind()` + kısıt adıyla eşleme yapabilir; JdbcTemplate kullanılırsa
+    3819 yine `UncategorizedSQLException` olur.
+  - Optimistic lock: eski versiyonla flush → `ObjectOptimisticLockingFailureException`, kök neden
+    `org.hibernate.StaleStateException` (StaleObjectStateException DEĞİL), mesajda `where id=? and version=?`.
+  - Testler: `repository/CatalogRepositoryTest` (13, transactional) ve `repository/BookTransactionBoundaryTest` (2,
+    `@Transactional(NOT_SUPPORTED)` + TransactionTemplate; REQUIRES_NEW ile eşzamanlı güncelleme; `@AfterEach` JDBC temizliği —
+    aynı context'i paylaşan diğer testler artık veri görmesin). BINARY(16) JDBC'de `UUID_TO_BIN(?)` / `BIN_TO_UUID` ile.
+  - `db/migration/.gitkeep` silindi.
+
 ## Sonraki adımlar
-- catalog-service: şema (V1), entity, security (resource server, user-service JWKS), springdoc, actuator, Dockerfile + compose servisi.
+- catalog-service: servis + hata işleyicisi (Hibernate ConstraintKind'e göre), API, security (resource server, user-service JWKS),
+  springdoc, actuator, Dockerfile + compose servisi.
 - Docker adımının commit'i (kullanıcı isteyince), logout, e-posta/parola değiştirme, consumer servisler, CORS.
 - Açık konular: DataSourceHealthIndicator stack trace gürültüsü; CI pipeline yok (drift testi yalnızca yerel `mvnw test`'te).
 - Açık konu: outbox'ta yayınlanmış satırların temizliği (retention) yok; bilinmeyen event_type kuyruğun başını tıkar.

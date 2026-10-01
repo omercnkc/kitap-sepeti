@@ -30,6 +30,9 @@
   (compose `MYSQL_DATABASE`/`MYSQL_USER`). `catalog-service` → `catalog_db`, `catalog_svc`
   (`infra/mysql/init/10-catalog-db.sh`, `.env` `CATALOG_DB_USER/PASSWORD`). Yeni servis şeması = yeni `NN-<servis>-db.sh`;
   mevcut volume'da elle `docker compose exec mysql sh /docker-entrypoint-initdb.d/<script>`. Tabloları her serviste Flyway oluşturur.
+- catalog-service şeması (V1__create_catalog_tables.sql): publishers, authors, categories, books, book_authors,
+  book_categories, stock_reservations, outbox. Aynı kurallar (BINARY(16) uygulama UUID'si, DATETIME(6) UTC, utf8mb4_0900_ai_ci,
+  isimlendirilmiş pk_/uk_/fk_/ck_/ix_ kısıtları). Fiyat DECIMAL(12,2) + currency CHAR(3) 'TRY'.
 - catalog-service: port 8082, çalıştırma `.\mvnw.cmd -pl catalog-service spring-boot:run`, testler `.\mvnw.cmd -pl catalog-service -am test`.
 - Mesajlaşma: RabbitMQ 4 (`rabbitmq:4-management`, container `kitapsepeti-rabbitmq`, AMQP 5672,
   Management UI/API yalnızca `127.0.0.1:15672`). Kullanıcı `.env`'deki `RABBITMQ_USER`/`RABBITMQ_PASSWORD`.
