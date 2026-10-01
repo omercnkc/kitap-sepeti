@@ -238,10 +238,46 @@
     `@Transactional(NOT_SUPPORTED)` + TransactionTemplate; REQUIRES_NEW ile eşzamanlı güncelleme; `@AfterEach` JDBC temizliği —
     aynı context'i paylaşan diğer testler artık veri görmesin). BINARY(16) JDBC'de `UUID_TO_BIN(?)` / `BIN_TO_UUID` ile.
   - `db/migration/.gitkeep` silindi.
+  - (Sonradan) İskelet, V1 ve entity/repository adımları commit + push edildi (`b32141e`, `ed3a62c`, `afce68a`).
+
+- catalog-service hata altyapısı + OAuth2 Resource Server (56 test yeşil; henüz commit edilmedi; user-service'e dokunulmadı,
+  ortak modül YOK — Cart servisi gelince ortak modüle çıkarılacak):
+  - Bağımlılıklar: `spring-boot-starter-security`, `spring-boot-starter-security-oauth2-resource-server`, test `spring-boot-starter-security-test`.
+  - user-service'ten KOPYA (paket `com.kitapsepeti.catalog`): `exception/` ErrorCode, ApiException, ResourceNotFoundException,
+    ProblemDetails, DbConstraints, GlobalExceptionHandler; `security/` BearerChallenge, ProblemDetailResponses, entry point,
+    access denied handler. `CatalogServiceApplication` → `exclude = UserDetailsServiceAutoConfiguration.class`.
+  - ErrorCode: user-service'in genel kodları (aynı status/log seviyesi) + SLUG_ALREADY_EXISTS, ISBN_ALREADY_EXISTS,
+    RESOURCE_IN_USE, CONCURRENT_MODIFICATION (hepsi 409/INFO). Kullanıcıya özel kodlar alınmadı.
+  - `DbConstraints.classify(ex)` → `Violation(code, constraint, kind)`: Hibernate `ConstraintViolationException` neden zincirinden,
+    ad "tablo." öneki atılıp küçük harfe normalize. UNIQUE uk_{publishers,authors,categories}_slug → SLUG_ALREADY_EXISTS,
+    uk_books_isbn → ISBN_ALREADY_EXISTS; FOREIGN_KEY + MySQL 1451 → RESOURCE_IN_USE (`violation.getErrorCode()`, JDBCException);
+    1452 / CHECK / bilinmeyen UNIQUE / diğer → CONFLICT. Log notu `constraint=<ad>, kind=<KIND>` (değer yok).
+  - `OptimisticLockingFailureException` (üst sınıf; ObjectOptimistic... dahil) → CONCURRENT_MODIFICATION.
+  - `config/SecurityConfig`: kural sırası GET /api/books/** + /api/categories/** permitAll → /error permitAll →
+    /api/admin/** ADMIN → /internal/** denyAll → anyRequest authenticated. Özel BearerTokenResolver, public GET'lerde
+    (aynı PathPatternRequestMatcher kuralları) Authorization'ı yok sayar → bozuk/expired token public okumayı 401'e düşürmez.
+    `@EnableMethodSecurity` YOK (URL kuralları yeterli).
+  - `config/JwtDecoderConfig`: kendi `JwtDecoder` bean'i = `NimbusJwtDecoder.withJwkSetUri(jwk-set-uri).jwsAlgorithm(RS256)`
+    + `JwtValidators.createDefaultWithIssuer(app.jwt.issuer)` (exp/nbf 60 sn tolerans + iss). jwk-set-uri
+    `OAuth2ResourceServerProperties`'ten (Boot 4 paketi `org.springframework.boot.security.oauth2.server.resource.autoconfigure`),
+    issuer `security/JwtProperties` (`app.jwt.issuer`, @Validated @NotBlank). JWKS istemcisi RestTemplate connect 2 s / read 3 s.
+    issuer-uri/OIDC discovery KULLANILMAZ (issuer URI değil). JWKS lazy: açılışta istek yok; user-service kapalıyken başlar.
+  - Bilinen davranış (düzeltilmedi): JWKS erişilemezken token'lı korumalı istek → Security 7 `AuthenticationServiceException`'ı
+    yeniden fırlatır → Boot varsayılan `/error` JSON'u ile **500** (ProblemDetail değil, ERROR + stack trace). Token'sız/public
+    istekler etkilenmez. Düzeltme seçeneği: resource server'a failure handler + 503 kodu.
+  - user-service token'larında `typ` yok; `createDefaultWithIssuer` bunu reddetmiyor (uçtan uca doğrulandı).
+  - Testler: `support/TestJwt` (user-service test anahtarıyla imza, thumbprint kid; yabancı anahtar, alg none),
+    `support/JwksServer` (JDK `com.sun.net.httpserver.HttpServer`, loopback rastgele port, istek sayacı), `ApiTestSupport`
+    (statik JWKS sunucusu + `@DynamicPropertySource`, tablo temizliği), `security/SecurityRulesTest` (14),
+    `security/JwksFlowTest` (1; ayrı context, açılışta 0 istek → ilk doğrulamada 1 → önbellek), `exception/GlobalExceptionHandlerTest` (11,
+    OutputCapture). Test controller'ları yalnızca src/test: `security/SecurityProbeController`, `exception/ErrorProbeController` (`/test/errors/**`).
+  - Test anahtarı `catalog-service/src/test/resources/jwt/` (user-service'ten kopya); kök `.gitignore`'a
+    `!catalog-service/src/test/resources/jwt/*.pem` eklendi.
+  - Uçtan uca (compose user-service): USER token → /api/admin/x 403; role=ADMIN + yeniden login → 404; token'sız /api/books → 404.
 
 ## Sonraki adımlar
-- catalog-service: servis + hata işleyicisi (Hibernate ConstraintKind'e göre), API, security (resource server, user-service JWKS),
-  springdoc, actuator, Dockerfile + compose servisi.
+- catalog-service: servis + API (admin CRUD, public okuma), JWKS erişilemezken 500 davranışı kararı,
+  springdoc, actuator, Dockerfile + compose servisi (`USER_SERVICE_JWKS_URI` compose'ta user-service adına).
 - Docker adımının commit'i (kullanıcı isteyince), logout, e-posta/parola değiştirme, consumer servisler, CORS.
 - Açık konular: DataSourceHealthIndicator stack trace gürültüsü; CI pipeline yok (drift testi yalnızca yerel `mvnw test`'te).
 - Açık konu: outbox'ta yayınlanmış satırların temizliği (retention) yok; bilinmeyen event_type kuyruğun başını tıkar.

@@ -37,7 +37,21 @@
 - Boot 4 MockMvc: `org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc`
   (`spring-boot-starter-webmvc-test` içinde).
 
+## Güvenlik (catalog-service = yalnızca Resource Server)
+- Catalog token ÜRETMEZ; src/main'de JwtEncoder/özel anahtar yok. `config/JwtDecoderConfig` JWKS'ten (user-service
+  `/.well-known/jwks.json`, `USER_SERVICE_JWKS_URI`) RS256 + `JwtValidators.createDefaultWithIssuer(app.jwt.issuer)`.
+  Anahtar ilk doğrulamada çekilir, önbelleğe alınır; servis açılışı user-service'e bağımlı değil.
+- Rol: JWT `role` claim → `ROLE_<ROLE>`; principal = `sub` (kullanıcı UUID'si).
+- URL kuralları sırası önemli: public GET (books, categories) → /error → /api/admin/** ADMIN → /internal/** denyAll →
+  authenticated. Public GET'lerde BearerTokenResolver Authorization'ı okumaz (aynı PathPattern listesi, `PUBLIC_GET_PATHS`).
+- Hata altyapısı user-service ile aynı yapıda KOPYA (ortak modül yok; Cart servisi gelince çıkarılacak). İki servisteki
+  `ProblemDetails`/`GlobalExceptionHandler`/security handler değişiklikleri elle senkron tutulmalı.
+- DB kısıt → ErrorCode eşlemesi tek yerde: `exception/DbConstraints.classify` (Hibernate kind + normalize ad + MySQL hata kodu).
+  Yeni UNIQUE kısıt özel kod isterse `UNIQUE_CODES`'a eklenir; aksi halde CONFLICT.
+
 ## Test
+- catalog API testleri `ApiTestSupport`'u extend eder: gerçek HTTP JWKS (JDK HttpServer) + `TestJwt` ile imzalı token.
+  JWKS çağrı sayısını ölçen test ayrı context ister (kendi sunucusu).
 - Repository testleri: `@DataJpaTest` + `@AutoConfigureTestDatabase(replace = NONE)` +
   `@Import(TestcontainersConfiguration.class)`; Flyway test container'ında çalışır.
 - Boot 4 paketleri: `org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest`,
