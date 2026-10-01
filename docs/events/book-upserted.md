@@ -62,7 +62,7 @@ UTF-8 JSON nesnesi. Alan sırası ve boşluklar garanti edilmez (JSON olarak ayr
 | `title` | string | Başlık. |
 | `isbn` | string \| null | Normalize edilmiş ISBN-10 veya ISBN-13 (tire/boşluk yok, kontrol karakteri büyük `X`). |
 | `description` | string \| null | Açıklama. |
-| `priceAmount` | string | Fiyat, her zaman 2 ondalık (ör. `"149.90"`). Ondalık kaybı olmasın diye metindir; sayıya çevirirken decimal tip kullanın. |
+| `priceAmount` | string | Fiyat, her zaman 2 ondalık (ör. `"149.90"`). Ondalık kaybı olmasın diye metindir; sayıya çevirirken decimal tip (ör. `BigDecimal`) kullanın. HTTP yanıtlarındaki `priceAmount` sayıdır; buradaki farkın nedeni aşağıda. |
 | `currency` | string | ISO 4217 kodu; şu an her zaman `TRY`. |
 | `coverUrl` | string \| null | Kapak görseli (http/https). |
 | `pageCount` | integer \| null | Sayfa sayısı. |
@@ -76,6 +76,12 @@ UTF-8 JSON nesnesi. Alan sırası ve boşluklar garanti edilmez (JSON olarak ayr
 
 Stok/rezerv miktarı, versiyon ve kitap durumu bilinçli olarak payload'da **yoktur** (olay yalnızca yayındaki
 kitaplar için üretilir).
+
+**`priceAmount` neden metin?** Payload, broker'a gönderilmeden önce outbox tablosunun MySQL `JSON` kolonunda
+saklanır. MySQL bu kolonda kesirli sayıları DOUBLE'a çevirir ve sondaki sıfırları atar (`149.90` → `149.9`,
+`130.00` → `130.0`). Sayı olarak yazılsaydı mesajdaki biçim HTTP yanıtlarındaki `priceAmount` ile aynı olmazdı.
+Metin olarak `"149.90"` aynen korunur. Tipi değiştirmek kırıcı değişiklik olacağından (bkz. Sürümleme) bu alan
+metin kalır.
 
 Örnek:
 

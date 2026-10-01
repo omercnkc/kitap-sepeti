@@ -7,7 +7,8 @@ import java.util.UUID;
 /**
  * {@code BookUpserted} outbox olayının içeriği (bkz. {@code docs/events/book-upserted.md}): yayındaki kitabın
  * aramada/listelemede gereken güncel hali. Stok/rezerv miktarı, versiyon ve durum BİLİNÇLİ olarak yoktur;
- * yalnızca {@code inStock}. Fiyat, ondalık kaybı olmasın diye metindir ({@code "149.90"}).
+ * yalnızca {@code inStock}. Fiyat, ondalık kaybı olmasın diye metindir ({@code "149.90"}): outbox payload kolonu
+ * MySQL JSON ve sayıları DOUBLE saklar ({@code 149.90} → {@code 149.9}).
  * Alan eklemek geriye uyumludur; alan silmek veya anlamını değiştirmek {@code eventVersion}'ı artırmayı gerektirir.
  */
 public record BookUpsertedEvent(int eventVersion, UUID bookId, String title, String isbn, String description,
