@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.kitapsepeti.catalog.ApiTestSupport;
 import com.kitapsepeti.catalog.support.TestJwt;
+import com.kitapsepeti.common.security.BearerChallenge;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;

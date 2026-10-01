@@ -8,7 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
+import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -16,8 +17,10 @@ import java.util.TreeSet;
 
 import com.jayway.jsonpath.DocumentContext;
 import com.jayway.jsonpath.JsonPath;
+import com.kitapsepeti.common.error.CommonErrorCode;
+import com.kitapsepeti.common.error.ErrorCode;
 import com.kitapsepeti.user.TestcontainersConfiguration;
-import com.kitapsepeti.user.exception.ErrorCode;
+import com.kitapsepeti.user.exception.UserErrorCode;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -78,11 +81,15 @@ class OpenApiDocsTest {
 		assertThat(docs.<Map<String, Object>>read("$.paths['/api/me'].get")).doesNotContainKey("security");
 	}
 
+	/** Doküman sırası API_CODES'tan; liste servisin tüm kodlarını ve JWKS'e özgü olan dışındaki ortak kodları kapsar. */
 	@Test
 	void problemCodeEnumMatchesErrorCodeNames() throws Exception {
 		List<String> documented = docs().read("$.components.schemas.Problem.properties.code.enum");
 
-		assertThat(documented).containsExactlyElementsOf(Arrays.stream(ErrorCode.values()).map(Enum::name).toList());
+		assertThat(documented).containsExactlyElementsOf(UserErrorCode.API_CODES.stream().map(ErrorCode::name).toList());
+		Set<ErrorCode> returnable = new HashSet<>(EnumSet.allOf(UserErrorCode.class));
+		returnable.addAll(EnumSet.complementOf(EnumSet.of(CommonErrorCode.AUTHENTICATION_UNAVAILABLE)));
+		assertThat(UserErrorCode.API_CODES).doesNotHaveDuplicates().containsExactlyInAnyOrderElementsOf(returnable);
 	}
 
 	@Test

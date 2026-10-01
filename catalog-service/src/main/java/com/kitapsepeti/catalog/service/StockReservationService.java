@@ -9,11 +9,11 @@ import java.util.stream.Collectors;
 
 import com.kitapsepeti.catalog.dto.request.ReserveStockRequest;
 import com.kitapsepeti.catalog.dto.response.ReservationResponse;
-import com.kitapsepeti.catalog.exception.DbConstraints;
 import com.kitapsepeti.catalog.exception.InvalidFieldException;
 import com.kitapsepeti.catalog.exception.ReservationMismatchException;
-import com.kitapsepeti.catalog.exception.ResourceNotFoundException;
 import com.kitapsepeti.catalog.exception.StockUnavailableException;
+import com.kitapsepeti.common.error.DbConstraints;
+import com.kitapsepeti.common.error.ResourceNotFoundException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 

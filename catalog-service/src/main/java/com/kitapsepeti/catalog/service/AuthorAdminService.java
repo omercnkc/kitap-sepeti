@@ -8,10 +8,10 @@ import com.kitapsepeti.catalog.dto.request.UpdateAuthorRequest;
 import com.kitapsepeti.catalog.dto.response.AuthorResponse;
 import com.kitapsepeti.catalog.dto.response.PageResponse;
 import com.kitapsepeti.catalog.entity.Author;
-import com.kitapsepeti.catalog.exception.ResourceNotFoundException;
 import com.kitapsepeti.catalog.exception.SlugAlreadyExistsException;
 import com.kitapsepeti.catalog.mapper.AuthorMapper;
 import com.kitapsepeti.catalog.repository.AuthorRepository;
+import com.kitapsepeti.common.error.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

@@ -1,9 +1,9 @@
 package com.kitapsepeti.user.config;
 
-import java.util.Arrays;
 import java.util.List;
 
-import com.kitapsepeti.user.exception.ErrorCode;
+import com.kitapsepeti.common.error.ErrorCode;
+import com.kitapsepeti.user.exception.UserErrorCode;
 import com.kitapsepeti.user.security.JwtProperties;
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
@@ -107,7 +107,7 @@ public class OpenApiConfig {
 	}
 
 	private static Schema<?> problemSchema() {
-		List<String> codes = Arrays.stream(ErrorCode.values()).map(Enum::name).toList();
+		List<String> codes = UserErrorCode.API_CODES.stream().map(ErrorCode::name).toList();
 		return new ObjectSchema()
 			.description("RFC 9457 Problem Details. İstemci hatayı `code` alanına göre ayırt etmelidir; "
 					+ "`title`/`detail` insan içindir ve değişebilir.")
@@ -120,7 +120,7 @@ public class OpenApiConfig {
 			.addProperty("instance", new StringSchema().format("uri-reference").description("İsteğin yolu.")
 				.example("/api/auth/register"))
 			.addProperty("code", new StringSchema()._enum(codes).description("Makine tarafından okunacak hata kodu.")
-				.example(ErrorCode.EMAIL_ALREADY_EXISTS.name()))
+				.example(UserErrorCode.EMAIL_ALREADY_EXISTS.name()))
 			.addProperty("errors", new ArraySchema()
 				.items(new Schema<>().$ref("#/components/schemas/" + FIELD_ERROR))
 				.description("Yalnızca `VALIDATION_FAILED`'da: alan bazında hatalar. Gönderilen değer yer almaz."))

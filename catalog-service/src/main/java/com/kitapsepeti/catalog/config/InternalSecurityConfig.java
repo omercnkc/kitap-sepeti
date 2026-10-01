@@ -1,10 +1,10 @@
 package com.kitapsepeti.catalog.config;
 
-import com.kitapsepeti.catalog.security.ProblemDetailAccessDeniedHandler;
-import com.kitapsepeti.catalog.security.internal.InternalApiKeyAuthenticationEntryPoint;
-import com.kitapsepeti.catalog.security.internal.InternalApiKeyAuthenticationFilter;
-import com.kitapsepeti.catalog.security.internal.InternalApiKeys;
-import com.kitapsepeti.catalog.security.internal.InternalAuthProperties;
+import com.kitapsepeti.common.security.ProblemDetailAccessDeniedHandler;
+import com.kitapsepeti.common.security.internal.InternalApiKeyAuthenticationEntryPoint;
+import com.kitapsepeti.common.security.internal.InternalApiKeyAuthenticationFilter;
+import com.kitapsepeti.common.security.internal.InternalApiKeys;
+import com.kitapsepeti.common.security.internal.InternalAuthProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,6 +19,7 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * /internal/** için ayrı, ana zincirden ({@link SecurityConfig}) önce eşleşen zincir. Kimlik yalnızca
  * {@code X-Internal-Api-Key} ile kanıtlanır; resource server YOK, kullanıcı JWT'si (ADMIN dahil) burada geçersizdir.
+ * Filtre bean DEĞİLDİR; yalnızca bu zincire eklenir.
  */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(InternalAuthProperties.class)

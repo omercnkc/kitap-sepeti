@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.kitapsepeti.common.error.CommonErrorCode;
 import com.kitapsepeti.user.TestcontainersConfiguration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -44,7 +45,7 @@ class GlobalExceptionHandlerTest {
 			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
 			.andExpect(jsonPath("$.status").value(409))
 			.andExpect(jsonPath("$.code").value("EMAIL_ALREADY_EXISTS"))
-			.andExpect(jsonPath("$.detail").value(ErrorCode.EMAIL_ALREADY_EXISTS.defaultDetail()))
+			.andExpect(jsonPath("$.detail").value(UserErrorCode.EMAIL_ALREADY_EXISTS.defaultDetail()))
 			.andExpect(jsonPath("$.instance").value(BASE + "/email-exists"));
 
 		assertThat(output).contains("GET " + BASE + "/email-exists -> EMAIL_ALREADY_EXISTS");
@@ -83,7 +84,7 @@ class GlobalExceptionHandlerTest {
 			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
 			.andExpect(jsonPath("$.status").value(400))
 			.andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
-			.andExpect(jsonPath("$.detail").value(ErrorCode.VALIDATION_FAILED.defaultDetail()))
+			.andExpect(jsonPath("$.detail").value(CommonErrorCode.VALIDATION_FAILED.defaultDetail()))
 			.andExpect(jsonPath("$.instance").value(BASE + "/constraint-violation"))
 			.andExpect(jsonPath("$.errors.length()").value(2))
 			.andExpect(jsonPath("$.errors[0].field").value("email"))
@@ -106,7 +107,7 @@ class GlobalExceptionHandlerTest {
 			.andExpect(status().isBadRequest())
 			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
 			.andExpect(jsonPath("$.code").value("MALFORMED_REQUEST"))
-			.andExpect(jsonPath("$.detail").value(ErrorCode.MALFORMED_REQUEST.defaultDetail()))
+			.andExpect(jsonPath("$.detail").value(CommonErrorCode.MALFORMED_REQUEST.defaultDetail()))
 			.andReturn().getResponse().getContentAsString();
 
 		assertThat(body).doesNotContain("com.").doesNotContain("tools.jackson").doesNotContain("Exception");
@@ -133,7 +134,7 @@ class GlobalExceptionHandlerTest {
 			.andExpect(status().isInternalServerError())
 			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
 			.andExpect(jsonPath("$.code").value("INTERNAL_ERROR"))
-			.andExpect(jsonPath("$.detail").value(ErrorCode.INTERNAL_ERROR.defaultDetail()))
+			.andExpect(jsonPath("$.detail").value(CommonErrorCode.INTERNAL_ERROR.defaultDetail()))
 			.andReturn().getResponse().getContentAsString();
 
 		assertThat(body).doesNotContain("gizli detay").doesNotContain("RuntimeException");

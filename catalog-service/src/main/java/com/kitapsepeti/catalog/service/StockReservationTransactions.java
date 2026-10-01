@@ -20,14 +20,14 @@ import com.kitapsepeti.catalog.entity.Book;
 import com.kitapsepeti.catalog.entity.BookStatus;
 import com.kitapsepeti.catalog.entity.ReservationStatus;
 import com.kitapsepeti.catalog.entity.StockReservation;
-import com.kitapsepeti.catalog.exception.ErrorCode;
+import com.kitapsepeti.catalog.exception.CatalogErrorCode;
 import com.kitapsepeti.catalog.exception.ReservationCommittedException;
 import com.kitapsepeti.catalog.exception.ReservationReleasedException;
-import com.kitapsepeti.catalog.exception.ResourceNotFoundException;
 import com.kitapsepeti.catalog.exception.StockUnavailableException;
 import com.kitapsepeti.catalog.repository.BookRepository;
 import com.kitapsepeti.catalog.repository.StockReservationRepository;
 import com.kitapsepeti.catalog.service.event.BookUpsertedEvent;
+import com.kitapsepeti.common.error.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -228,9 +228,9 @@ public class StockReservationTransactions {
 			.filter(id -> !books.containsKey(id) || books.get(id).getStatus() != BookStatus.PUBLISHED)
 			.toList();
 		if (!notAvailable.isEmpty()) {
-			return new StockUnavailableException(ErrorCode.BOOK_NOT_AVAILABLE, notAvailable);
+			return new StockUnavailableException(CatalogErrorCode.BOOK_NOT_AVAILABLE, notAvailable);
 		}
-		return new StockUnavailableException(ErrorCode.INSUFFICIENT_STOCK, failed);
+		return new StockUnavailableException(CatalogErrorCode.INSUFFICIENT_STOCK, failed);
 	}
 
 	private void appendIfInStockChanged(Book book, int availableBefore) {

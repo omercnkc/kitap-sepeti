@@ -17,9 +17,9 @@ import java.util.Map;
 import java.util.UUID;
 
 import com.jayway.jsonpath.JsonPath;
+import com.kitapsepeti.common.error.DbConstraints;
 import com.kitapsepeti.user.TestcontainersConfiguration;
 import com.kitapsepeti.user.entity.User;
-import com.kitapsepeti.user.exception.DbConstraints;
 import com.kitapsepeti.user.repository.UserRepository;
 import com.kitapsepeti.user.service.OutboxService;
 import org.junit.jupiter.api.AfterEach;

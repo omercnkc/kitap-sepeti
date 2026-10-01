@@ -1,9 +1,13 @@
 package com.kitapsepeti.user.config;
 
-import com.kitapsepeti.user.security.ProblemDetailAccessDeniedHandler;
-import com.kitapsepeti.user.security.ProblemDetailAuthenticationEntryPoint;
+import com.kitapsepeti.common.security.BearerTokenResolvers;
+import com.kitapsepeti.common.security.JwtRoleConverters;
+import com.kitapsepeti.common.security.ProblemDetailAccessDeniedHandler;
+import com.kitapsepeti.common.security.ProblemDetailAuthenticationEntryPoint;
+import com.kitapsepeti.common.security.ProblemDetailSecurityHandlers;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -12,10 +16,6 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
-import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
-import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
-import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
@@ -25,10 +25,12 @@ import org.springframework.security.web.SecurityFilterChain;
  * Parola kontrolü AuthService içinde {@link PasswordEncoder#matches} ile elle yapıldığı için
  * AuthenticationManager / UserDetailsService tanımlanmaz.
  * {@code @EnableMethodSecurity}: {@code @PreAuthorize} ile uç bazında rol kontrolü.
+ * 401/403 handler bean'leri common'dan açıkça alınır ({@link ProblemDetailSecurityHandlers}).
  */
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
+@Import(ProblemDetailSecurityHandlers.class)
 public class SecurityConfig {
 
 	private static final String AUTH_PATH_PREFIX = "/api/auth/";
@@ -59,9 +61,11 @@ public class SecurityConfig {
 				.requestMatchers("/error").permitAll()
 				.anyRequest().authenticated())
 			// Geçersiz/süresi dolmuş token da aynı ProblemDetail entry point'ine düşer.
+			// Auth uçlarında Authorization başlığı yok sayılır. Aksi halde süresi dolmuş access token'ı başlıkta
+			// göndermeye devam eden istemci, tam da token yenilemek istediği /api/auth/refresh'te 401 alırdı.
 			.oauth2ResourceServer(rs -> rs
-				.bearerTokenResolver(bearerTokenResolver())
-				.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
+				.bearerTokenResolver(BearerTokenResolvers.ignoringUriPrefix(AUTH_PATH_PREFIX))
+				.jwt(jwt -> jwt.jwtAuthenticationConverter(JwtRoleConverters.roleClaim()))
 				.authenticationEntryPoint(authenticationEntryPoint)
 				.accessDeniedHandler(accessDeniedHandler))
 			// Token hiç yoksa (veya method security reddi) ExceptionTranslationFilter bu handler'ları kullanır;
@@ -70,26 +74,6 @@ public class SecurityConfig {
 				.authenticationEntryPoint(authenticationEntryPoint)
 				.accessDeniedHandler(accessDeniedHandler));
 		return http.build();
-	}
-
-	/** {@code role} claim'i (USER/ADMIN) → {@code ROLE_USER}/{@code ROLE_ADMIN}; principal adı = {@code sub}. */
-	private static JwtAuthenticationConverter jwtAuthenticationConverter() {
-		JwtGrantedAuthoritiesConverter authorities = new JwtGrantedAuthoritiesConverter();
-		authorities.setAuthoritiesClaimName("role");
-		authorities.setAuthorityPrefix("ROLE_");
-		JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-		converter.setJwtGrantedAuthoritiesConverter(authorities);
-		converter.setPrincipalClaimName("sub");
-		return converter;
-	}
-
-	/**
-	 * Auth uçlarında Authorization başlığı yok sayılır. Aksi halde süresi dolmuş access token'ı başlıkta
-	 * göndermeye devam eden istemci, tam da token yenilemek istediği {@code /api/auth/refresh}'te 401 alırdı.
-	 */
-	private static BearerTokenResolver bearerTokenResolver() {
-		DefaultBearerTokenResolver delegate = new DefaultBearerTokenResolver();
-		return request -> request.getRequestURI().startsWith(AUTH_PATH_PREFIX) ? null : delegate.resolve(request);
 	}
 
 }

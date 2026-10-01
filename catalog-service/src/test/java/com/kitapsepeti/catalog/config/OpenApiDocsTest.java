@@ -8,16 +8,20 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
+import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 
 import com.jayway.jsonpath.DocumentContext;
 import com.jayway.jsonpath.JsonPath;
 import com.kitapsepeti.catalog.ApiTestSupport;
-import com.kitapsepeti.catalog.exception.ErrorCode;
+import com.kitapsepeti.catalog.exception.CatalogErrorCode;
+import com.kitapsepeti.common.error.CommonErrorCode;
+import com.kitapsepeti.common.error.ErrorCode;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -123,11 +127,15 @@ class OpenApiDocsTest extends ApiTestSupport {
 		assertThat(problemRef(docs, "/internal/stock/reservations/{orderId}/commit", "post", "409")).isEqualTo(PROBLEM_REF);
 	}
 
+	/** Doküman sırası API_CODES'tan; liste servisin tüm kodlarını ve tüm ortak kodları kapsar. */
 	@Test
 	void problemCodeEnumMatchesErrorCodeNames() throws Exception {
 		List<String> documented = docs().read("$.components.schemas.Problem.properties.code.enum");
 
-		assertThat(documented).containsExactlyElementsOf(Arrays.stream(ErrorCode.values()).map(Enum::name).toList());
+		assertThat(documented).containsExactlyElementsOf(CatalogErrorCode.API_CODES.stream().map(ErrorCode::name).toList());
+		Set<ErrorCode> returnable = new HashSet<>(EnumSet.allOf(CatalogErrorCode.class));
+		returnable.addAll(EnumSet.allOf(CommonErrorCode.class));
+		assertThat(CatalogErrorCode.API_CODES).doesNotHaveDuplicates().containsExactlyInAnyOrderElementsOf(returnable);
 	}
 
 	@Test
@@ -186,7 +194,7 @@ class OpenApiDocsTest extends ApiTestSupport {
 			.andExpect(content().contentTypeCompatibleWith(PROBLEM_JSON))
 			.andExpect(jsonPath("$.title").isString())
 			.andExpect(jsonPath("$.status").value(404))
-			.andExpect(jsonPath("$.code").value(ErrorCode.RESOURCE_NOT_FOUND.name()))
+			.andExpect(jsonPath("$.code").value(CommonErrorCode.RESOURCE_NOT_FOUND.name()))
 			.andExpect(jsonPath("$.instance").value(startsWith("/api/books/")))
 			.andExpect(jsonPath("$.type").doesNotExist());
 	}

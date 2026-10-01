@@ -2,6 +2,8 @@ package com.kitapsepeti.catalog.exception;
 
 import java.util.List;
 
+import com.kitapsepeti.common.error.ApiException;
+
 /**
  * Kitap yayın koşullarını sağlamıyor (409). Detail hangi koşulların eksik olduğunu söyler; kitabın
  * değerlerini (fiyat, başlık...) içermez.
@@ -9,7 +11,7 @@ import java.util.List;
 public class BookNotPublishableException extends ApiException {
 
 	public BookNotPublishableException(List<String> missingRequirements) {
-		super(ErrorCode.BOOK_NOT_PUBLISHABLE, ErrorCode.BOOK_NOT_PUBLISHABLE.defaultDetail() + " Missing: "
+		super(CatalogErrorCode.BOOK_NOT_PUBLISHABLE, CatalogErrorCode.BOOK_NOT_PUBLISHABLE.defaultDetail() + " Missing: "
 				+ String.join(", ", missingRequirements) + ".");
 	}
 

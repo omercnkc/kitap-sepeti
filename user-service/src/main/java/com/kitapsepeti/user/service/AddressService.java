@@ -3,13 +3,13 @@ package com.kitapsepeti.user.service;
 import java.util.List;
 import java.util.UUID;
 
+import com.kitapsepeti.common.error.ResourceNotFoundException;
 import com.kitapsepeti.user.dto.request.CreateAddressRequest;
 import com.kitapsepeti.user.dto.request.UpdateAddressRequest;
 import com.kitapsepeti.user.dto.response.AddressResponse;
 import com.kitapsepeti.user.entity.Address;
 import com.kitapsepeti.user.entity.User;
 import com.kitapsepeti.user.exception.DefaultAddressRequiredException;
-import com.kitapsepeti.user.exception.ResourceNotFoundException;
 import com.kitapsepeti.user.mapper.AddressMapper;
 import com.kitapsepeti.user.repository.AddressRepository;
 import org.springframework.stereotype.Service;

@@ -11,9 +11,10 @@ import java.util.UUID;
 
 import com.kitapsepeti.catalog.RabbitTestcontainersConfiguration;
 import com.kitapsepeti.catalog.TestcontainersConfiguration;
-import com.kitapsepeti.catalog.exception.ErrorCode;
 import com.kitapsepeti.catalog.support.JwksServer;
 import com.kitapsepeti.catalog.support.TestJwt;
+import com.kitapsepeti.common.error.CommonErrorCode;
+import com.kitapsepeti.common.security.BearerChallenge;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
@@ -75,7 +76,7 @@ class JwksOutageTest {
 			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
 			.andExpect(jsonPath("$.status").value(503))
 			.andExpect(jsonPath("$.code").value("AUTHENTICATION_UNAVAILABLE"))
-			.andExpect(jsonPath("$.detail").value(ErrorCode.AUTHENTICATION_UNAVAILABLE.defaultDetail()))
+			.andExpect(jsonPath("$.detail").value(CommonErrorCode.AUTHENTICATION_UNAVAILABLE.defaultDetail()))
 			.andExpect(jsonPath("$.instance").value("/api/admin/ping"))
 			.andExpect(header().doesNotExist(HttpHeaders.RETRY_AFTER))
 			.andExpect(header().doesNotExist(HttpHeaders.WWW_AUTHENTICATE))

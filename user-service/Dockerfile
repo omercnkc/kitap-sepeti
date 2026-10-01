@@ -6,16 +6,17 @@ FROM eclipse-temurin:21-jdk AS build
 WORKDIR /workspace
 
 # Önce yalnızca build tanımları: pom'lar değişmedikçe bağımlılık katmanı cache'ten gelir.
-# Kök POM'daki her <module>'ün pom'u olmalı (yoksa Maven reaktörü okuyamaz); diğer servisin kaynağı kopyalanmaz.
+# Kök POM'daki her <module>'ün pom'u olmalı (yoksa Maven reaktörü okuyamaz). --parents klasörleri korur;
+# yeni modül eklenince bu satır değişmez.
 COPY mvnw ./
 COPY .mvn/ .mvn/
 COPY pom.xml ./
-COPY user-service/pom.xml user-service/
-COPY catalog-service/pom.xml catalog-service/
+COPY --parents */pom.xml ./
 RUN chmod +x mvnw
 RUN --mount=type=cache,target=/root/.m2 ./mvnw -B -pl user-service -am dependency:go-offline
 
-COPY user-service/src user-service/src
+# Yalnızca bu servisin ve derlediği modüllerin (-am) kaynağı; diğer servislerinki kopyalanmaz.
+COPY --parents common/src user-service/src ./
 RUN --mount=type=cache,target=/root/.m2 ./mvnw -B -pl user-service -am package -DskipTests
 
 # Katmanlar sık değişenden seyreğe ayrılır; kod değişince yalnızca "application" katmanı yeniden yazılır.

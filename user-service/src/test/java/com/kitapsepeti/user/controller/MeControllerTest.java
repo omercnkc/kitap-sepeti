@@ -12,8 +12,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
+import com.kitapsepeti.common.security.BearerChallenge;
 import com.kitapsepeti.user.ApiTestSupport;
-import com.kitapsepeti.user.security.BearerChallenge;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;

@@ -11,10 +11,10 @@ import com.kitapsepeti.catalog.dto.response.PageResponse;
 import com.kitapsepeti.catalog.entity.Category;
 import com.kitapsepeti.catalog.exception.CategoryCycleException;
 import com.kitapsepeti.catalog.exception.InvalidFieldException;
-import com.kitapsepeti.catalog.exception.ResourceNotFoundException;
 import com.kitapsepeti.catalog.exception.SlugAlreadyExistsException;
 import com.kitapsepeti.catalog.mapper.CategoryMapper;
 import com.kitapsepeti.catalog.repository.CategoryRepository;
+import com.kitapsepeti.common.error.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

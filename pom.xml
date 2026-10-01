@@ -20,6 +20,12 @@
 	      Servis POM'unda bu kütüphaneler versiyonsuz yazılır.
 	  [4] Bir bağımlılık TÜM servislerde gerekliyse buradaki <dependencies>'e
 	      taşı. Sadece bazı servislerde gerekiyorsa servis POM'unda bırak.
+	  [5] Servis POM'una kitap-sepeti-common'ı (versiyonsuz) ekle; ortak
+	      bileşenleri servis config'inde @Import/@Bean ile kaydet (common'da
+	      component scan veya auto-configuration yok). Ayrıntı:
+	      memory-bank/systemPatterns.md, "common modülü" bölümü.
+	  [6] Servisin Dockerfile'ını mevcutlardan kopyala; modül pom'ları
+	      "COPY parents" bayrağıyla otomatik gelir, yalnızca src satırları servise özeldir.
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -65,8 +71,12 @@
 		<url/>
 	</scm>
 
-	<!-- [1] Build'e dahil edilecek servisler. Her yeni servis klasörü buraya eklenir. -->
+	<!--
+		[1] Build'e dahil edilecek modüller. Her yeni servis klasörü buraya eklenir.
+		common servislerden önce gelir (reaktör sırayı bağımlılıktan da çıkarır; okuyan için açık olsun).
+	-->
 	<modules>
+		<module>common</module>
 		<module>user-service</module>
 		<module>catalog-service</module>
 	</modules>
@@ -90,6 +100,11 @@
 	-->
 	<dependencyManagement>
 		<dependencies>
+			<dependency>
+				<groupId>com.kitapsepeti</groupId>
+				<artifactId>kitap-sepeti-common</artifactId>
+				<version>${project.version}</version>
+			</dependency>
 			<dependency>
 				<groupId>org.springdoc</groupId>
 				<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>

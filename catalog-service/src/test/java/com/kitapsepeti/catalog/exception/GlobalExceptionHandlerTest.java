@@ -20,6 +20,8 @@ import com.kitapsepeti.catalog.entity.Publisher;
 import com.kitapsepeti.catalog.repository.BookRepository;
 import com.kitapsepeti.catalog.repository.PublisherRepository;
 import com.kitapsepeti.catalog.support.TestJwt;
+import com.kitapsepeti.common.error.CommonErrorCode;
+import com.kitapsepeti.common.error.ErrorCode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,7 +58,7 @@ class GlobalExceptionHandlerTest extends ApiTestSupport {
 			.andExpect(status().isOk());
 
 		String body = assertConflict(post(BASE + "/publishers").contentType(MediaType.APPLICATION_JSON).content(request),
-				ErrorCode.SLUG_ALREADY_EXISTS);
+				CatalogErrorCode.SLUG_ALREADY_EXISTS);
 
 		assertNoLeak(body, output, SECRET_SLUG);
 		assertThat(output).contains("POST " + BASE + "/publishers -> SLUG_ALREADY_EXISTS")
@@ -70,7 +72,7 @@ class GlobalExceptionHandlerTest extends ApiTestSupport {
 			.andExpect(status().isOk());
 
 		String body = assertConflict(post(BASE + "/books").contentType(MediaType.APPLICATION_JSON).content(request),
-				ErrorCode.ISBN_ALREADY_EXISTS);
+				CatalogErrorCode.ISBN_ALREADY_EXISTS);
 
 		assertNoLeak(body, output, SECRET_ISBN);
 		assertThat(output).contains("constraint=uk_books_isbn, kind=UNIQUE");
@@ -81,7 +83,7 @@ class GlobalExceptionHandlerTest extends ApiTestSupport {
 		Publisher publisher = publisherRepository.save(new Publisher("Yayınevi", SECRET_SLUG));
 		bookRepository.save(new Book("Kitap", publisher, new BigDecimal("10.00")));
 
-		String body = assertConflict(delete(BASE + "/publishers/" + publisher.getId()), ErrorCode.RESOURCE_IN_USE);
+		String body = assertConflict(delete(BASE + "/publishers/" + publisher.getId()), CatalogErrorCode.RESOURCE_IN_USE);
 
 		assertNoLeak(body, output, SECRET_SLUG);
 		assertThat(output).contains("constraint=fk_books_publisher, kind=FOREIGN_KEY");
@@ -90,7 +92,7 @@ class GlobalExceptionHandlerTest extends ApiTestSupport {
 
 	@Test
 	void reservedAboveStockReturnsGenericConflict(CapturedOutput output) throws Exception {
-		String body = assertConflict(post(BASE + "/books/overbooked"), ErrorCode.CONFLICT);
+		String body = assertConflict(post(BASE + "/books/overbooked"), CommonErrorCode.CONFLICT);
 
 		assertNoLeak(body, output);
 		assertThat(output).contains("-> CONFLICT").contains("kind=CHECK").contains("constraint=ck_books_");
@@ -102,7 +104,7 @@ class GlobalExceptionHandlerTest extends ApiTestSupport {
 		UUID bookId = bookRepository.save(new Book("Kitap", publisher, new BigDecimal("10.00"))).getId();
 
 		String body = assertConflict(post(BASE + "/books/" + bookId + "/stale-update"),
-				ErrorCode.CONCURRENT_MODIFICATION);
+				CatalogErrorCode.CONCURRENT_MODIFICATION);
 
 		assertNoLeak(body, output);
 		assertThat(output).doesNotContain("version=?");
@@ -118,7 +120,7 @@ class GlobalExceptionHandlerTest extends ApiTestSupport {
 			.andExpect(status().isBadRequest())
 			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
 			.andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
-			.andExpect(jsonPath("$.detail").value(ErrorCode.VALIDATION_FAILED.defaultDetail()))
+			.andExpect(jsonPath("$.detail").value(CommonErrorCode.VALIDATION_FAILED.defaultDetail()))
 			.andExpect(jsonPath("$.instance").value(BASE + "/validate"))
 			.andExpect(jsonPath("$.errors.length()").value(2))
 			.andExpect(jsonPath("$.errors[*].field", containsInAnyOrder("name", "slug")))
@@ -138,7 +140,7 @@ class GlobalExceptionHandlerTest extends ApiTestSupport {
 			.andExpect(status().isBadRequest())
 			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
 			.andExpect(jsonPath("$.code").value("MALFORMED_REQUEST"))
-			.andExpect(jsonPath("$.detail").value(ErrorCode.MALFORMED_REQUEST.defaultDetail()))
+			.andExpect(jsonPath("$.detail").value(CommonErrorCode.MALFORMED_REQUEST.defaultDetail()))
 			.andReturn().getResponse().getContentAsString();
 
 		assertThat(body).doesNotContain("com.").doesNotContain("tools.jackson").doesNotContain("Exception");
@@ -176,7 +178,7 @@ class GlobalExceptionHandlerTest extends ApiTestSupport {
 			.andExpect(status().isInternalServerError())
 			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
 			.andExpect(jsonPath("$.code").value("INTERNAL_ERROR"))
-			.andExpect(jsonPath("$.detail").value(ErrorCode.INTERNAL_ERROR.defaultDetail()))
+			.andExpect(jsonPath("$.detail").value(CommonErrorCode.INTERNAL_ERROR.defaultDetail()))
 			.andReturn().getResponse().getContentAsString();
 
 		assertThat(body).doesNotContain("gizli-ic-detay-4411").doesNotContain("IllegalStateException")
