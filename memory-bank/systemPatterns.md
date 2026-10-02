@@ -133,6 +133,17 @@
   GlobalExceptionHandler'da ayrı handler: tek WARN `... -> CATALOG_UNAVAILABLE (cause=<kök neden SimpleName>)`, stack/mesaj yok.
 - `DbConstraintCodes`: uk_carts_active_user, uk_cart_items_cart_book (sızarsa) ve diğer tüm kısıtlar → CONFLICT (cart'ta RESOURCE_IN_USE yok).
 - `config/ClockConfig` `Clock.systemUTC()`; testlerde `MutableClock` `@Primary`.
+- Internal zincir (Adım 8, catalog ile birebir kurulum): `config/InternalSecurityConfig` `@Order(1)`, `securityMatcher("/internal/**")`,
+  stateless, CSRF/httpBasic/form/logout/anonymous kapalı, resource server YOK, common `InternalApiKeyAuthenticationFilter` (bean değil,
+  `addFilterBefore(AuthorizationFilter)`), `hasRole(INTERNAL_SERVICE)`, 401 = common `InternalApiKeyAuthenticationEntryPoint`
+  (`ApiKey realm="internal"`). Kullanıcı zinciri (`SecurityConfig`) `@Order(2)`, davranışı aynı. Kullanıcı JWT'si /internal'da 401;
+  internal anahtar /api/cart'ta 401 `Bearer`. Anahtar kontrolü yönlendirmeden önce → anahtarsız `GET /internal/cart/snapshot` 401
+  (Allow yok), anahtarlı 405.
+- `config/InternalAuthConfig`: `InternalAuthProperties` + `InternalApiKeys` bean'i (özet biçimi common'da: 64 hex, değer mesajda yok).
+  CATALOG'DAN FARK: özeti boş/yok istemci kapalı sayılmaz → bağlam açılmaz ("... must be set; cart-service does not start with a
+  disabled internal client"); istemci listesi boşsa da açılmaz. application.yml `app.internal-auth.clients[0]` = `order-service` +
+  `key-sha256: ${CART_INTERNAL_KEY_ORDER_SHA256:}`.
+- Internal yolda maskeleme gerekmez: kullanıcı/kitap id'si yolda değil gövdede taşınır (`instance` = `/internal/cart/snapshot`).
 
 ## Stok rezervasyonu (catalog-service internal)
 - Dış servis (`StockReservationService`) BİLEREK transactional değil; iç `StockReservationTransactions` `@Transactional(READ_COMMITTED)`.
@@ -353,6 +364,12 @@
   SecurityConfig'te sarılmış common security handler'ları) `/api/cart/items/<x>` → `/api/cart/items/:bookId` (ProblemDetail `instance` +
   log). `{}` kullanılmaz (common `URI.create` → geçersiz → instance null). Path'te bozuk UUID → 400 MALFORMED_REQUEST (TypeMismatch,
   common'ın varsayılan dalı; mevcut davranış).
+- Internal snapshot (`POST /internal/cart/snapshot` {userId}, `controller/internal/InternalCartController`, DTO'lar `dto/internal/`):
+  `service/CartSnapshotService` `@Transactional(readOnly = true)` → `findByUserIdAndStatus(userId, ACTIVE)` = TEK SQL (EntityGraph
+  join, `for update` yok). Kilit yok, sepet açılmaz, damga yok, Catalog yok. Yanıt `{cartId, updatedAt, items[{bookId, quantity,
+  unitPriceSnapshot (scale 2, sayı), currency, title}]}`; aktif sepet yoksa (kapanmış sepetler dahil) cartId/updatedAt null + items [];
+  aktif sepet boşsa cartId dolu + items []. userId ve coverUrl yanıtta yok. Gövde okunamazsa (boş, bozuk JSON, UUID değil) 400
+  MALFORMED_REQUEST, userId yok/null 400 VALIDATION_FAILED; gönderilen değer yanıtta yok.
 - Test: `support/FakeCatalog` (CatalogStub yanıtlayıcısı; harita = yayındaki kitaplar, `failWith` ile kesinti); yarış senaryoları
   `ApiTestSupport.carts` spy'ı (`@MockitoSpyBean`) ile deterministik; gerçek eşzamanlılık `runConcurrently` (MockMvc, gerçek thread'ler).
 

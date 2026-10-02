@@ -75,13 +75,17 @@
   UNAVAILABLE + snapshot fiyatları) ve `POST /api/cart/items` (Catalog TX'ten önce; sepet aç/adet artır/satır ekle READ COMMITTED
   TX'te; ilk sepet yarışında bir kez yeniden deneme; limitler 409 + `limit`). Tüm zamanlar Clock'tan. Eşzamanlılık testleri dahil
   cart-service 237 test (2 skipped); uçtan uca a–h geçti.
-- Cart Adım 7 (henüz commit edilmedi): `PATCH /api/cart/items/{bookId}` (adet; Catalog doğrulaması/snapshot yenileme yok; yoksa 404,
+- Cart Adım 7 (commit `c692567` + `a3b7abe`, push edildi): `PATCH /api/cart/items/{bookId}` (adet; Catalog doğrulaması/snapshot yenileme yok; yoksa 404,
   limit 409), `DELETE /api/cart/items/{bookId}` (idempotent 200) ve `DELETE /api/cart/items` (satırlar silinir, sepet aktif kalır).
   Değişiklik yoksa damgalama yok. Yoldaki kitap id'si hata yanıtında/logda `:bookId` olarak maskelenir. cart-service 264 test
   (2 skipped); uçtan uca a–f geçti.
 
+- Cart Adım 8 (henüz commit edilmedi): `POST /internal/cart/snapshot` (X-Internal-Api-Key, catalog ile aynı @Order(1) zinciri; salt
+  okunur tek SQL, aktif sepet yoksa cartId null). `CART_INTERNAL_KEY_ORDER_SHA256` yoksa/bozuksa cart açılmaz. cart-service 287 test
+  (2 skipped).
+
 ## Yapılacaklar
-- Cart servisi (Adım 8+: internal snapshot/checkout, OpenAPI, Docker).
+- Cart servisi (Adım 9+: yol maskelemeyi common'a taşıma, OpenAPI, Docker; checkout tüketimi Order fazında).
 - Outbox kodunu common'a taşıma (ayrı adım; şu an servis başına kopya).
 - order-service (catalog rezervasyon istemcisi).
 - Search için: yayınevi/yazar/kategori yeniden adlandırması yayındaki kitaplar için olay üretmiyor → yeniden indeksleme gerekecek.

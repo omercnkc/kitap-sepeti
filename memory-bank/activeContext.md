@@ -740,9 +740,29 @@
     cart_db'de 1 sepet (405×1).
   - `CartService.md` repoda YOK (aranan: `**/CartService*.md`, sepet/cart adlı tüm .md) → API tablosu tutarlılığı kontrol edilemedi.
 
+- Cart Adım 7 commit + push edildi (`c692567` kod, `a3b7abe` memory-bank).
+
+- Cart Adım 8 — `POST /internal/cart/snapshot` + internal güvenlik zinciri (henüz commit edilmedi; CartCheckedOut/RabbitMQ, OpenAPI,
+  Docker YOK; common/catalog/user, migration, .env değişmedi):
+  - Ana kod: `config/InternalSecurityConfig` (@Order(1)), `config/InternalAuthConfig` (özet zorunlu), `SecurityConfig` `@Order(2)`,
+    `controller/internal/InternalCartController`, `service/CartSnapshotService`, `dto/internal/CartSnapshotRequest|Response|Item`,
+    application.yml `app.internal-auth`, `.env.example` `CART_INTERNAL_KEY_ORDER_SHA256`. Kurallar systemPatterns (cart güvenlik + sepet servisi).
+  - Env adı `CART_INTERNAL_KEY_ORDER_SHA256` (catalog `CATALOG_INTERNAL_KEY_ORDER_SHA256` karşılığı), property
+    `app.internal-auth.clients[0].key-sha256`, istemci adı `order-service`.
+  - Testler (cart 287 = 264 + 23): `controller/internal/InternalCartSnapshotTest` 19, `config/InternalAuthConfigTest` 4. Eski testlerde
+    yalnızca tam bağlam açan 4 kökte (`ApiTestSupport`, JwksOutageTest, CatalogLiveTest, CatalogConnectionRefusedTest) `InternalTestKeys.register`.
+  - Root `clean verify`: common 25, user 83, catalog 276, cart 287 (2 skipped).
+  - Uçtan uca (cart spring-boot:run, `.env`'deki özetle açıldı): anahtarsız / yanlış anahtar / kullanıcı Bearer → 401
+    `ApiKey realm="internal"`; internal anahtarla `/api/cart` → 401 `Bearer`; loglarda anahtar/özet/userId/token/e-posta yok, internal
+    satırlar yalnızca `Rejected internal request POST /internal/cart/snapshot -> UNAUTHORIZED`. AÇIK: `.env`'deki ORDER_INTERNAL_API_KEY
+    ile snapshot da 401 → `.env`'deki CART_INTERNAL_KEY_ORDER_SHA256 bu anahtarın özeti değil (64 hex, uygulama açılıyor; OS ortam
+    değişkeni yok). İki kez denendi, kullanıcı uçtan uca testi atlamayı seçti; 200 yolu yalnızca testlerde doğrulandı. Değeri
+    `CATALOG_INTERNAL_KEY_ORDER_SHA256` ile aynı yapmak ya da yeniden üretmek gerekiyor. user_db'de 2 yeni e2e kullanıcısı.
+
 ## Sonraki adımlar
-- Cart sonraki adımlar: internal snapshot/checkout zinciri (checkout + yeni sepet aynı TX'te olursa arada `flush()` — flush tuzağı),
-  OpenAPI (code enum = CartErrorCode.API_CODES; maskeli `instance` örneği `/api/cart/items/:bookId`), Docker + compose.
+- Cart sonraki adımlar: checkout zinciri (CartCheckedOut tüketimi Order fazında; checkout + yeni sepet aynı TX'te olursa arada `flush()`
+  — flush tuzağı), yol maskelemeyi common'a taşıma (Order fazının başında ayrı adım), OpenAPI (code enum = CartErrorCode.API_CODES;
+  maskeli `instance` örneği `/api/cart/items/:bookId`; internalApiKey şeması), Docker + compose (`CART_INTERNAL_KEY_ORDER_SHA256` env).
 - order-service (rezervasyon istemcisi; fiyat anlık görüntüsü kendisinde; `RESERVATION_RELEASED` → ödeme iadesi telafisi; süre dolumu
   olayı yok, GET ile sorgulanır; istemci `docs/api/catalog-service.openapi.json`'dan). Compose'a eklenirken catalog'a
   `http://catalog-service:8082` ve `.env` `ORDER_INTERNAL_API_KEY` ile bağlanır.

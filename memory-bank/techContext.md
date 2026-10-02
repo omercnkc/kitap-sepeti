@@ -65,6 +65,8 @@
 - Servisler arası anahtar (`.env`): `ORDER_INTERNAL_API_KEY` (order-service'in göndereceği ham anahtar, 32 bayt base64url) ve
   `CATALOG_INTERNAL_KEY_ORDER_SHA256` (aynı anahtarın SHA-256 hex'i; catalog yalnızca bunu okur). İkisi birlikte üretilir/değişir;
   ham anahtar hiçbir çıktıya yazılmaz (doğrulama yalnızca uzunluk + "hash eşleşiyor" boolean'ı ile). Sözleşme `docs/api/catalog-internal-stock.md`.
+  cart-service: `CART_INTERNAL_KEY_ORDER_SHA256` (aynı anahtarın özeti; değer CATALOG_INTERNAL_KEY_ORDER_SHA256 ile aynıdır). Boşsa cart
+  AÇILMAZ (catalog açılır). Testler anahtarı/özeti JVM'de üretir (`support/InternalTestKeys.register`, tam bağlam açan 4 test kökü).
 - PowerShell tuzağı: değişken adları büyük/küçük harf DUYARSIZ (`$c` ile `$C` aynı değişken).
 - Test tuzağı: JdbcTemplate'e `java.sql.Timestamp` verilirse Connector/J DATETIME'a JVM saat diliminde (UTC+3) yazar; Hibernate ise
   UTC (`hibernate.jdbc.time_zone`). Karşılaştırılacak zamanı JDBC ile yazarken `LocalDateTime.ofInstant(instant, ZoneOffset.UTC)` kullan.
