@@ -11,6 +11,7 @@ import java.util.UUID;
 
 import com.kitapsepeti.cart.TestcontainersConfiguration;
 import com.kitapsepeti.cart.exception.CatalogUnavailableException;
+import com.kitapsepeti.cart.support.InternalTestKeys;
 import com.kitapsepeti.cart.support.JwksServer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,6 +36,7 @@ class CatalogConnectionRefusedTest {
 	@DynamicPropertySource
 	static void catalogProperties(DynamicPropertyRegistry registry) {
 		registry.add("app.catalog.base-url", () -> "http://127.0.0.1:" + CLOSED_PORT);
+		InternalTestKeys.register(registry);
 	}
 
 	@Test

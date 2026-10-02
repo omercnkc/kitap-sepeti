@@ -9,6 +9,7 @@ import com.kitapsepeti.common.security.ProblemDetailSecurityHandlers;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -25,6 +26,7 @@ import tools.jackson.databind.json.JsonMapper;
  * Herkese açık uç yalnızca health; sepetin tamamı kimlik ister (USER ve ADMIN, ayrı rol şartı yok).
  * Diğer yollar da kimlik ister (catalog ile aynı): kimliksiz 401, kimlikli olmayan yol 404.
  * Ortak security handler'larına istek {@link MaskedRequestPaths} üzerinden verilir (yoldaki kitap id'si logda/yanıtta yok).
+ * /internal/** bu zincire hiç gelmez ({@link InternalSecurityConfig}, sıra 1).
  */
 @Configuration
 @EnableWebSecurity
@@ -38,6 +40,7 @@ public class SecurityConfig {
 	}
 
 	@Bean
+	@Order(2)
 	public SecurityFilterChain securityFilterChain(HttpSecurity http,
 			ProblemDetailAuthenticationEntryPoint authenticationEntryPoint,
 			ProblemDetailAccessDeniedHandler accessDeniedHandler,

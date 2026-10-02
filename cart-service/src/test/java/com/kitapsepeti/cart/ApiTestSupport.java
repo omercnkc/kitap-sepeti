@@ -4,6 +4,7 @@ import java.util.UUID;
 
 import com.kitapsepeti.cart.repository.CartRepository;
 import com.kitapsepeti.cart.support.CatalogStub;
+import com.kitapsepeti.cart.support.InternalTestKeys;
 import com.kitapsepeti.cart.support.JwksServer;
 import com.kitapsepeti.cart.support.MutableClock;
 import com.kitapsepeti.cart.support.MutableClockConfiguration;
@@ -58,6 +59,7 @@ public abstract class ApiTestSupport {
 	static void jwksProperties(DynamicPropertyRegistry registry) {
 		registry.add("spring.security.oauth2.resourceserver.jwt.jwk-set-uri", JWKS::jwkSetUri);
 		registry.add("app.catalog.base-url", CATALOG::baseUrl);
+		InternalTestKeys.register(registry);
 	}
 
 	@BeforeEach

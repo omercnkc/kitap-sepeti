@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.util.UUID;
 
 import com.kitapsepeti.cart.TestcontainersConfiguration;
+import com.kitapsepeti.cart.support.InternalTestKeys;
 import com.kitapsepeti.cart.support.JwksServer;
 import com.kitapsepeti.cart.support.TestJwt;
 import com.kitapsepeti.common.error.CommonErrorCode;
@@ -62,6 +63,7 @@ class JwksOutageTest {
 	@DynamicPropertySource
 	static void jwksProperties(DynamicPropertyRegistry registry) {
 		registry.add("spring.security.oauth2.resourceserver.jwt.jwk-set-uri", () -> JwksServer.jwkSetUri(PORT));
+		InternalTestKeys.register(registry);
 	}
 
 	@AfterAll

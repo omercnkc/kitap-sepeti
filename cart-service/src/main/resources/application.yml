@@ -50,6 +50,12 @@ app:
     issuer: kitapsepeti-user-service
   catalog:
     base-url: ${CATALOG_BASE_URL:http://localhost:8082}
+  # /internal/** istemcileri. Ham anahtar burada değil; yalnızca SHA-256 özeti (64 hex). Catalog'dan farklı olarak
+  # özet boşsa uygulama açılmaz (InternalAuthConfig).
+  internal-auth:
+    clients:
+      - name: order-service
+        key-sha256: ${CART_INTERNAL_KEY_ORDER_SHA256:}
   cart:
     # DB'deki ck_cart_items_quantity (1–99) bunun üst sınırıdır.
     max-quantity-per-item: 10

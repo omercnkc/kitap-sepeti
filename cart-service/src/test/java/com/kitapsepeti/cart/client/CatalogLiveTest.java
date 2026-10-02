@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import com.kitapsepeti.cart.TestcontainersConfiguration;
+import com.kitapsepeti.cart.support.InternalTestKeys;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,6 +40,7 @@ class CatalogLiveTest {
 	@DynamicPropertySource
 	static void catalogProperties(DynamicPropertyRegistry registry) {
 		registry.add("app.catalog.base-url", () -> System.getProperty("catalog.live.base-url", "http://127.0.0.1:8082"));
+		InternalTestKeys.register(registry);
 	}
 
 	@Test
