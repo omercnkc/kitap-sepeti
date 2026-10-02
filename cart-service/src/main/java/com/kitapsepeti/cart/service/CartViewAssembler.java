@@ -14,6 +14,7 @@ import com.kitapsepeti.cart.dto.response.CartLineResponse;
 import com.kitapsepeti.cart.dto.response.CartResponse;
 import com.kitapsepeti.cart.dto.response.CatalogStatus;
 import com.kitapsepeti.cart.exception.CatalogUnavailableException;
+import com.kitapsepeti.cart.exception.MaskedRequestPaths;
 import com.kitapsepeti.common.error.ProblemDetails;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -117,7 +118,7 @@ public class CartViewAssembler {
 		String note = ((rootCause != null) ? "cause=" + rootCause.getClass().getSimpleName() + ", " : "")
 				+ "served from snapshot";
 		if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes) {
-			HttpServletRequest request = attributes.getRequest();
+			HttpServletRequest request = MaskedRequestPaths.mask(attributes.getRequest());
 			ProblemDetails.log(log, ex.getErrorCode(), request, ex, note);
 		}
 		else {

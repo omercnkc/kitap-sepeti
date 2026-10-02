@@ -1,6 +1,8 @@
 package com.kitapsepeti.cart.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import java.math.BigDecimal;
@@ -26,11 +28,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.test.web.servlet.RequestBuilder;
 
 /**
- * Aynı kullanıcının eşzamanlı {@code POST /api/cart/items} istekleri: ilk sepet yarışı ({@code uk_carts_active_user}
- * + yeniden deneme) ve satır kilidiyle sıraya giren limit kontrolleri. Hiçbir senaryoda 500, deadlock ya da kilit
- * zaman aşımı olmamalı.
+ * Aynı kullanıcının eşzamanlı sepet istekleri: ilk sepet yarışı ({@code uk_carts_active_user} + yeniden deneme),
+ * satır kilidiyle sıraya giren limit kontrolleri ve aynı satırda PATCH/DELETE/boşaltma yarışları. Hiçbir senaryoda
+ * 500, deadlock ya da kilit zaman aşımı olmamalı.
  */
 class CartConcurrencyTest extends ApiTestSupport {
 
@@ -105,19 +108,95 @@ class CartConcurrencyTest extends ApiTestSupport {
 		assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM cart_items", Integer.class)).isEqualTo(50);
 	}
 
+	@Test
+	void fiveConcurrentPatchesOfSameLineLeaveOneOfTheRequestedQuantities() throws Exception {
+		Book book = catalog.publish("Adet yarışı", "10.00");
+		seedCartWith(book);
+		List<Integer> quantities = List.of(2, 3, 4, 5, 6);
+
+		List<Outcome> outcomes = runConcurrently(
+				quantities.stream().<Callable<Outcome>>map(quantity -> () -> patchQuantity(book, quantity)).toList());
+
+		assertThat(outcomes).extracting(Outcome::status).containsOnly(200);
+		assertThat(jdbc.queryForObject("SELECT quantity FROM cart_items", Integer.class)).isIn(quantities);
+	}
+
+	/** Sıra ne olursa olsun satır sonunda yoktur: önce PATCH ise sonra silinir, önce DELETE ise PATCH 404 alır. */
+	@Test
+	void concurrentDeleteAndPatchOfSameLineEndWithLineRemoved() throws Exception {
+		Book book = catalog.publish("Sil-değiştir", "10.00");
+		for (int round = 0; round < 5; round++) {
+			resetCarts();
+			seedCartWith(book);
+
+			List<Outcome> outcomes = runConcurrently(List.of(() -> removeItem(book), () -> patchQuantity(book, 7)));
+
+			assertThat(outcomes.get(0)).isEqualTo(new Outcome(200, null));
+			assertThat(outcomes.get(1)).isIn(new Outcome(200, null), new Outcome(404, "RESOURCE_NOT_FOUND"));
+			assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM cart_items", Integer.class)).isZero();
+			assertThat(activeCartCount()).isEqualTo(1);
+		}
+	}
+
+	/** Önce boşaltma ise yeni kitap kalır; önce ekleme ise boşaltma onu da siler. Sepet her durumda tek ve aktif. */
+	@Test
+	void concurrentClearAndAddEndWithEmptyCartOrOnlyTheNewBook() throws Exception {
+		Book old = catalog.publish("Eski", "10.00");
+		Book fresh = catalog.publish("Yeni", "20.00");
+		for (int round = 0; round < 5; round++) {
+			resetCarts();
+			seedCartWith(old);
+
+			List<Outcome> outcomes = runConcurrently(List.of(this::clear, () -> add(fresh)));
+
+			assertThat(outcomes).extracting(Outcome::status).containsOnly(200);
+			assertThat(jdbc.queryForList("SELECT BIN_TO_UUID(book_id) FROM cart_items", String.class))
+				.isIn(List.of(), List.of(fresh.id().toString()));
+			assertThat(activeCartCount()).isEqualTo(1);
+			assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM carts", Integer.class)).isEqualTo(1);
+		}
+	}
+
 	private List<Callable<Outcome>> tasks(int count, IntFunction<Book> bookOf) {
 		return IntStream.range(0, count).<Callable<Outcome>>mapToObj(i -> () -> add(bookOf.apply(i))).toList();
 	}
 
 	private Outcome add(Book book) throws Exception {
-		MockHttpServletResponse response = mockMvc.perform(post("/api/cart/items").with(bearer(token))
-				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"bookId\":\"" + book.id() + "\",\"quantity\":1}"))
-			.andReturn()
-			.getResponse();
+		return outcomeOf(post("/api/cart/items").with(bearer(token))
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("{\"bookId\":\"" + book.id() + "\",\"quantity\":1}"));
+	}
+
+	private Outcome patchQuantity(Book book, int quantity) throws Exception {
+		return outcomeOf(patch("/api/cart/items/{bookId}", book.id()).with(bearer(token))
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("{\"quantity\":" + quantity + "}"));
+	}
+
+	private Outcome removeItem(Book book) throws Exception {
+		return outcomeOf(delete("/api/cart/items/{bookId}", book.id()).with(bearer(token)));
+	}
+
+	private Outcome clear() throws Exception {
+		return outcomeOf(delete("/api/cart/items").with(bearer(token)));
+	}
+
+	private Outcome outcomeOf(RequestBuilder request) throws Exception {
+		MockHttpServletResponse response = mockMvc.perform(request).andReturn().getResponse();
 		String code = (response.getStatus() == 200) ? null
 				: JsonPath.read(response.getContentAsString(), "$.code");
 		return new Outcome(response.getStatus(), code);
+	}
+
+	private void seedCartWith(Book book) {
+		Cart cart = Cart.openFor(userId, clock);
+		cart.addItem(book.id(), 1, new BigDecimal(book.price()), "TRY", book.title(), null, clock);
+		carts.saveAndFlush(cart);
+	}
+
+	private void resetCarts() {
+		jdbc.update("DELETE FROM cart_items");
+		jdbc.update("DELETE FROM carts");
 	}
 
 	private int activeCartCount() {

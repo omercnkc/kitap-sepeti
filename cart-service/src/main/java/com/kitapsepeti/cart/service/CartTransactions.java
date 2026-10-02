@@ -10,6 +10,7 @@ import com.kitapsepeti.cart.entity.CartItem;
 import com.kitapsepeti.cart.entity.CartStatus;
 import com.kitapsepeti.cart.exception.CartLimitExceededException;
 import com.kitapsepeti.cart.repository.CartRepository;
+import com.kitapsepeti.common.error.ResourceNotFoundException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,7 +25,9 @@ import org.springframework.transaction.annotation.Transactional;
  * ihlalle düşer ve servis yeniden dener.
  * <p>
  * Flush sırası tuzağı (INSERT → UPDATE → DELETE): buradaki akışlarda aynı transaction'da satır silip aynı kitabı
- * eklemek ya da checkout + yeni sepet YOK. Tekrar ekleme satırı silmez, günceller (adet + anlık görüntü).
+ * eklemek ya da checkout + yeni sepet YOK. Tekrar ekleme satırı silmez, günceller (adet + anlık görüntü); silme ve
+ * boşaltma yalnızca siler, aynı transaction'da ekleme yapmaz (boşaltıp yeniden ekleme ayrı isteklerdir). Bir akış
+ * ikisini birleştirecekse silmeden sonra {@code flush()} şart.
  */
 @Component
 public class CartTransactions {
@@ -79,6 +82,61 @@ public class CartTransactions {
 		}
 		this.carts.flush();
 		return CartContents.of(cart);
+	}
+
+	/**
+	 * Sepetteki kitabın adedini verilen değere ayarlar; anlık görüntü (fiyat, başlık) DEĞİŞMEZ ve Catalog'a sorulmaz.
+	 * Aynı adet gönderilirse hiçbir şey değişmez (zaman damgaları dahil).
+	 * @throws ResourceNotFoundException aktif sepet yoksa ya da kitap sepette değilse
+	 * @throws CartLimitExceededException adet iş limitini aşarsa (satır değişmez)
+	 */
+	@Transactional(isolation = Isolation.READ_COMMITTED)
+	public CartContents changeQuantity(UUID userId, UUID bookId, int quantity) {
+		Cart cart = this.carts.findActiveByUserIdForUpdate(userId).orElseThrow(CartTransactions::itemNotFound);
+		CartItem item = cart.findItem(bookId).orElseThrow(CartTransactions::itemNotFound);
+		requireQuantityWithinLimit(quantity);
+		if (item.getQuantity() != quantity) {
+			item.changeQuantity(quantity, this.clock);
+			this.carts.flush();
+		}
+		return CartContents.of(cart);
+	}
+
+	/**
+	 * Kitabın satırını siler. Idempotent: aktif sepet yoksa boş içerik (sepet açılmaz), kitap sepette değilse sepet
+	 * olduğu gibi döner ve damgalanmaz. Sepet son satır silinse de aktif kalır.
+	 */
+	@Transactional(isolation = Isolation.READ_COMMITTED)
+	public CartContents removeItem(UUID userId, UUID bookId) {
+		Optional<Cart> active = this.carts.findActiveByUserIdForUpdate(userId);
+		if (active.isEmpty()) {
+			return CartContents.EMPTY;
+		}
+		Cart cart = active.get();
+		cart.findItem(bookId).ifPresent(item -> {
+			cart.removeItem(item.getId(), this.clock);
+			this.carts.flush();
+		});
+		return CartContents.of(cart);
+	}
+
+	/**
+	 * Aktif sepetin tüm satırlarını siler; sepet aktif ve boş kalır (silinmez). Sepet yoksa açılmaz; zaten boşsa
+	 * damgalanmaz.
+	 */
+	@Transactional(isolation = Isolation.READ_COMMITTED)
+	public CartContents clear(UUID userId) {
+		this.carts.findActiveByUserIdForUpdate(userId)
+			.filter(cart -> !cart.getItems().isEmpty())
+			.ifPresent(cart -> {
+				cart.clear(this.clock);
+				this.carts.flush();
+			});
+		return CartContents.EMPTY;
+	}
+
+	private static ResourceNotFoundException itemNotFound() {
+		return new ResourceNotFoundException("Book is not in the cart.");
 	}
 
 	private void requireQuantityWithinLimit(int quantity) {

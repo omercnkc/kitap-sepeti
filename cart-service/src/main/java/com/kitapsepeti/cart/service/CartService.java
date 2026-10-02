@@ -5,6 +5,7 @@ import java.util.UUID;
 import com.kitapsepeti.cart.client.CatalogBook;
 import com.kitapsepeti.cart.client.CatalogGateway;
 import com.kitapsepeti.cart.dto.request.AddCartItemRequest;
+import com.kitapsepeti.cart.dto.request.UpdateCartItemRequest;
 import com.kitapsepeti.cart.dto.response.CartResponse;
 import com.kitapsepeti.common.error.DbConstraints;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -58,6 +59,21 @@ public class CartService {
 			contents = this.transactions.addItem(userId, book, request.quantity());
 		}
 		return this.assembler.assemble(contents);
+	}
+
+	/** Catalog'a sorulmaz; anlık görüntü korunur. Sepet yoksa ya da kitap sepette değilse 404. */
+	public CartResponse changeQuantity(UUID userId, UUID bookId, UpdateCartItemRequest request) {
+		return this.assembler.assemble(this.transactions.changeQuantity(userId, bookId, request.quantity()));
+	}
+
+	/** Idempotent; sepet yoksa boş sepet döner (oluşturulmaz). */
+	public CartResponse removeItem(UUID userId, UUID bookId) {
+		return this.assembler.assemble(this.transactions.removeItem(userId, bookId));
+	}
+
+	/** Sepet aktif ve boş kalır; yoksa oluşturulmaz. Yanıt her zaman boş sepet (Catalog çağrılmaz). */
+	public CartResponse clear(UUID userId) {
+		return this.assembler.assemble(this.transactions.clear(userId));
 	}
 
 }
