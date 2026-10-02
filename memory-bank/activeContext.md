@@ -591,9 +591,42 @@
   - Testler (cart-service 42): CartSchemaConstraintsTest 25 (@JdbcTest), ActuatorHealthTest 10, CartServiceApplicationTests 3, CartPropertiesTest 4.
     Toplam: common 25, user 83, catalog 262, cart 42. `docker compose build user-service catalog-service` Dockerfile değişmeden başarılı.
 
+- Cart Adım 1 commit + push edildi (`2b31367` kod, `45b432c` memory-bank).
+
+- Cart Adım 2 — entity + repository (henüz commit edilmedi; servis/controller/güvenlik/Feign YOK; migration, user/catalog/common değişmedi):
+  - `entity/CartStatus` (ACTIVE, CHECKED_OUT, ABANDONED) + `CartStatusConverter` (küçük harf yaz; okumada BİREBİR eşleşme, bilinmeyen
+    değer → `IllegalArgumentException("Unknown cart status in database: '<v>'; expected one of [active, checked_out, abandoned]")`;
+    catalog converter'ı `toUpperCase` ile okuduğu için 'ACTIVE'i kabul ederdi, cart etmez).
+  - `entity/Cart` (aggregate root): UUIDv7 id, userId, status (varsayılan ACTIVE), createdAt/updatedAt (Instant). `active_user_id`
+    EŞLENMEDİ (validate takılmadı). `items` = `@OneToMany(mappedBy="cart", cascade=ALL, orphanRemoval=true)` + `@OrderBy("addedAt ASC, id ASC")`,
+    `List`, getter salt okunur görünüm. Fabrika `openFor(userId, clock)`; `addItem(bookId, qty, price, currency, title, coverUrl, clock)`
+    (aynı kitap → ISE), `findItem(bookId)`, `findItemById(itemId)`, `removeItem(itemId)` (bool), `clear()`, `checkout()`/`abandon()`
+    (yalnızca ACTIVE'den, aksi ISE). EK: geçmiş sepette add/remove/clear/changeQuantity/refreshSnapshot → ISE (`requireActive`). Setter yok.
+  - `entity/CartItem`: UUIDv7 id, cart (LAZY, optional=false), bookId, quantity (1–99, aksi IAE), unitPriceSnapshot (scale 2,
+    `RoundingMode.UNNECESSARY`; fazla ondalık/negatif → IAE), currencySnapshot (null → "TRY"), titleSnapshot, coverUrlSnapshot (null olabilir),
+    addedAt, updatedAt. `changeQuantity`, `refreshSnapshot(price, currency, title, coverUrl)`. Constructor package-private.
+  - Zaman: oluşturma anı `Clock`'tan (MICROS'a kesilir; INSERT'e açıkça yazılır). Güncelleme anı `@PreUpdate` → `Instant.now()` (UTC).
+    `@CurrentTimestamp(event = UPDATE)` DENENDİ ve bırakıldı: Hibernate 7.4.5 kolonu INSERT'ten çıkarıyor → DB default'u (şimdi) yazılıyor,
+    bellekteki saat değeriyle tutarsız. `@CreationTimestamp/@UpdateTimestamp` (catalog) Clock'u kullanmadığı için seçilmedi.
+  - `repository/CartRepository`: `findByUserIdAndStatus` (`@EntityGraph("items")` → tek SQL, left join + `order by added_at, id`);
+    `findActiveByUserIdForUpdate(userId)` (default metot → `lockByUserIdAndStatus` JPQL + PESSIMISTIC_WRITE → `... for update of c1_0`,
+    satırlar yüklenmez). `existsByUserIdAndStatus` ve `CartItemRepository` YAZILMADI (gerek yok; satırlar aggregate üzerinden).
+  - Kilit zaman aşımı: `jakarta.persistence.lock.timeout` ipucu (5000) MySQL'de ETKİSİZ çıktı (Hibernate 7.4.5 `MySQLLockingSupport`
+    pozitif süreyi SQL'e yazamıyor, bağlantıya da uygulamıyor; test 5 sn yerine 30 sn bekledi) → kaldırıldı. Yerine Hikari
+    `connection-init-sql: SET SESSION innodb_lock_wait_timeout = 5` (tüm cart bağlantıları; GLOBAL 50 aynen). Test: 5 sn sonra
+    `PessimisticLockingFailureException`.
+  - `default_batch_fetch_size: 50` application.yml'e (catalog gibi).
+  - Flush sırası BULGULARI (Adım 6'da çözülecek): (1) aynı flush'ta `removeItem` + aynı kitabı `addItem` → INSERT önce çalışıyor →
+    `uk_cart_items_cart_book` (orphanRemoval de DELETE'i sona bırakıyor); arada `flush()` → çalışıyor. (2) aynı flush'ta `checkout()` +
+    aynı kullanıcıya yeni sepet → INSERT, UPDATE'ten önce → `uk_carts_active_user`; checkout'tan sonra `flush()` → çalışıyor.
+  - Testler (cart-service 90): CartRepositoryTest 18 (@DataJpaTest), CartLockingTest 3 (iki thread + latch, NOT_SUPPORTED, ~17 sn),
+    CartTest 18 (birim), CartStatusConverterTest 9 (birim), + mevcut 42. Test profili: `generate_statistics`, `support/SqlCapture`
+    (catalog'dan kopya). Repository testleri `@ActiveProfiles("test")` (statistics/inspector için).
+
 ## Sonraki adımlar
-- Cart Adım 1 doğrulamaları tamam; commit kullanıcı onayı bekliyor.
-- Cart sonraki adımlar: entity/repository, kalıcı Resource Server güvenliği (common tarifi), Catalog Feign client, uçlar, Docker + compose (Adım 10).
+- Cart Adım 2 doğrulamaları tamam; commit kullanıcı onayı bekliyor.
+- Cart sonraki adımlar: kalıcı Resource Server güvenliği (common tarifi), Catalog Feign client, servis + uçlar (Adım 6: flush sırası
+  çözümü — checkout/yeniden ekleme öncesi ara flush ya da satırı silmek yerine güncellemek; `Clock` bean'i), Docker + compose (Adım 10).
 - order-service (rezervasyon istemcisi; fiyat anlık görüntüsü kendisinde; `RESERVATION_RELEASED` → ödeme iadesi telafisi; süre dolumu
   olayı yok, GET ile sorgulanır; istemci `docs/api/catalog-service.openapi.json`'dan). Compose'a eklenirken catalog'a
   `http://catalog-service:8082` ve `.env` `ORDER_INTERNAL_API_KEY` ile bağlanır.

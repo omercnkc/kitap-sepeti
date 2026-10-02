@@ -239,6 +239,19 @@
   ifadeler büyük/küçük harf duyarsız olur ('ACTIVE' geçer ve aktif sayılır). Şema testi kolonun collation'ını ve 'ACTIVE'/'Active'
   INSERT'inin 3819 verdiğini doğrular (cart `CartSchemaConstraintsTest`). Metin kolonları (başlık vb.) `_ai_ci` kalır.
 
+## Aggregate entity'leri (cart-service)
+- Aggregate root (`Cart`) satırları `@OneToMany(mappedBy, cascade = ALL, orphanRemoval = true)` + `@OrderBy` ile `List`'te tutar;
+  getter salt okunur görünüm, değişiklik yalnızca root'un metotlarıyla. Satırın ayrı repository'si yok. Satır constructor'ı package-private.
+- Entity'de yalnızca bütünlük (DB kısıtlarıyla aynı sınırlar + durum geçişleri → IAE/ISE); iş limitleri serviste.
+- Oluşturma anı `Clock` parametresiyle (fabrika/ekleme metodu), MICROS'a kesilir; güncelleme anı `@PreUpdate` (`Instant.now()`).
+  `@CurrentTimestamp(event = UPDATE)` KULLANMA: Hibernate 7.4.5 kolonu INSERT'ten çıkarır, DB default'u yazılır.
+- Durum enum'u converter'ı okumada birebir eşleşme ister (bilinmeyen değer → anlamlı IAE).
+- Okuma: `@EntityGraph(attributePaths = "items")` (tek sorgu). Değiştirme: root satırı `PESSIMISTIC_WRITE` (JPQL, satırlar yüklenmeden);
+  bekleme üst sınırı bağlantı seviyesinde (Hikari `connection-init-sql: SET SESSION innodb_lock_wait_timeout = N`), çünkü
+  `jakarta.persistence.lock.timeout` ipucu MySQL'de pozitif değerlerde etkisiz (yalnızca -2 SKIP LOCKED / 0 NOWAIT çalışır).
+- Flush sırası INSERT → UPDATE → DELETE (orphan silme dahil): aynı UNIQUE anahtarı boşaltıp dolduran işlemler (satır sil + aynı kitabı
+  ekle, checkout + yeni aktif sepet) arasında `flush()` gerekir.
+
 ## Container (servis başına)
 - `<servis>/Dockerfile`, build context = repo kökü (kök pom + mvnw gerekir). Çok aşamalı: pom'lar → `go-offline`
   (cache mount) → src → `package -DskipTests` → layered extract → JRE runtime, sabit UID/GID 10001 non-root.

@@ -30,7 +30,12 @@
   Boot yükseltilirken spring.io/projects/spring-cloud uyumluluk tablosu yeniden kontrol edilir; milestone/RC ve milestone repo kullanılmaz.
   Şu an yalnızca cart-service kullanıyor (`spring-cloud-starter-openfeign` 5.0.3).
 - cart-service: port 8083, şema `cart_db`, kullanıcı `.env` `CART_DB_USER/PASSWORD` (`infra/mysql/init/20-cart-db.sh`). Çalıştırma
-  `.\mvnw.cmd -pl cart-service spring-boot:run`, testler `.\mvnw.cmd -pl cart-service -am test`. Compose'da henüz servis kaydı yok.
+  `.\mvnw.cmd -pl cart-service spring-boot:run` (common `~/.m2`'de değilse önce `.\mvnw.cmd -pl common -am install -DskipTests`),
+  testler `.\mvnw.cmd -pl cart-service -am test`. Compose'da henüz servis kaydı yok. Hikari `connection-init-sql` ile
+  `innodb_lock_wait_timeout = 5` (oturum; GLOBAL 50).
+- Hibernate ORM 7.4.5.Final (Boot 4.1.1). MySQL kilit tuzağı: `jakarta.persistence.lock.timeout` pozitif değerde SQL'e yazılmaz,
+  bağlantıya da uygulanmaz (`MySQLLockingSupport`); yalnızca -2 (SKIP LOCKED) ve 0 (NOWAIT) etkili. `PESSIMISTIC_WRITE` JPQL'i
+  `for update of <alias>` üretir. SQL'i görmek için testte `-Dlogging.level.org.hibernate.SQL=DEBUG` (surefire'a geçer).
 - Test tuzağı (tr-TR): `JdbcTemplate.queryForList/queryForMap` satır map'i (LinkedCaseInsensitiveMap) anahtarı JVM locale'iyle küçültür;
   information_schema'nın büyük harfli kolon adları (`ENGINE` → `engıne`) bulunamaz → SELECT'te küçük harfli takma ad ver.
 - Ortak kütüphane: `common/` (`kitap-sepeti-common`, düz jar). Servis testleri `-am` ile common'ı da derler:

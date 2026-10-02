@@ -57,10 +57,12 @@
 - cart-service Adım 1 (henüz commit edilmedi): modül iskeleti (8083), Spring Cloud 2025.1.3 BOM + OpenFeign (client yok),
   geçici güvenlik (yalnızca health açık), `cart_db` init script'i, V1 (carts + cart_items, kısıt testleri; `carts.status`
   `utf8mb4_bin`). cart-service 42 test. Yerel `cart_db` oluşturuldu (yetki yalnızca `cart_db.*`), V1 `spring-boot:run` ile uygulandı,
-  health UP.
+  health UP. Commit `2b31367` + `45b432c`, push edildi.
+- cart-service Adım 2 (henüz commit edilmedi): `Cart` (aggregate root) + `CartItem` + `CartStatus`/converter, `CartRepository`
+  (EntityGraph ile tek sorgu okuma, `FOR UPDATE` kilit), kilit beklemesi 5 sn (Hikari `connection-init-sql`). cart-service 90 test.
 
 ## Yapılacaklar
-- Cart servisi (Adım 2+: entity, güvenlik, Feign client, uçlar, Docker).
+- Cart servisi (Adım 3+: güvenlik, Feign client, servis + uçlar, Docker).
 - Outbox kodunu common'a taşıma (ayrı adım; şu an servis başına kopya).
 - order-service (catalog rezervasyon istemcisi).
 - Search için: yayınevi/yazar/kategori yeniden adlandırması yayındaki kitaplar için olay üretmiyor → yeniden indeksleme gerekecek.
@@ -74,6 +76,10 @@
   user-service/JWKS kapalıysa son bilinen anahtarla doğrulamaya devam (şu an önbellek süresi içinde 200, sonrasında 503).
 
 ## Bilinen sorunlar
+- cart flush sırası (Hibernate INSERT → UPDATE → DELETE; orphanRemoval da DELETE'i sona bırakır): aynı flush'ta satırı silip aynı
+  kitabı eklemek `uk_cart_items_cart_book`, checkout + yeni aktif sepet `uk_carts_active_user` verir. Testle belgelendi; servis
+  (Adım 6) ara `flush()` ya da güncelleme ile çözecek.
+- catalog'un `FOR UPDATE` sorgularında kilit süresi yok → MySQL varsayılanı 50 sn bekler (cart'ta 5 sn'ye çekildi; catalog'a dokunulmadı).
 - catalog/user durum kolonları `utf8mb4_0900_ai_ci`: catalog `books.status` (`ck_books_status`), `stock_reservations.status`
   (`ck_stock_reservations_status`), user `users.status` (`ck_users_status`; `ck_users_role` de aynı). CHECK büyük/küçük harf
   duyarsız ('PUBLISHED' geçer). Uygulama küçük harf yazdığı için risk düşük, V2 gerekmez; ham SQL yazımında dikkat.
