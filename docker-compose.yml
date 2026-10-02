@@ -13,6 +13,9 @@ services:
       # infra/mysql/init/10-catalog-db.sh okur (catalog_db şeması + kullanıcısı).
       CATALOG_DB_USER: ${CATALOG_DB_USER}
       CATALOG_DB_PASSWORD: ${CATALOG_DB_PASSWORD}
+      # infra/mysql/init/20-cart-db.sh okur (cart_db şeması + kullanıcısı).
+      CART_DB_USER: ${CART_DB_USER}
+      CART_DB_PASSWORD: ${CART_DB_PASSWORD}
     volumes:
       - mysql_data:/var/lib/mysql
       # Yalnızca boş volume'da otomatik çalışır; mevcut volume'da script elle çalıştırılır.

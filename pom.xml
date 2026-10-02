@@ -79,6 +79,7 @@
 		<module>common</module>
 		<module>user-service</module>
 		<module>catalog-service</module>
+		<module>cart-service</module>
 	</modules>
 
 	<!--
@@ -91,6 +92,12 @@
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 		<!-- springdoc 3.x = Spring Boot 4 hattı (3.1.x, spring-boot-starter-parent 4.1 üzerine derlenir). -->
 		<springdoc.version>3.1.1</springdoc.version>
+		<!--
+			Spring Cloud release train. Uyumluluk tablosu (spring.io/projects/spring-cloud):
+			2025.1.x (Oakwood) = Spring Boot 4.0.x ve 4.1.x (4.1 desteği 2025.1.2 ile başlar).
+			Boot yükseltilirken bu tablo yeniden kontrol edilmeli; milestone/RC kullanılmaz.
+		-->
+		<spring-cloud.version>2025.1.3</spring-cloud.version>
 	</properties>
 
 	<!--
@@ -109,6 +116,14 @@
 				<groupId>org.springdoc</groupId>
 				<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
 				<version>${springdoc.version}</version>
+			</dependency>
+			<!-- Spring Cloud starter'larının (ör. spring-cloud-starter-openfeign) sürümleri; servise yalnızca kullanan ekler. -->
+			<dependency>
+				<groupId>org.springframework.cloud</groupId>
+				<artifactId>spring-cloud-dependencies</artifactId>
+				<version>${spring-cloud.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>
