@@ -45,12 +45,27 @@
 
 ### Yeni servis common'ı nasıl kullanır (tarif)
 1. Servis POM'una `com.kitapsepeti:kitap-sepeti-common` (versiyonsuz) ekle.
-2. `exception/<Servis>ErrorCode implements ErrorCode` (yalnızca servise özel kodlar) + `API_CODES` listesi (ortak + özel, doküman sırası).
+2. `exception/<Servis>ErrorCode implements ErrorCode` (yalnızca servise özel kodlar) + `API_CODES` listesi (ortak + özel, doküman sırası:
+   ortak genel kodlar → servis kodları → AUTHENTICATION_UNAVAILABLE → INTERNAL_ERROR). Küme kuralı: JWKS ile doğrulayan servis
+   (catalog, cart) = servis kodları ∪ TÜM 12 ortak kod; user-service = AUTHENTICATION_UNAVAILABLE hariç. OpenAPI yoksa kontrol birim
+   testinde (cart `CartErrorCodeTest`: tekrarsız + küme eşitliği → enum'a eklenip listeye yazılmayan kod testi kırar).
 3. `exception/GlobalExceptionHandler extends ProblemDetailExceptionHandler` + `@RestControllerAdvice`; gerekirse `addProperties`/`classify` override.
-4. SecurityConfig: `@Import(ProblemDetailSecurityHandlers.class)`; entry point/access denied handler'ı enjekte et;
-   `JwtRoleConverters.roleClaim()`; public uçlar için `BearerTokenResolvers.ignoringGet(...)`.
-   Resource server ise `@Bean JwtDecoder` = `JwkSetJwtDecoders.rs256(jwkSetUri, issuer)` ve 503 için
-   `@Bean ProblemDetailAuthenticationFailureHandler` + `withObjectPostProcessor(ProblemDetailAuthenticationFailureHandler.postProcessorFor(h))`.
+   `classify` için `exception/DbConstraintCodes` (catalog kalıbı; `Violation(code, constraint, kind)` + `logNote()`).
+   Not: catch-all (ISE/IAE dahil) 500 INTERNAL_ERROR + GENEL detail ("An unexpected error occurred."), mesaj yanıtta yok, logda ERROR + stack.
+4. SecurityConfig (resource server): `@Import(ProblemDetailSecurityHandlers.class)`; entry point/access denied handler'ı enjekte et ve
+   HEM `oauth2ResourceServer(...)` HEM `exceptionHandling(...)` içine ver; `JwtRoleConverters.roleClaim()`; stateless + csrf/basic/form/logout kapalı;
+   kurallar: health GET permitAll → `/error` permitAll (YOKSA controller hataları /error yönlendirmesinde 401 olur) → servis kuralları →
+   `anyRequest().authenticated()`. `BearerTokenResolvers.ignoringGet(...)` YALNIZCA public GET uçları varsa (cart'ta yok → özelleştirme yok;
+   o zaman açık uca gönderilen bozuk token da 401 olur).
+   JwtDecoder: servis içinde `security/JwtProperties` (`@ConfigurationProperties("app.jwt")`, `@NotBlank issuer`; common'da DEĞİL) +
+   `config/JwtDecoderConfig` (`@EnableConfigurationProperties(JwtProperties)`, `JwkSetJwtDecoders.rs256(OAuth2ResourceServerProperties
+   .getJwt().getJwkSetUri(), issuer)`). application.yml: `spring.security.oauth2.resourceserver.jwt.jwk-set-uri:
+   ${USER_SERVICE_JWKS_URI:http://localhost:8081/.well-known/jwks.json}` + `app.jwt.issuer: kitapsepeti-user-service`.
+   Decoder sarmalanırsa ek kontrol `BadJwtException` fırlatmalı (diğer JwtException'lar 401 değil 503 olur).
+   503 için `@Bean ProblemDetailAuthenticationFailureHandler` + `withObjectPostProcessor(ProblemDetailAuthenticationFailureHandler.postProcessorFor(h))`.
+   Test altyapısı (servis başına kopya): `support/TestJwt` (anahtar test JVM'inde üretilir — cart; catalog/user pem dosyası + .gitignore
+   istisnası kullanır), `support/JwksServer`, `ApiTestSupport` (statik JWKS + `@DynamicPropertySource`), `support/MutableClock(Configuration)`,
+   ayrı context'li `security/JwksOutageTest`.
 5. Internal uç sunuyorsa: `@EnableConfigurationProperties(InternalAuthProperties.class)`, `new InternalApiKeys(props)`, filtreyi zincirde
    `new` ile ekle (bean yapma), entry point'i `exceptionHandling`'e ver.
 6. `OpenApiConfig`: `code` enum'u `<Servis>ErrorCode.API_CODES.stream().map(ErrorCode::name).toList()`.
@@ -102,6 +117,22 @@
   bağlamada DEĞİL `InternalApiKeys` ctor'unda (fail-fast `IllegalStateException`, mesajda özellik + istemci adı, değer YOK —
   Boot'un bind failure analyzer'ı değeri yansıtabilirdi; yanlışlıkla ham anahtar girilirse sızmasın). `Client.toString` özeti maskeler.
   Ana zincirdeki `/internal/** denyAll` ek savunma olarak kalır. Yeni istemci = listeye yeni `{name, key-sha256}` + `.env` özeti.
+
+## Güvenlik (cart-service = yalnızca Resource Server)
+- catalog ile aynı yapı (tarif adım 4); farklar: public GET yok → BearerTokenResolver özelleştirmesi yok; `/api/cart/**` authenticated
+  (USER ve ADMIN, rol şartı yok); anyRequest authenticated (kimliksiz 401, kimlikli olmayan yol / kapalı actuator ucu 404 NOT_FOUND).
+- Kullanıcı kimliği YALNIZCA `@CurrentUserId UUID userId` (`security/CurrentUserIdArgumentResolver`, `config/WebConfig`'te kayıtlı);
+  istekten (path/query/gövde) userId alınmaz. `sub` kuralı `security/JwtSubjects.userId`: yalnızca `UUID.toString()` biçimi (küçük harf,
+  36 karakter; "1-1-1-1-1" ve büyük harf reddedilir). İki katman: (1) `JwtDecoderConfig` common decoder'ı sarar, geçersiz sub →
+  `BadJwtException` → 401 `Bearer error="invalid_token"` (her yolda); (2) resolver yine de geçersiz/JWT olmayan kimlik görürse
+  `InvalidSubjectException` (ApiException, UNAUTHORIZED) → common handler aynı 401 + invalid_token başlığı. 500 olmaz.
+- Loglarda yalnızca `METHOD path -> CODE` (+ kısıt/kök neden sınıfı); token, sub, claim (e-posta) yazılmaz (catalog kuralı; testli).
+- Hata kodları `CartErrorCode`: CART_LINE_LIMIT_EXCEEDED / CART_QUANTITY_LIMIT_EXCEEDED / BOOK_NOT_AVAILABLE (409 INFO), CATALOG_UNAVAILABLE
+  (503 WARN). `CartLimitExceededException.lines(max)` / `.quantityPerItem(max)` → yanıta yalnızca `limit` (yapılandırılmış üst sınır)
+  uzantısı; istenen değer ve bookId yanıtta YOK. `BookNotAvailableException` alan taşımaz. `CatalogUnavailableException(cause)` →
+  GlobalExceptionHandler'da ayrı handler: tek WARN `... -> CATALOG_UNAVAILABLE (cause=<kök neden SimpleName>)`, stack/mesaj yok.
+- `DbConstraintCodes`: uk_carts_active_user, uk_cart_items_cart_book (sızarsa) ve diğer tüm kısıtlar → CONFLICT (cart'ta RESOURCE_IN_USE yok).
+- `config/ClockConfig` `Clock.systemUTC()`; testlerde `MutableClock` `@Primary`.
 
 ## Stok rezervasyonu (catalog-service internal)
 - Dış servis (`StockReservationService`) BİLEREK transactional değil; iç `StockReservationTransactions` `@Transactional(READ_COMMITTED)`.
@@ -231,7 +262,8 @@
   jdbc UTC, Flyway, actuator yalnızca health); `TestcontainersConfiguration` (MySQL) + `application-test.yml` (datasource test/test);
   `@JdbcTest` + `@AutoConfigureTestDatabase(NONE)` ile şema/kısıt testi (CHECK → `UncategorizedSQLException` + 3819).
 - Güvenlik yapılmadan önce geçici SecurityFilterChain: yalnızca health açık, diğer her şey common entry point'iyle 401;
-  `UserDetailsServiceAutoConfiguration` exclude (üretilmiş parola logu yok).
+  `UserDetailsServiceAutoConfiguration` exclude (üretilmiş parola logu yok). Kalıcı güvenlik adımında tarif adım 4 ile değiştirilir;
+  tam context testleri `ApiTestSupport`'a taşınır (tek context, tek konteyner).
 - "Kullanıcı başına tek aktif kayıt" = VIRTUAL generated kolon (`CASE WHEN status = 'active' THEN user_id END`) + UNIQUE
   (user-service `default_owner` ile aynı fikir; NULL'lar UNIQUE'e takılmaz).
 - KURAL: yeni servislerde durum kolonları `utf8mb4_bin` (ör. `status VARCHAR(16) COLLATE utf8mb4_bin NOT NULL DEFAULT 'active'`).

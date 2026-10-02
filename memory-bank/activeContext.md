@@ -623,10 +623,34 @@
     CartTest 18 (birim), CartStatusConverterTest 9 (birim), + mevcut 42. Test profili: `generate_statistics`, `support/SqlCapture`
     (catalog'dan kopya). Repository testleri `@ActiveProfiles("test")` (statistics/inspector için).
 
+- Cart Adım 2 commit + push edildi (`333d19a` kod, `376ab3a` memory-bank).
+
+- Cart Adım 3 — kalıcı güvenlik (Resource Server + JWKS) + Cart hata kodları (henüz commit edilmedi; controller/servis/Feign/internal/
+  OpenAPI YOK; common, user-service, catalog-service, migration, .gitignore değişmedi):
+  - Ana kod: application.yml (`jwk-set-uri` + `app.jwt.issuer`), `security/` JwtProperties, JwtSubjects, CurrentUserId,
+    CurrentUserIdArgumentResolver, InvalidSubjectException; `config/` JwtDecoderConfig (common rs256 + sub UUID kontrolü), SecurityConfig
+    (geçici olanın yerine), ClockConfig, WebConfig; `exception/` CartErrorCode (+ API_CODES), CartLimitExceededException,
+    BookNotAvailableException, CatalogUnavailableException, GlobalExceptionHandler, DbConstraintCodes. Kurallar: systemPatterns "Güvenlik (cart-service)".
+  - Test anahtarı: RSA çifti test JVM'inde üretilir (`support/TestJwt`), JWKS JDK HttpServer stub'ından (`support/JwksServer`);
+    pem dosyası/.gitignore istisnası YOK.
+  - Testler (cart 150 = 90 + 60): SecurityRulesTest 23, JwksOutageTest 3 (ayrı context), GlobalExceptionHandlerTest 7, CartErrorCodeTest 4,
+    DbConstraintCodesTest 7, CurrentUserIdArgumentResolverTest 6, JwtSubjectsTest 8, CartServiceApplicationTests 5 (+2: JwtEncoder yok,
+    Clock). Test-only controller'lar: `security/SecurityProbeController` (`/api/cart/_whoami`, `/api/other/ping`),
+    `exception/ErrorProbeController` (`/api/cart/_errors/**`).
+  - Değişen eski testler: CartServiceApplicationTests ve ActuatorHealthTest artık `ApiTestSupport`'tan türer (aynı context; annotation'lar
+    tabana taşındı); ActuatorHealthTest'te yalnızca metot adı `everythingElseIsUnauthorized` → `everythingElseNeedsToken` (beklentiler aynı).
+  - Root `clean verify`: common 25, user 83, catalog 262, cart 150.
+  - Uçtan uca (Docker user-service gerçek USER token'ı, token yazdırılmadı): a) token'sız 401 `Bearer`; b) token'lı `/api/cart` 404
+    NOT_FOUND (henüz controller yok); c) bozuk imza / çöp token 401 `Bearer error="invalid_token"`; d) user-service stop + cart yeniden
+    başlatma (cart user-service olmadan açıldı) → 503 AUTHENTICATION_UNAVAILABLE + tek WARN (cause=ConnectException), token'sız 401,
+    readiness 200; start → aynı token 404. Loglarda token/Bearer/e-posta yok; .env değerlerinden yalnızca RabbitMQ kullanıcı adı
+    ("kitapsepeti" alt dizesi, zararsız). user_db'de 1 yeni e2e kullanıcısı.
+
 ## Sonraki adımlar
-- Cart Adım 2 doğrulamaları tamam; commit kullanıcı onayı bekliyor.
-- Cart sonraki adımlar: kalıcı Resource Server güvenliği (common tarifi), Catalog Feign client, servis + uçlar (Adım 6: flush sırası
-  çözümü — checkout/yeniden ekleme öncesi ara flush ya da satırı silmek yerine güncellemek; `Clock` bean'i), Docker + compose (Adım 10).
+- Cart Adım 3 doğrulamaları tamam; commit kullanıcı onayı bekliyor.
+- Cart sonraki adımlar: Catalog Feign client (CatalogUnavailableException/BookNotAvailableException burada kullanılacak), servis + uçlar
+  (Adım 6–7: flush sırası çözümü — checkout/yeniden ekleme öncesi ara flush ya da satırı silmek yerine güncellemek; limitler
+  CartLimitExceededException ile), internal zincir (Adım 8), OpenAPI (Adım 9: code enum = CartErrorCode.API_CODES), Docker + compose.
 - order-service (rezervasyon istemcisi; fiyat anlık görüntüsü kendisinde; `RESERVATION_RELEASED` → ödeme iadesi telafisi; süre dolumu
   olayı yok, GET ile sorgulanır; istemci `docs/api/catalog-service.openapi.json`'dan). Compose'a eklenirken catalog'a
   `http://catalog-service:8082` ve `.env` `ORDER_INTERNAL_API_KEY` ile bağlanır.

@@ -58,11 +58,15 @@
   geçici güvenlik (yalnızca health açık), `cart_db` init script'i, V1 (carts + cart_items, kısıt testleri; `carts.status`
   `utf8mb4_bin`). cart-service 42 test. Yerel `cart_db` oluşturuldu (yetki yalnızca `cart_db.*`), V1 `spring-boot:run` ile uygulandı,
   health UP. Commit `2b31367` + `45b432c`, push edildi.
-- cart-service Adım 2 (henüz commit edilmedi): `Cart` (aggregate root) + `CartItem` + `CartStatus`/converter, `CartRepository`
+- cart-service Adım 2: `Cart` (aggregate root) + `CartItem` + `CartStatus`/converter, `CartRepository`
   (EntityGraph ile tek sorgu okuma, `FOR UPDATE` kilit), kilit beklemesi 5 sn (Hikari `connection-init-sql`). cart-service 90 test.
+  Commit `333d19a` + `376ab3a`, push edildi.
+- cart-service Adım 3 (henüz commit edilmedi): kalıcı Resource Server güvenliği (JWKS, lazy; JWKS kesintisi 503), `@CurrentUserId`
+  (sub → UUID, geçersiz sub 401 invalid_token), `CartErrorCode` + API_CODES, limit/kitap/catalog exception'ları, GlobalExceptionHandler +
+  DbConstraintCodes, ClockConfig. Test anahtarı çalışma anında üretiliyor. cart-service 150 test; uçtan uca a–d geçti.
 
 ## Yapılacaklar
-- Cart servisi (Adım 3+: güvenlik, Feign client, servis + uçlar, Docker).
+- Cart servisi (Adım 4+: Feign client, servis + uçlar, internal zincir, OpenAPI, Docker).
 - Outbox kodunu common'a taşıma (ayrı adım; şu an servis başına kopya).
 - order-service (catalog rezervasyon istemcisi).
 - Search için: yayınevi/yazar/kategori yeniden adlandırması yayındaki kitaplar için olay üretmiyor → yeniden indeksleme gerekecek.
