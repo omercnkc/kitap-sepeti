@@ -34,7 +34,9 @@
   testler `.\mvnw.cmd -pl cart-service -am test`. Compose'da henüz servis kaydı yok. Catalog adresi `CATALOG_BASE_URL`
   (varsayılan `http://localhost:8082`; compose'da `http://catalog-service:8082` olacak). Gerçek Catalog'a karşı test:
   `.\mvnw.cmd -pl cart-service test "-Dtest=CatalogLiveTest" "-Dcatalog.live=true"` (catalog seed'li olmalı). Hikari `connection-init-sql` ile
-  `innodb_lock_wait_timeout = 5` (oturum; GLOBAL 50).
+  `innodb_lock_wait_timeout = 5` (oturum; GLOBAL 50). Uçlar: `GET /api/cart`, `POST /api/cart/items` (USER token).
+  Uçtan uca denemede seed 402 yayında ama stokta değil (409 BOOK_NOT_AVAILABLE); stokta yayındaki kitaplar 401, 404–411.
+- Bean Validation mesajları JVM dilinde (Windows'ta tr: `'99' değerinden küçük yada eşit olmalı`); tüm servislerde aynı, girilen değer yok.
 - Hibernate ORM 7.4.5.Final (Boot 4.1.1). MySQL kilit tuzağı: `jakarta.persistence.lock.timeout` pozitif değerde SQL'e yazılmaz,
   bağlantıya da uygulanmaz (`MySQLLockingSupport`); yalnızca -2 (SKIP LOCKED) ve 0 (NOWAIT) etkili. `PESSIMISTIC_WRITE` JPQL'i
   `for update of <alias>` üretir. SQL'i görmek için testte `-Dlogging.level.org.hibernate.SQL=DEBUG` (surefire'a geçer).

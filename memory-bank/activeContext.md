@@ -682,14 +682,45 @@
     bağlam), CatalogLiveTest 2 (`-Dcatalog.live=true` ile; Docker catalog'a karşı geçti: 401 → 145.00 TRY inStock; 401+412(draft)+402
     → 2 kalem). Read timeout ~2.01 sn, bağlantı reddi ConnectException ~0.1 sn. `ApiTestSupport` artık `CatalogStub` da açıyor.
   - Root `clean verify`: common 25, user 83, catalog 276, cart 197.
-  - Not: `app.cart.max-lines` (50) ≤ `CatalogGateway.MAX_LOOKUP_IDS` şartı şu an yalnızca CatalogContractTest'te; CartProperties'te
-    `@Max` yok (Adım 6'da eklenebilir).
+  - Not: `app.cart.max-lines` (50) ≤ `CatalogGateway.MAX_LOOKUP_IDS` şartı Adım 6'da `CartProperties` `@Max`'ına bağlandı.
+
+- Cart Adım 5 commit + push edildi (`66b3d01` kod, `99a04fa` memory-bank).
+
+- Cart Adım 6 — `GET /api/cart` + `POST /api/cart/items` (henüz commit edilmedi; PATCH/DELETE, internal snapshot, OpenAPI, Docker YOK;
+  catalog/user/common, migration değişmedi):
+  - Zaman Clock'tan: `@PreUpdate`'ler kaldırıldı. Değiştiren her metot Clock alır ve satırın + sepetin `updatedAt`'ini yeniler
+    (`Cart.touch(clock)`; `CartItem.changeQuantity/refreshSnapshot(…, clock)`, `Cart.addItem/removeItem/clear(…, clock)`).
+    SAPMA (spec'te yoktu): `checkout(clock)`/`abandon(clock)` da Clock alır (yoksa durum geçişinde updatedAt eski kalırdı). Geçmiş
+    sepet `touch` edilemez (ISE). Değişen eski testler: CartTest (tüm çağrılar + 3 yeni zaman testi), CartRepositoryTest (iki zaman
+    testi yeniden yazıldı: satır değişince sepet updated_at da saatle güncellenir — eskiden "sepet UPDATE edilmez" bekleniyordu;
+    checkout updated_at = saat; diğer çağrılar yalnızca imza).
+  - `CartProperties`: `maxQuantityPerItem` `@Min(CartItem.MIN_QUANTITY) @Max(CartItem.MAX_QUANTITY)` (1–99),
+    `maxLines` `@Min(1) @Max(CatalogGateway.MAX_LOOKUP_IDS)` (1–50). 51 / 100 → context açılmaz (CartPropertiesTest).
+  - Kod: `service/CartService` (TX'siz), `service/CartTransactions` (`findActive` readOnly; `addItem` READ_COMMITTED),
+    `service/CartViewAssembler`, `service/CartContents` (TX içinde kopyalanan, id'siz satırlar), `dto/request/AddCartItemRequest`
+    (`@NotNull bookId`, `quantity` 1–99, null → 1), `dto/response/CartResponse` + `CartLineResponse` + `CatalogStatus`,
+    `controller/CartController`. Kurallar systemPatterns "Sepet servisi (cart-service)".
+  - Testler (cart 237 = 197 + 40): CartControllerTest 26, CartConcurrencyTest 4 (2 farklı kitap → 1 sepet/2 satır; 10 × aynı kitap →
+    adet 10; 12 → 10×200 + 2×409 QUANTITY; 49 satır + 5 yeni kitap → 1×200 + 4×409 LINE; 3 tekrar koşuda kararlı), CartServiceTest 5
+    (Mockito: yeniden deneme kuralları), CartTest +3, CartPropertiesTest +2. `support/FakeCatalog` (CatalogStub yanıtlayıcısı: harita =
+    yayındaki kitaplar), `ApiTestSupport`'a `@MockitoSpyBean CartRepository carts` (tek context korunur; yarış testleri
+    `findActiveByUserIdForUpdate`'i taklit eder, rakip sepet REQUIRES_NEW TransactionTemplate ile commit edilir).
+  - Root `clean verify`: common 25, user 83, catalog 276, cart 237 (2 skipped).
+  - Uçtan uca (cart spring-boot:run + Docker user/catalog, gerçek USER + ADMIN token, yazdırılmadı): boş GET (DB'de sepet yok) →
+    401 ekle → tekrar ekle adet 2 → 404×3 (seed 402 yayında ama stokta değil → 409 BOOK_NOT_AVAILABLE; bu yüzden ikinci kitap 404)
+    → GET VERIFIED 587.00 → 412 taslak 409 → 401 +9 → 409 limit 10 → adet 100 → 400 → catalog stop: GET 200 UNAVAILABLE (snapshot
+    587.00), POST 503 (7 ms, ConnectException) → start: VERIFIED → admin PATCH 401 159.90: priceChanged true, subtotal 616.80 → geri
+    145.00. cart_db: kullanıcıda 1 active sepet, birden fazla aktif sepetli kullanıcı 0. Log: yalnızca 2 beklenen WARN; token/e-posta/
+    kitap id'si/fiyat yok. Yerel veri: user_db'de 2 yeni e2e kullanıcısı (biri ADMIN), cart_db'de 1 sepet (2 satır), catalog_db'de
+    401 için 2 BookUpserted (fiyat 145.00'e döndü).
+  - Not: doğrulama mesajları JVM dilinde (tr) geliyor (`'99' değerinden küçük yada eşit olmalı`); girilen değer yok (mevcut davranış).
+
+- Cart Adım 6 commit + push edildi (`3a378d6` kod, memory-bank ayrı commit).
 
 ## Sonraki adımlar
-- Cart Adım 5 doğrulamaları tamam; commit kullanıcı onayı bekliyor.
-- Cart sonraki adımlar: servis + uçlar (CatalogGateway kullanılacak: ekleme `requireAvailableBook`, `GET /api/cart` `lookup`)
-  (Adım 6–7: flush sırası çözümü — checkout/yeniden ekleme öncesi ara flush ya da satırı silmek yerine güncellemek; limitler
-  CartLimitExceededException ile), internal zincir (Adım 8), OpenAPI (Adım 9: code enum = CartErrorCode.API_CODES), Docker + compose.
+- Cart sonraki adımlar: PATCH (adet) / DELETE (satır, sepeti boşalt) uçları — aynı iki katman + Clock; satır silip aynı kitabı
+  ekleyen ya da checkout + yeni sepet açan akış yazılırsa arada `flush()` (flush tuzağı); internal snapshot/checkout zinciri,
+  OpenAPI (code enum = CartErrorCode.API_CODES), Docker + compose.
 - order-service (rezervasyon istemcisi; fiyat anlık görüntüsü kendisinde; `RESERVATION_RELEASED` → ödeme iadesi telafisi; süre dolumu
   olayı yok, GET ile sorgulanır; istemci `docs/api/catalog-service.openapi.json`'dan). Compose'a eklenirken catalog'a
   `http://catalog-service:8082` ve `.env` `ORDER_INTERNAL_API_KEY` ile bağlanır.

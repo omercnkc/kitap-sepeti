@@ -303,7 +303,10 @@
 - Aggregate root (`Cart`) satırları `@OneToMany(mappedBy, cascade = ALL, orphanRemoval = true)` + `@OrderBy` ile `List`'te tutar;
   getter salt okunur görünüm, değişiklik yalnızca root'un metotlarıyla. Satırın ayrı repository'si yok. Satır constructor'ı package-private.
 - Entity'de yalnızca bütünlük (DB kısıtlarıyla aynı sınırlar + durum geçişleri → IAE/ISE); iş limitleri serviste.
-- Oluşturma anı `Clock` parametresiyle (fabrika/ekleme metodu), MICROS'a kesilir; güncelleme anı `@PreUpdate` (`Instant.now()`).
+- TÜM zamanlar `Clock` parametresiyle, MICROS'a kesilir (`Cart.now(clock)`): oluşturma (fabrika/ekleme) VE güncelleme. Değiştiren
+  her metot (`addItem`, `removeItem`, `clear`, `changeQuantity`, `refreshSnapshot`, `checkout`, `abandon`) Clock alır; satır değişince
+  satırın ve sepetin `updatedAt`'i aynı anla yenilenir (`Cart.touch(clock)`; geçmiş sepette ISE). Reddedilen değişiklik (IAE/ISE)
+  zamana dokunmaz; hiçbir şey silinmeyen `removeItem` de. `@PreUpdate`/`Instant.now()` YOK (testte MutableClock ile DB değerine kadar doğrulanır).
   `@CurrentTimestamp(event = UPDATE)` KULLANMA: Hibernate 7.4.5 kolonu INSERT'ten çıkarır, DB default'u yazılır.
 - Durum enum'u converter'ı okumada birebir eşleşme ister (bilinmeyen değer → anlamlı IAE).
 - Okuma: `@EntityGraph(attributePaths = "items")` (tek sorgu). Değiştirme: root satırı `PESSIMISTIC_WRITE` (JPQL, satırlar yüklenmeden);
@@ -311,6 +314,31 @@
   `jakarta.persistence.lock.timeout` ipucu MySQL'de pozitif değerlerde etkisiz (yalnızca -2 SKIP LOCKED / 0 NOWAIT çalışır).
 - Flush sırası INSERT → UPDATE → DELETE (orphan silme dahil): aynı UNIQUE anahtarı boşaltıp dolduran işlemler (satır sil + aynı kitabı
   ekle, checkout + yeni aktif sepet) arasında `flush()` gerekir.
+
+## Sepet servisi (cart-service)
+- Üç katman: `CartService` (BİLEREK TX'siz) → `CartTransactions` (`@Component`, kısa DB TX'leri, entity yerine `CartContents` döner)
+  → `CartViewAssembler` (TX kapandıktan sonra Catalog'la birleştirir). Catalog çağrısı ASLA DB TX'i/satır kilidi tutulurken yapılmaz.
+- Yazma TX'leri `READ_COMMITTED` (catalog rezervasyonuyla aynı gerekçe): REPEATABLE READ'de olmayan satıra `FOR UPDATE` gap lock alır,
+  eşzamanlı iki "ilk sepet" INSERT'i deadlock olur. RC'de ikinci INSERT `uk_carts_active_user`'da birincinin commit'ini bekler ve ihlalle
+  düşer → `CartService` `DbConstraints.isViolated(ex, "uk_carts_active_user")` ise TX'i BİR KEZ yeniden çağırır (yeni TX, artık var olan
+  sepeti kilitler); ikinci ihlal ve diğer kısıtlar handler'a (409 CONFLICT, log `constraint=…`). Yeni sepet `saveAndFlush` ile hemen
+  yazılır (ihlal satırlar eklenmeden görülsün). Aynı kullanıcının diğer yazımları sepet satırının `FOR UPDATE`'inde sıraya girer → limit
+  kontrolleri (satır sayısı, adet) kilit altında, yarışsız.
+- Ekleme sırası: (1) `CatalogGateway.requireAvailableBook` (TX dışı; 409/503'te sepet açılmaz/değişmez) → (2) TX: kilitle-ya-da-aç;
+  kitap sepetteyse `yeni adet = mevcut + istenen` > `max-quantity-per-item` → 409 QUANTITY, değilse `changeQuantity` + `refreshSnapshot`
+  (güncel Catalog bilgisi); yoksa satır sayısı ≥ `max-lines` → 409 LINE, adet > limit → 409 QUANTITY, değilse `addItem`; `flush()` →
+  (3) assembler. İstek DTO'su DB sınırını (1–99, 400) doğrular; iş limiti (10) serviste (409 + `limit`). Yanıtta bookId/istenen değer yok.
+- Okuma: `findByUserIdAndStatus` (EntityGraph, tek SQL, kilitsiz, readOnly TX) → içerik → assembler. Aktif sepet yoksa boş yanıt; sepet
+  OLUŞTURULMAZ, Catalog çağrılmaz.
+- Görünüm (`CartResponse`): satırlar added_at sırasıyla; `currentUnitPrice` yalnızca Catalog'da var + stokta ise; `available` true/false
+  (lookup'ta yok ya da stokta değil)/null (Catalog'a ulaşılamadı); `priceChanged = current != null && current ≠ snapshot (compareTo)`;
+  `lineTotal = qty × (current ?: snapshot)`; `subtotal` = `available != false` satırların toplamı; para birimleri farklıysa `subtotal` ve
+  `currency` null. Para scale 2 (HALF_UP), JSON sayı. Sepet/satır id'si ve userId yanıtta YOK. `catalogStatus` VERIFIED | UNAVAILABLE.
+- Catalog kesintisinde GET hata vermez: assembler `CatalogUnavailableException`'ı yakalar, tek WARN `GET /api/cart -> CATALOG_UNAVAILABLE
+  (cause=<kök neden>, served from snapshot)` (ProblemDetails.log biçimi, istek RequestContextHolder'dan), UNAVAILABLE döner.
+  `IllegalStateException` (Catalog'un beklenmedik 4xx'i) yukarı çıkar → 500.
+- Test: `support/FakeCatalog` (CatalogStub yanıtlayıcısı; harita = yayındaki kitaplar, `failWith` ile kesinti); yarış senaryoları
+  `ApiTestSupport.carts` spy'ı (`@MockitoSpyBean`) ile deterministik; gerçek eşzamanlılık `runConcurrently` (MockMvc, gerçek thread'ler).
 
 ## Container (servis başına)
 - `<servis>/Dockerfile`, build context = repo kökü (kök pom + mvnw gerekir). Çok aşamalı: pom'lar → `go-offline`

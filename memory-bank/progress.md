@@ -68,12 +68,16 @@
 - Cart Adım 4 (catalog-service): public `GET /api/books/lookup?ids=...` (en fazla 50; yalnızca yayındakiler,
   istek sırası, tekrarsız; sabit 2 SQL). Sözleşmeye yeni path + `BookLookupResponse`. catalog-service 276 test. cart bunu
   `GET /api/cart`'ta kullanacak. Commit `c0e1c19` + `0455964`, push edildi.
-- Cart Adım 5 (henüz commit edilmedi): `CatalogClient` (Feign) + `CatalogGateway` (hata eşleme: 404/stokta değil → 409, kesinti → 503,
+- Cart Adım 5: `CatalogClient` (Feign) + `CatalogGateway` (hata eşleme: 404/stokta değil → 409, kesinti → 503,
   diğer 4xx → 500), timeout 1/2 sn, retry yok, token taşınmıyor; JDK HttpServer stub'ı, tüketici sözleşme testi, gerçek Catalog'a
-  karşı opsiyonel test. cart-service 197 test (2 skipped).
+  karşı opsiyonel test. cart-service 197 test (2 skipped). Commit `66b3d01` + `99a04fa`, push edildi.
+- Cart Adım 6 (commit `3a378d6`, push edildi): `GET /api/cart` (kilitsiz tek SQL + TX dışında tek Catalog lookup; Catalog yoksa 200
+  UNAVAILABLE + snapshot fiyatları) ve `POST /api/cart/items` (Catalog TX'ten önce; sepet aç/adet artır/satır ekle READ COMMITTED
+  TX'te; ilk sepet yarışında bir kez yeniden deneme; limitler 409 + `limit`). Tüm zamanlar Clock'tan. Eşzamanlılık testleri dahil
+  cart-service 237 test (2 skipped); uçtan uca a–h geçti.
 
 ## Yapılacaklar
-- Cart servisi (Adım 6+: servis + uçlar, internal zincir, OpenAPI, Docker).
+- Cart servisi (Adım 7+: PATCH/DELETE uçları, internal snapshot/checkout, OpenAPI, Docker).
 - Outbox kodunu common'a taşıma (ayrı adım; şu an servis başına kopya).
 - order-service (catalog rezervasyon istemcisi).
 - Search için: yayınevi/yazar/kategori yeniden adlandırması yayındaki kitaplar için olay üretmiyor → yeniden indeksleme gerekecek.
@@ -88,8 +92,9 @@
 
 ## Bilinen sorunlar
 - cart flush sırası (Hibernate INSERT → UPDATE → DELETE; orphanRemoval da DELETE'i sona bırakır): aynı flush'ta satırı silip aynı
-  kitabı eklemek `uk_cart_items_cart_book`, checkout + yeni aktif sepet `uk_carts_active_user` verir. Testle belgelendi; servis
-  (Adım 6) ara `flush()` ya da güncelleme ile çözecek.
+  kitabı eklemek `uk_cart_items_cart_book`, checkout + yeni aktif sepet `uk_carts_active_user` verir. Adım 6 akışları bu yolu
+  kullanmaz (tekrar ekleme satırı UPDATE eder; testte DELETE/INSERT SQL'i olmadığı doğrulanır). İleride satır silen/checkout yapan
+  akış aynı TX'te yeniden ekleme/yeni sepet yaparsa arada `flush()` şart (CartTransactions javadoc'u).
 - catalog'un `FOR UPDATE` sorgularında kilit süresi yok → MySQL varsayılanı 50 sn bekler (cart'ta 5 sn'ye çekildi; catalog'a dokunulmadı).
 - catalog/user durum kolonları `utf8mb4_0900_ai_ci`: catalog `books.status` (`ck_books_status`), `stock_reservations.status`
   (`ck_stock_reservations_status`), user `users.status` (`ck_users_status`; `ck_users_role` de aynı). CHECK büyük/küçük harf
