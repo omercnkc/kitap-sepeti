@@ -253,9 +253,37 @@
   olay payload'larında para METİN (`"149.90"`), çünkü payload MySQL `JSON` kolonunda durur ve MySQL kesirli sayıyı DOUBLE'a çevirip
   sondaki sıfırları atar (`149.90` → `149.9`).
 
-## Servisler arası HTTP istemcisi
+## Servisler arası HTTP istemcisi (cart → catalog ile doğrulandı)
 - Spring Cloud OpenFeign (yalnızca ihtiyacı olan serviste starter; sürüm kök POM'daki `spring-cloud-dependencies` BOM'undan).
-  `@EnableFeignClients` ana sınıfta. İlk kullanıcı cart-service (Catalog'u çağıracak; client sonraki adımda).
+  `@EnableFeignClients` ana sınıfta. Alttaki HTTP istemcisi Feign varsayılanı (HttpURLConnection; hc5/okhttp yok).
+- **İki katman:** `client/<Hedef>Client` (`@FeignClient(name = "<hedef>", url = "${app.<hedef>.base-url}")`, yalnızca Spring MVC
+  anotasyonları) + `client/<Hedef>Gateway` (`@Component`, servis katmanının TEK temas noktası). Feign tipleri/hataları gateway dışına
+  çıkmaz; client'ı başka sınıf kullanmaz. DTO'lar istemcinin kendi record'ları (`client/` paketinde), karşı servisin DTO'su kopyalanmaz.
+- **DTO = tolerant reader:** `@JsonIgnoreProperties(ignoreUnknown = true)`; yalnızca kullanılan alanlar; karşı tarafta zorunlu olanlar
+  `@JsonProperty(required = true)` (eksikse okuma hatası) + compact ctor `requireNonNull` (açık null). Opsiyonel alan (coverUrl) işaretsiz.
+  Jackson 3 (`tools.jackson` 3.1.5) ile çalışıyor; anotasyonlar hâlâ `com.fasterxml.jackson.annotation`. Para `BigDecimal` (149.90 scale 2 korunur).
+- **Hata eşlemesi gateway'de** (ErrorDecoder'da DEĞİL; aynı status metoda göre farklı anlam taşır): `FeignException` yakalanır →
+  `RetryableException` (bağlantı reddi, connect/read timeout, Retry-After'lı 503) / status < 0 / 5xx / 2xx (DecodeException, okunamayan
+  gövde) → hedefin "unavailable" exception'ı (503, neden olarak Feign hatası); metoda özel anlamlı 4xx (ör. kitap okumada 404) → iş
+  exception'ı; diğer 4xx → `IllegalStateException` (500; mesajda URL/id YOK, Feign hatası cause olarak EKLENMEZ — mesajı URL içerir).
+  2xx ama beklenen kaydı taşımayan yanıt (boş gövde, başka id, null eleman) da "unavailable" (`InvalidCatalogResponseException` nedeni).
+- **Zaman aşımı/retry/log yml'de:** `spring.cloud.openfeign.client.config.<name>.{connect-timeout, read-timeout, logger-level: none}`
+  (cart→catalog 1000/2000 ms). Retry yok: Spring Cloud varsayılanı `Retryer.NEVER_RETRY` (testte `FeignClientFactory.getInstance`
+  ile doğrulanır; Retry-After'lı 503'te de tek istek). `logger-level` BASIC+ URL'yi (id), FULL header/gövdeyi loglar → NONE.
+- **Token/header taşınmaz:** RequestInterceptor YOK (OpenFeign oauth2 desteği varsayılan kapalı). Karşı uç public değilse servisler arası
+  anahtar (`X-Internal-Api-Key`) ayrı bir interceptor'la eklenir; kullanıcı token'ı ASLA. Testte stub gelen istekte Authorization/Cookie
+  olmadığını, kimlikli gerçek istek içinden çağrılırken doğrular.
+- **Log:** hedef kesintisi controller'a "unavailable" exception olarak çıkar → GlobalExceptionHandler tek WARN `... -> <KOD>
+  (cause=<kök neden SimpleName>)`; URL/host/id/gövde loga girmez (OutputCapture testi).
+- **Test:** `support/CatalogStub` (JDK HttpServer, ek bağımlılık yok; istekleri kaydeder, yanıt/gecikme/header programlanır, cached
+  thread pool → geciken yanıt sonraki testi bekletmez). `ApiTestSupport`'ta statik, `app.catalog.base-url` DynamicPropertySource ile,
+  her test başında `reset()`. Bağlantı reddi ayrı bağlamda (kapalı port; Windows'ta ConnectException ~0.1 sn). Gerçek hedefe karşı test
+  `@EnabledIfSystemProperty(named = "catalog.live", matches = "true")` (varsayılan build'de skipped). Test-only probe controller
+  (`/api/cart/_catalog/**`) gateway'i kimlikli istek içinden çağırır.
+- **Tüketici sözleşme testi:** `client/CatalogContractTest` karşı servisin `docs/api/<hedef>.openapi.json`'ını (modülden `../docs/api/`,
+  yalnızca okunur; yoksa anlamlı mesajla kırılır) okur: yollar + GET, 200 şemasından (`$ref` çözülerek) kullanılan alanların varlığı,
+  tipi (OpenAPI 3.1 tip dizisi de kabul), formatı, zorunlularının `required`'da olması, toplu okuma `maxItems` ≥ istemci sınırı.
+  Bozulmuş kopyalarla (yeniden adlandırma, required'dan çıkarma, tip değişimi, düşük maxItems) kontrolün kırıldığı testle gösterilir.
 
 ## Servis iskeleti (yeni servis, cart-service ile doğrulandı)
 - catalog Adım 1–2 kalıbı: `NN-<servis>-db.sh` + compose mysql env + `.env.example`; application.yml (Hikari 5000 ms, validate, OSIV kapalı,

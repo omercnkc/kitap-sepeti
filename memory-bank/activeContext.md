@@ -665,9 +665,29 @@
   - Testler: `BookLookupControllerTest` 14 (catalog 276). Root `clean verify`: common 25, user 83, catalog 276, cart 150.
   - Docker (seed id'leri): 2 yayında + 1 taslak → 2 item; 51 id → 400; token'sız ve bozuk Bearer → 200.
 
+- Cart Adım 4 commit + push edildi (`c0e1c19` kod, `0455964` memory-bank).
+
+- Cart Adım 5 — Catalog Feign client + gateway (henüz commit edilmedi; servis/controller YOK; catalog/user/common/kök pom değişmedi):
+  - `client/CatalogClient` (`@FeignClient(name = "catalog", url = "${app.catalog.base-url}")`): `getBook(UUID)` → GET `/api/books/{id}`,
+    `lookup(List<UUID>)` → GET `/api/books/lookup?ids=a&ids=b` (Feign varsayılanı tekrarlı parametre; Catalog kabul ediyor).
+  - DTO'lar `client/CatalogBook(id, title, priceAmount, currency, coverUrl, inStock)`, `CatalogBookLookup(items)`: tolerant reader,
+    zorunlular `@JsonProperty(required = true)` + compact ctor null kontrolü.
+  - `client/CatalogGateway`: `requireAvailableBook(UUID)` (404 / inStock=false → BookNotAvailableException; 5xx, timeout, bağlantı,
+    okunamayan/başka id → CatalogUnavailableException; diğer 4xx → IllegalStateException, cause'suz) ve `lookup(Collection<UUID>)`
+    → `Map<UUID, CatalogBook>` (boş → çağrı yok; tekrarlar bir kez gönderilir; >`MAX_LOOKUP_IDS` (50) tekil id → IAE; istenmeyen id'ler
+    atılır; 404 dahil 4xx → ISE). `InvalidCatalogResponseException` (paket içi) 2xx-ama-yanlış yanıtın nedeni.
+  - application.yml: `app.catalog.base-url: ${CATALOG_BASE_URL:http://localhost:8082}`; `spring.cloud.openfeign.client.config.catalog`
+    connect 1000 / read 2000 ms, `logger-level: none`. Retry yok (varsayılan NEVER_RETRY, testle).
+  - Testler (cart 197 = 150 + 47; 2'si skipped live): CatalogGatewayTest 39, CatalogContractTest 5, CatalogConnectionRefusedTest 1 (ayrı
+    bağlam), CatalogLiveTest 2 (`-Dcatalog.live=true` ile; Docker catalog'a karşı geçti: 401 → 145.00 TRY inStock; 401+412(draft)+402
+    → 2 kalem). Read timeout ~2.01 sn, bağlantı reddi ConnectException ~0.1 sn. `ApiTestSupport` artık `CatalogStub` da açıyor.
+  - Root `clean verify`: common 25, user 83, catalog 276, cart 197.
+  - Not: `app.cart.max-lines` (50) ≤ `CatalogGateway.MAX_LOOKUP_IDS` şartı şu an yalnızca CatalogContractTest'te; CartProperties'te
+    `@Max` yok (Adım 6'da eklenebilir).
+
 ## Sonraki adımlar
-- Cart Adım 4 doğrulamaları tamam; commit kullanıcı onayı bekliyor.
-- Cart sonraki adımlar: Catalog Feign client (`GET /api/books/lookup` + `GET /api/books/{id}`) (CatalogUnavailableException/BookNotAvailableException burada kullanılacak), servis + uçlar
+- Cart Adım 5 doğrulamaları tamam; commit kullanıcı onayı bekliyor.
+- Cart sonraki adımlar: servis + uçlar (CatalogGateway kullanılacak: ekleme `requireAvailableBook`, `GET /api/cart` `lookup`)
   (Adım 6–7: flush sırası çözümü — checkout/yeniden ekleme öncesi ara flush ya da satırı silmek yerine güncellemek; limitler
   CartLimitExceededException ile), internal zincir (Adım 8), OpenAPI (Adım 9: code enum = CartErrorCode.API_CODES), Docker + compose.
 - order-service (rezervasyon istemcisi; fiyat anlık görüntüsü kendisinde; `RESERVATION_RELEASED` → ödeme iadesi telafisi; süre dolumu

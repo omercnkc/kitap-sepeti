@@ -65,12 +65,15 @@
   (sub → UUID, geçersiz sub 401 invalid_token), `CartErrorCode` + API_CODES, limit/kitap/catalog exception'ları, GlobalExceptionHandler +
   DbConstraintCodes, ClockConfig. Test anahtarı çalışma anında üretiliyor. cart-service 150 test; uçtan uca a–d geçti.
   Commit `2119d3f` + `76e8a46`, push edildi.
-- Cart Adım 4 (catalog-service, henüz commit edilmedi): public `GET /api/books/lookup?ids=...` (en fazla 50; yalnızca yayındakiler,
+- Cart Adım 4 (catalog-service): public `GET /api/books/lookup?ids=...` (en fazla 50; yalnızca yayındakiler,
   istek sırası, tekrarsız; sabit 2 SQL). Sözleşmeye yeni path + `BookLookupResponse`. catalog-service 276 test. cart bunu
-  `GET /api/cart`'ta kullanacak.
+  `GET /api/cart`'ta kullanacak. Commit `c0e1c19` + `0455964`, push edildi.
+- Cart Adım 5 (henüz commit edilmedi): `CatalogClient` (Feign) + `CatalogGateway` (hata eşleme: 404/stokta değil → 409, kesinti → 503,
+  diğer 4xx → 500), timeout 1/2 sn, retry yok, token taşınmıyor; JDK HttpServer stub'ı, tüketici sözleşme testi, gerçek Catalog'a
+  karşı opsiyonel test. cart-service 197 test (2 skipped).
 
 ## Yapılacaklar
-- Cart servisi (Adım 5+: catalog Feign client (lookup), servis + uçlar, internal zincir, OpenAPI, Docker).
+- Cart servisi (Adım 6+: servis + uçlar, internal zincir, OpenAPI, Docker).
 - Outbox kodunu common'a taşıma (ayrı adım; şu an servis başına kopya).
 - order-service (catalog rezervasyon istemcisi).
 - Search için: yayınevi/yazar/kategori yeniden adlandırması yayındaki kitaplar için olay üretmiyor → yeniden indeksleme gerekecek.

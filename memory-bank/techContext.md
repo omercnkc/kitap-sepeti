@@ -31,7 +31,9 @@
   Şu an yalnızca cart-service kullanıyor (`spring-cloud-starter-openfeign` 5.0.3).
 - cart-service: port 8083, şema `cart_db`, kullanıcı `.env` `CART_DB_USER/PASSWORD` (`infra/mysql/init/20-cart-db.sh`). Çalıştırma
   `.\mvnw.cmd -pl cart-service spring-boot:run` (common `~/.m2`'de değilse önce `.\mvnw.cmd -pl common -am install -DskipTests`),
-  testler `.\mvnw.cmd -pl cart-service -am test`. Compose'da henüz servis kaydı yok. Hikari `connection-init-sql` ile
+  testler `.\mvnw.cmd -pl cart-service -am test`. Compose'da henüz servis kaydı yok. Catalog adresi `CATALOG_BASE_URL`
+  (varsayılan `http://localhost:8082`; compose'da `http://catalog-service:8082` olacak). Gerçek Catalog'a karşı test:
+  `.\mvnw.cmd -pl cart-service test "-Dtest=CatalogLiveTest" "-Dcatalog.live=true"` (catalog seed'li olmalı). Hikari `connection-init-sql` ile
   `innodb_lock_wait_timeout = 5` (oturum; GLOBAL 50).
 - Hibernate ORM 7.4.5.Final (Boot 4.1.1). MySQL kilit tuzağı: `jakarta.persistence.lock.timeout` pozitif değerde SQL'e yazılmaz,
   bağlantıya da uygulanmaz (`MySQLLockingSupport`); yalnızca -2 (SKIP LOCKED) ve 0 (NOWAIT) etkili. `PESSIMISTIC_WRITE` JPQL'i
