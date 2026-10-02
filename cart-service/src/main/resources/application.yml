@@ -33,10 +33,23 @@ spring:
         jwt:
           # Açık anahtar ilk doğrulamada çekilir ve önbelleğe alınır; açılışta istek atılmaz.
           jwk-set-uri: ${USER_SERVICE_JWKS_URI:http://localhost:8081/.well-known/jwks.json}
+  cloud:
+    openfeign:
+      client:
+        config:
+          # CatalogClient (@FeignClient name). Retry yok (Spring Cloud varsayılanı Retryer.NEVER_RETRY);
+          # en kötü durumda istek ~connect + read süresi bekler.
+          catalog:
+            connect-timeout: 1000
+            read-timeout: 2000
+            # BASIC ve üstü URL'yi (kitap id'si), FULL header/gövdeyi loglar.
+            logger-level: none
 
 app:
   jwt:
     issuer: kitapsepeti-user-service
+  catalog:
+    base-url: ${CATALOG_BASE_URL:http://localhost:8082}
   cart:
     # DB'deki ck_cart_items_quantity (1–99) bunun üst sınırıdır.
     max-quantity-per-item: 10
