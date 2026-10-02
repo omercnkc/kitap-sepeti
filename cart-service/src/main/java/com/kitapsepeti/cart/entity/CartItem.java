@@ -13,7 +13,6 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -73,7 +72,7 @@ public class CartItem {
 	@Column(name = "added_at", nullable = false, updatable = false)
 	private Instant addedAt;
 
-	/** İlk değer eklenme anı; sonraki her UPDATE'te {@link #onUpdate()} yeniler (gerekçe {@link Cart}'ta). */
+	/** İlk değer eklenme anı; satırı değiştiren her metot verilen saatle yeniler (sepetinkini de). */
 	@Column(name = "updated_at", nullable = false)
 	private Instant updatedAt;
 
@@ -87,16 +86,23 @@ public class CartItem {
 		this.updatedAt = addedAt;
 	}
 
-	/** {@value #MIN_QUANTITY}..{@value #MAX_QUANTITY} dışında {@link IllegalArgumentException}. */
-	public void changeQuantity(int quantity) {
+	/** {@value #MIN_QUANTITY}..{@value #MAX_QUANTITY} dışında {@link IllegalArgumentException} (hiçbir şey değişmez). */
+	public void changeQuantity(int quantity, Clock clock) {
 		cart.requireActive();
 		this.quantity = validQuantity(quantity);
+		touch(clock);
 	}
 
 	/** Catalog'dan okunan güncel bilgiyle anlık görüntüyü değiştirir. {@code currency} null ise {@value #DEFAULT_CURRENCY}. */
-	public void refreshSnapshot(BigDecimal unitPrice, String currency, String title, String coverUrl) {
+	public void refreshSnapshot(BigDecimal unitPrice, String currency, String title, String coverUrl, Clock clock) {
 		cart.requireActive();
 		applySnapshot(unitPrice, currency, title, coverUrl);
+		touch(clock);
+	}
+
+	private void touch(Clock clock) {
+		this.updatedAt = Cart.now(clock);
+		cart.touch(clock);
 	}
 
 	private void applySnapshot(BigDecimal unitPrice, String currency, String title, String coverUrl) {
@@ -104,11 +110,6 @@ public class CartItem {
 		this.currencySnapshot = (currency != null) ? currency : DEFAULT_CURRENCY;
 		this.titleSnapshot = Objects.requireNonNull(title, "title");
 		this.coverUrlSnapshot = coverUrl;
-	}
-
-	@PreUpdate
-	void onUpdate() {
-		updatedAt = Cart.now(Clock.systemUTC());
 	}
 
 	private static int validQuantity(int quantity) {

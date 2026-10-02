@@ -18,7 +18,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -59,7 +58,10 @@ public class Cart {
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
 
-	/** İlk değer {@link #openFor} saatinden; sonraki her UPDATE'te {@link #onUpdate()} yeniler. */
+	/**
+	 * Son işlem anı: sepeti ya da satırlarını değiştiren her metot (ve durum geçişi) verilen saatle yeniler. Hibernate
+	 * kolonu UPDATE'te açıkça yazdığı için DB'nin {@code ON UPDATE CURRENT_TIMESTAMP}'i devreye girmez.
+	 */
 	@Column(name = "updated_at", nullable = false)
 	private Instant updatedAt;
 
@@ -95,6 +97,7 @@ public class Cart {
 		}
 		CartItem item = new CartItem(this, bookId, quantity, unitPrice, currency, title, coverUrl, now(clock));
 		items.add(item);
+		touch(clock);
 		return item;
 	}
 
@@ -107,26 +110,37 @@ public class Cart {
 		return items.stream().filter(item -> itemId.equals(item.getId())).findFirst();
 	}
 
-	/** Satırı sepetten çıkarır (flush'ta silinir). Satır bu sepette yoksa false. */
-	public boolean removeItem(UUID itemId) {
+	/** Satırı sepetten çıkarır (flush'ta silinir). Satır bu sepette yoksa false ve sepet değişmez. */
+	public boolean removeItem(UUID itemId, Clock clock) {
 		requireActive();
-		return findItemById(itemId).map(items::remove).orElse(false);
+		boolean removed = findItemById(itemId).map(items::remove).orElse(false);
+		if (removed) {
+			touch(clock);
+		}
+		return removed;
 	}
 
 	/** Tüm satırları çıkarır; sepetin kendisi kalır. */
-	public void clear() {
+	public void clear(Clock clock) {
 		requireActive();
 		items.clear();
+		touch(clock);
 	}
 
 	/** {@code ACTIVE} → {@code CHECKED_OUT}; başka durumdan {@link IllegalStateException}. */
-	public void checkout() {
-		transitionTo(CartStatus.CHECKED_OUT);
+	public void checkout(Clock clock) {
+		transitionTo(CartStatus.CHECKED_OUT, clock);
 	}
 
 	/** {@code ACTIVE} → {@code ABANDONED}; başka durumdan {@link IllegalStateException}. */
-	public void abandon() {
-		transitionTo(CartStatus.ABANDONED);
+	public void abandon(Clock clock) {
+		transitionTo(CartStatus.ABANDONED, clock);
+	}
+
+	/** Son işlem anını yeniler; satır değişiklikleri de bunu çağırır. Geçmiş sepette {@link IllegalStateException}. */
+	public void touch(Clock clock) {
+		requireActive();
+		updatedAt = now(clock);
 	}
 
 	/** Geçmiş (checked_out/abandoned) sepetin satırları değişmez. */
@@ -136,20 +150,12 @@ public class Cart {
 		}
 	}
 
-	private void transitionTo(CartStatus target) {
+	private void transitionTo(CartStatus target, Clock clock) {
 		if (status != CartStatus.ACTIVE) {
 			throw new IllegalStateException("Cart cannot move from " + status + " to " + target);
 		}
 		status = target;
-	}
-
-	/**
-	 * Hibernate {@code @CurrentTimestamp(event = UPDATE)} kolonu INSERT'ten çıkarıyor (DB default'u yazıyor), bu yüzden
-	 * güncelleme anı callback'le verilir. Uygulama saati entity'ye ulaşmadığı için sistem saati (UTC Instant).
-	 */
-	@PreUpdate
-	void onUpdate() {
-		updatedAt = now(Clock.systemUTC());
+		updatedAt = now(clock);
 	}
 
 	/** DATETIME(6) ile aynı hassasiyet: kaydedilen ve bellekteki değer eşit kalır. */

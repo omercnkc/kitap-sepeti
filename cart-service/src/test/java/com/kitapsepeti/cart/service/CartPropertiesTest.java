@@ -23,9 +23,15 @@ class CartPropertiesTest {
 		});
 	}
 
+	@Test
+	void maxLinesMayEqualCatalogLookupLimit() {
+		runner.withPropertyValues("app.cart.max-quantity-per-item=1", "app.cart.max-lines=50")
+			.run(context -> assertThat(context.getBean(CartProperties.class).maxLines()).isEqualTo(50));
+	}
+
 	@ParameterizedTest
 	@ValueSource(strings = { "app.cart.max-quantity-per-item=0", "app.cart.max-quantity-per-item=100",
-			"app.cart.max-lines=0" })
+			"app.cart.max-lines=0", "app.cart.max-lines=51" })
 	void rejectsOutOfRangeLimits(String invalid) {
 		runner.withPropertyValues("app.cart.max-quantity-per-item=10", "app.cart.max-lines=50", invalid)
 			.run(context -> assertThat(context).hasFailed());

@@ -3,16 +3,12 @@ package com.kitapsepeti.cart.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
-import static org.assertj.core.api.Assertions.within;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
-import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -54,8 +50,6 @@ class CartRepositoryTest {
 	private static final Clock T1 = Clock.fixed(Instant.parse("2026-03-01T10:15:30.123456789Z"), ZoneOffset.UTC);
 
 	private static final Clock T2 = Clock.fixed(Instant.parse("2026-03-01T10:16:00Z"), ZoneOffset.UTC);
-
-	private static final DateTimeFormatter DB_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS");
 
 	/** DB'deki BINARY(16) sırası = işaretsiz msb, sonra işaretsiz lsb ({@code UUID.compareTo} işaretli karşılaştırır). */
 	private static final Comparator<UUID> DB_ORDER = (a, b) -> {
@@ -114,7 +108,7 @@ class CartRepositoryTest {
 	}
 
 	@Test
-	void timestampsAreStoredInUtcAndItemUpdatedAtIsRefreshedOnUpdate() {
+	void timestampsAreStoredInUtcAndItemChangeStampsItemAndCartWithClock() {
 		Cart cart = Cart.openFor(userId, T1);
 		CartItem item = cart.addItem(UUID.randomUUID(), 1, BigDecimal.TEN, null, "A", null, T1);
 		carts.saveAndFlush(cart);
@@ -125,28 +119,24 @@ class CartRepositoryTest {
 		assertThat(dbTime("cart_items", "added_at", item.getId())).isEqualTo("2026-03-01 10:15:30.123456");
 		assertThat(dbTime("cart_items", "updated_at", item.getId())).isEqualTo("2026-03-01 10:15:30.123456");
 
-		item.changeQuantity(3);
+		item.changeQuantity(3, T2);
 		carts.flush();
 
-		Instant updatedInDb = LocalDateTime.parse(dbTime("cart_items", "updated_at", item.getId()), DB_TIME)
-			.toInstant(ZoneOffset.UTC);
-		assertThat(updatedInDb).isCloseTo(Instant.now(), within(10, ChronoUnit.SECONDS));
-		assertThat(item.getUpdatedAt()).isCloseTo(updatedInDb, within(1, ChronoUnit.MILLIS));
+		assertThat(dbTime("cart_items", "updated_at", item.getId())).isEqualTo("2026-03-01 10:16:00.000000");
 		assertThat(dbTime("cart_items", "added_at", item.getId())).isEqualTo("2026-03-01 10:15:30.123456");
-		// Yalnızca satır değişti; sepet satırı UPDATE edilmedi.
-		assertThat(dbTime("carts", "updated_at", cart.getId())).isEqualTo("2026-03-01 10:15:30.123456");
+		// Satır değişince sepetin "son işlem" anı da aynı saatle yenilenir (DB'nin ON UPDATE'i değil, uygulama saati).
+		assertThat(dbTime("carts", "updated_at", cart.getId())).isEqualTo("2026-03-01 10:16:00.000000");
+		assertThat(dbTime("carts", "created_at", cart.getId())).isEqualTo("2026-03-01 10:15:30.123456");
 	}
 
 	@Test
-	void cartUpdatedAtIsRefreshedOnStatusChange() {
+	void cartUpdatedAtIsStampedWithClockOnStatusChange() {
 		Cart cart = carts.saveAndFlush(Cart.openFor(userId, T1));
 
-		cart.checkout();
+		cart.checkout(T2);
 		carts.flush();
 
-		Instant updatedInDb = LocalDateTime.parse(dbTime("carts", "updated_at", cart.getId()), DB_TIME)
-			.toInstant(ZoneOffset.UTC);
-		assertThat(updatedInDb).isCloseTo(Instant.now(), within(10, ChronoUnit.SECONDS));
+		assertThat(dbTime("carts", "updated_at", cart.getId())).isEqualTo("2026-03-01 10:16:00.000000");
 		assertThat(dbTime("carts", "created_at", cart.getId())).isEqualTo("2026-03-01 10:15:30.123456");
 	}
 
@@ -194,7 +184,7 @@ class CartRepositoryTest {
 	@Test
 	void findByUserIdAndStatusIgnoresOtherStatusesAndUsers() {
 		Cart historic = Cart.openFor(userId, T1);
-		historic.checkout();
+		historic.checkout(T1);
 		carts.saveAndFlush(historic);
 		carts.saveAndFlush(Cart.openFor(UUID.randomUUID(), T1));
 
@@ -210,12 +200,12 @@ class CartRepositoryTest {
 		CartItem second = cart.addItem(UUID.randomUUID(), 1, BigDecimal.TEN, null, "B", null, T1);
 		carts.saveAndFlush(cart);
 
-		assertThat(cart.removeItem(first.getId())).isTrue();
+		assertThat(cart.removeItem(first.getId(), T2)).isTrue();
 		carts.flush();
 
 		assertThat(itemIds(cart.getId())).containsExactly(second.getId().toString());
 
-		cart.clear();
+		cart.clear(T2);
 		carts.flush();
 
 		assertThat(itemIds(cart.getId())).isEmpty();
@@ -238,7 +228,7 @@ class CartRepositoryTest {
 	void checkedOutCartAllowsNewActiveCartAndCannotBeCheckedOutAgain() {
 		Cart first = carts.saveAndFlush(Cart.openFor(userId, T1));
 
-		first.checkout();
+		first.checkout(T2);
 		carts.flush();
 		Cart second = carts.saveAndFlush(Cart.openFor(userId, T2));
 
@@ -246,7 +236,7 @@ class CartRepositoryTest {
 			.isEqualTo("checked_out");
 		assertThat(carts.findByUserIdAndStatus(userId, CartStatus.ACTIVE)).get()
 			.extracting(Cart::getId).isEqualTo(second.getId());
-		assertThatThrownBy(first::checkout).isInstanceOf(IllegalStateException.class);
+		assertThatThrownBy(() -> first.checkout(T2)).isInstanceOf(IllegalStateException.class);
 	}
 
 	/**
@@ -257,7 +247,7 @@ class CartRepositoryTest {
 	void newActiveCartInSameFlushAsCheckoutViolatesUkCartsActiveUser() {
 		Cart first = carts.saveAndFlush(Cart.openFor(userId, T1));
 
-		first.checkout();
+		first.checkout(T2);
 		Throwable thrown = catchThrowable(() -> carts.saveAndFlush(Cart.openFor(userId, T2)));
 
 		assertThat(thrown).isInstanceOf(DataIntegrityViolationException.class);
@@ -291,8 +281,8 @@ class CartRepositoryTest {
 		CartItem item = cart.addItem(UUID.randomUUID(), 1, BigDecimal.TEN, null, "A", null, T1);
 		carts.saveAndFlush(cart);
 
-		assertThatThrownBy(() -> item.changeQuantity(0)).isInstanceOf(IllegalArgumentException.class);
-		assertThatThrownBy(() -> item.changeQuantity(100)).isInstanceOf(IllegalArgumentException.class);
+		assertThatThrownBy(() -> item.changeQuantity(0, T1)).isInstanceOf(IllegalArgumentException.class);
+		assertThatThrownBy(() -> item.changeQuantity(100, T1)).isInstanceOf(IllegalArgumentException.class);
 
 		// Domain kontrolünü atlayan bir yazım (ör. ileride hatalı kod) DB'de durdurulur.
 		ReflectionTestUtils.setField(item, "quantity", 100);
@@ -335,7 +325,7 @@ class CartRepositoryTest {
 		Cart cart = Cart.openFor(userId, T1);
 		cart.addItem(UUID.randomUUID(), 1, BigDecimal.TEN, null, "A", null, T1);
 		Cart historic = Cart.openFor(userId, T1);
-		historic.checkout();
+		historic.checkout(T1);
 		carts.saveAndFlush(historic);
 		carts.saveAndFlush(cart);
 		entityManager.clear();
@@ -356,7 +346,7 @@ class CartRepositoryTest {
 	/**
 	 * Flush sırası tuzağı (5. madde): satır aggregate'ten çıkarılıp (orphanRemoval) aynı kitap aynı flush'ta yeniden
 	 * eklenince Hibernate yeni satırın INSERT'ini eski satırın DELETE'inden ÖNCE çalıştırır (INSERT → UPDATE → DELETE)
-	 * → {@code uk_cart_items_cart_book}. Çözüm Adım 6'da (ara flush ya da satırı silmek yerine güncellemek).
+	 * → {@code uk_cart_items_cart_book}. Servis bu yolu kullanmaz: tekrar ekleme satırı günceller (CartTransactions).
 	 */
 	@Test
 	void removingAndReAddingSameBookInOneFlushViolatesUkCartItemsCartBook() {
@@ -365,7 +355,7 @@ class CartRepositoryTest {
 		CartItem old = cart.addItem(bookId, 2, BigDecimal.TEN, null, "Eski", null, T1);
 		carts.saveAndFlush(cart);
 
-		cart.removeItem(old.getId());
+		cart.removeItem(old.getId(), T2);
 		cart.addItem(bookId, 5, new BigDecimal("12.00"), null, "Yeni", null, T2);
 		SqlCapture.start();
 		Throwable thrown = catchThrowable(carts::flush);
@@ -384,7 +374,7 @@ class CartRepositoryTest {
 		CartItem old = cart.addItem(bookId, 2, BigDecimal.TEN, null, "Eski", null, T1);
 		carts.saveAndFlush(cart);
 
-		cart.removeItem(old.getId());
+		cart.removeItem(old.getId(), T2);
 		carts.flush();
 		CartItem fresh = cart.addItem(bookId, 5, new BigDecimal("12.00"), null, "Yeni", null, T2);
 		carts.flush();

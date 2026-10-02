@@ -2,6 +2,7 @@ package com.kitapsepeti.cart;
 
 import java.util.UUID;
 
+import com.kitapsepeti.cart.repository.CartRepository;
 import com.kitapsepeti.cart.support.CatalogStub;
 import com.kitapsepeti.cart.support.JwksServer;
 import com.kitapsepeti.cart.support.MutableClock;
@@ -17,6 +18,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
@@ -47,6 +49,10 @@ public abstract class ApiTestSupport {
 
 	@Autowired
 	protected MutableClock clock;
+
+	/** Gerçek repository; yarış senaryosu testleri tek tek metotları taklit eder (her testten sonra sıfırlanır). */
+	@MockitoSpyBean
+	protected CartRepository carts;
 
 	@DynamicPropertySource
 	static void jwksProperties(DynamicPropertyRegistry registry) {
