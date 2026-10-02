@@ -53,10 +53,14 @@
 - Cart Adım 0 (henüz commit edilmedi): `common` modülü (`kitap-sepeti-common`; ErrorCode arayüzü + CommonErrorCode, ProblemDetail
   handler tabanı, DbConstraints genel kısmı, 401/403/503 handler'ları, rol dönüştürücü, BearerTokenResolver yardımcıları, JWKS
   JwtDecoder yardımcısı, internal API anahtarı filtresi). İki servis ona geçti; sözleşmeler byte-aynı. Dockerfile'lar `COPY --parents`.
-  Compose host portları yalnızca 127.0.0.1. Testler: common 25, user-service 83, catalog-service 262.
+  Compose host portları yalnızca 127.0.0.1. Testler: common 25, user-service 83, catalog-service 262. Commit + push edildi.
+- cart-service Adım 1 (henüz commit edilmedi): modül iskeleti (8083), Spring Cloud 2025.1.3 BOM + OpenFeign (client yok),
+  geçici güvenlik (yalnızca health açık), `cart_db` init script'i, V1 (carts + cart_items, kısıt testleri; `carts.status`
+  `utf8mb4_bin`). cart-service 42 test. Yerel `cart_db` oluşturuldu (yetki yalnızca `cart_db.*`), V1 `spring-boot:run` ile uygulandı,
+  health UP.
 
 ## Yapılacaklar
-- Cart servisi (Adım 1+; common hazır).
+- Cart servisi (Adım 2+: entity, güvenlik, Feign client, uçlar, Docker).
 - Outbox kodunu common'a taşıma (ayrı adım; şu an servis başına kopya).
 - order-service (catalog rezervasyon istemcisi).
 - Search için: yayınevi/yazar/kategori yeniden adlandırması yayındaki kitaplar için olay üretmiyor → yeniden indeksleme gerekecek.
@@ -70,6 +74,10 @@
   user-service/JWKS kapalıysa son bilinen anahtarla doğrulamaya devam (şu an önbellek süresi içinde 200, sonrasında 503).
 
 ## Bilinen sorunlar
+- catalog/user durum kolonları `utf8mb4_0900_ai_ci`: catalog `books.status` (`ck_books_status`), `stock_reservations.status`
+  (`ck_stock_reservations_status`), user `users.status` (`ck_users_status`; `ck_users_role` de aynı). CHECK büyük/küçük harf
+  duyarsız ('PUBLISHED' geçer). Uygulama küçük harf yazdığı için risk düşük, V2 gerekmez; ham SQL yazımında dikkat.
+  (cart-service'te düzeltildi: `carts.status COLLATE utf8mb4_bin`; yeni servisler için kural systemPatterns'te.)
 - MySQL CHECK ihlali (3819, HY000) JdbcTemplate'te `UncategorizedSQLException` olur; JPA yolunda ise
   `DataIntegrityViolationException` (Hibernate çevirir). catalog-service'te CHECK'e dokunan yazımlar JPA üzerinden yapılmalı.
 - Outbox'ta yayınlanmış satırlar temizlenmiyor; bilinmeyen `event_type` kuyruğun başını tıkar (user-service ve catalog-service).

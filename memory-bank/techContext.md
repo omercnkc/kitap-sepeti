@@ -26,6 +26,13 @@
   3.10.0 `go-offline` reaktör modülünü (common) uzaktan çözmeye çalışmaz.
 - Compose host portları YALNIZCA `127.0.0.1` (8081, 8082, 3306, 5672, 15672, adminer 8090): LAN'dan erişilmez, localhost'tan
   erişilir; container'lar arası servis adıyla erişim etkilenmez.
+- Spring Cloud: release train `2025.1.3` (Oakwood; Boot 4.0.x/4.1.x, 4.1 desteği 2025.1.2'den itibaren), kök POM BOM import.
+  Boot yükseltilirken spring.io/projects/spring-cloud uyumluluk tablosu yeniden kontrol edilir; milestone/RC ve milestone repo kullanılmaz.
+  Şu an yalnızca cart-service kullanıyor (`spring-cloud-starter-openfeign` 5.0.3).
+- cart-service: port 8083, şema `cart_db`, kullanıcı `.env` `CART_DB_USER/PASSWORD` (`infra/mysql/init/20-cart-db.sh`). Çalıştırma
+  `.\mvnw.cmd -pl cart-service spring-boot:run`, testler `.\mvnw.cmd -pl cart-service -am test`. Compose'da henüz servis kaydı yok.
+- Test tuzağı (tr-TR): `JdbcTemplate.queryForList/queryForMap` satır map'i (LinkedCaseInsensitiveMap) anahtarı JVM locale'iyle küçültür;
+  information_schema'nın büyük harfli kolon adları (`ENGINE` → `engıne`) bulunamaz → SELECT'te küçük harfli takma ad ver.
 - Ortak kütüphane: `common/` (`kitap-sepeti-common`, düz jar). Servis testleri `-am` ile common'ı da derler:
   `.\mvnw.cmd -pl catalog-service -am test`; yalnızca common: `.\mvnw.cmd -pl common test` (Docker gerekmez).
 - Windows PowerShell 5.1: `Invoke-WebRequest -SkipHttpErrorCheck` yok; 4xx için try/catch kullan.

@@ -222,6 +222,23 @@
   olay payload'larında para METİN (`"149.90"`), çünkü payload MySQL `JSON` kolonunda durur ve MySQL kesirli sayıyı DOUBLE'a çevirip
   sondaki sıfırları atar (`149.90` → `149.9`).
 
+## Servisler arası HTTP istemcisi
+- Spring Cloud OpenFeign (yalnızca ihtiyacı olan serviste starter; sürüm kök POM'daki `spring-cloud-dependencies` BOM'undan).
+  `@EnableFeignClients` ana sınıfta. İlk kullanıcı cart-service (Catalog'u çağıracak; client sonraki adımda).
+
+## Servis iskeleti (yeni servis, cart-service ile doğrulandı)
+- catalog Adım 1–2 kalıbı: `NN-<servis>-db.sh` + compose mysql env + `.env.example`; application.yml (Hikari 5000 ms, validate, OSIV kapalı,
+  jdbc UTC, Flyway, actuator yalnızca health); `TestcontainersConfiguration` (MySQL) + `application-test.yml` (datasource test/test);
+  `@JdbcTest` + `@AutoConfigureTestDatabase(NONE)` ile şema/kısıt testi (CHECK → `UncategorizedSQLException` + 3819).
+- Güvenlik yapılmadan önce geçici SecurityFilterChain: yalnızca health açık, diğer her şey common entry point'iyle 401;
+  `UserDetailsServiceAutoConfiguration` exclude (üretilmiş parola logu yok).
+- "Kullanıcı başına tek aktif kayıt" = VIRTUAL generated kolon (`CASE WHEN status = 'active' THEN user_id END`) + UNIQUE
+  (user-service `default_owner` ile aynı fikir; NULL'lar UNIQUE'e takılmaz).
+- KURAL: yeni servislerde durum kolonları `utf8mb4_bin` (ör. `status VARCHAR(16) COLLATE utf8mb4_bin NOT NULL DEFAULT 'active'`).
+  Tablo varsayılanı `utf8mb4_0900_ai_ci` olduğundan aksi halde `CHECK (status IN (...))` ve `status = 'active'` içeren generated
+  ifadeler büyük/küçük harf duyarsız olur ('ACTIVE' geçer ve aktif sayılır). Şema testi kolonun collation'ını ve 'ACTIVE'/'Active'
+  INSERT'inin 3819 verdiğini doğrular (cart `CartSchemaConstraintsTest`). Metin kolonları (başlık vb.) `_ai_ci` kalır.
+
 ## Container (servis başına)
 - `<servis>/Dockerfile`, build context = repo kökü (kök pom + mvnw gerekir). Çok aşamalı: pom'lar → `go-offline`
   (cache mount) → src → `package -DskipTests` → layered extract → JRE runtime, sabit UID/GID 10001 non-root.

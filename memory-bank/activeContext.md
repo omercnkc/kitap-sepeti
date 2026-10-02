@@ -560,8 +560,40 @@
     `ApiKey realm="internal"`, anahtarla 404; user-service durdurulup catalog yeniden başlatılınca admin 503 AUTHENTICATION_UNAVAILABLE,
     geri gelince 200. Loglarda .env sırları/JWT/e-posta/özel anahtar/stack trace 0.
 
+- Cart Adım 0 commit + push edildi (`dab2d0c` A, `7a33669` B, `3aefe4b` memory-bank).
+
+- Cart Adım 1 — cart-service iskeleti + cart_db + V1 (henüz commit edilmedi; entity/repository/controller/kalıcı güvenlik/Feign client YOK;
+  user-service, catalog-service, common, Dockerfile'lar değişmedi; compose'a cart-service kaydı YOK):
+  - Spring Cloud KARARI: `2025.1.3` (Oakwood) eklendi. Kaynak spring.io/projects/spring-cloud tablosu: "2025.1.x aka Oakwood |
+    4.0.x, 4.1.x (Starting with 2025.1.2)"; Maven Central'da 2025.1.3 GA (2026.0.0-M1 milestone → kullanılmadı). Kök POM
+    `spring-cloud.version` + `spring-cloud-dependencies` BOM import (dependencyManagement). BOM user/catalog'un çözülmüş bağımlılıklarını
+    DEĞİŞTİRMEDİ (dependency:list HEAD ↔ şimdi: 195/195, fark 0). cart-service: `spring-cloud-starter-openfeign` (openfeign 5.0.3,
+    feign 13.6.1; geçişli bcprov + commons-fileupload), `@EnableFeignClients` (client yok; `FeignClientFactory` bean'i testte).
+  - Modül: `cart-service` (port 8083), ana sınıf `com.kitapsepeti.cart.CartServiceApplication` (`exclude = UserDetailsServiceAutoConfiguration`),
+    `config/CartConfig` + `service/CartProperties` (`app.cart.max-quantity-per-item` 10 [1–99], `max-lines` 50 [≥1], @Validated; henüz kullanılmıyor).
+  - GEÇİCİ `config/SecurityConfig`: yalnızca GET `/actuator/health`, `/actuator/health/**` açık; diğer her şey 401 ProblemDetail
+    (`WWW-Authenticate: Bearer`, common `ProblemDetailSecurityHandlers`). Resource server/JWT ayarı YOK (sonraki adımda değişecek).
+  - application.yml catalog yapısı: `CART_DB_HOST/PORT/USER/PASSWORD`, `cart_db`, Hikari 5000 ms, validate, OSIV kapalı, hibernate jdbc UTC,
+    Flyway, actuator yalnızca health (readiness = readinessState + db). Seed, rabbitmq, springdoc, outbox YOK.
+  - DB: `infra/mysql/init/20-cart-db.sh` (10-catalog kalıbı), compose mysql env `CART_DB_USER/PASSWORD`, `.env.example` yer tutucular.
+    Kullanıcı `.env`'ye CART_DB_* ekledi → `docker compose up -d mysql` (yeniden oluşturuldu, volume korundu) → script elle çalıştırıldı.
+    `SHOW GRANTS`: yalnızca `USAGE ON *.*` + `ALL ON cart_db.*`; `SHOW DATABASES`: cart_db, information_schema, performance_schema.
+    user-service/catalog-service container'ları mysql yeniden oluşturulduktan sonra healthy kaldı.
+  - V1 `V1__create_cart_tables.sql`: carts (status CHECK, `active_user_id` VIRTUAL generated + `uk_carts_active_user`, `ix_carts_user`),
+    cart_items (FK CASCADE, quantity 1–99, fiyat ≥ 0, snapshot kolonları, `uk_cart_items_cart_book`). Outbox yok.
+  - Collation DÜZELTİLDİ (V1 gerçek DB'ye uygulanmadan önce): `status VARCHAR(16) COLLATE utf8mb4_bin` → `ck_carts_status` ve
+    `active_user_id` ifadesi büyük/küçük harfe duyarlı ('ACTIVE'/'Active' → 3819). Generated ifade metni değişmedi. Kural systemPatterns'te;
+    catalog/user `_ai_ci` durum kolonları bilinen sorunlarda (V2 yok).
+  - Yerel çalıştırma: `.\mvnw.cmd -pl cart-service spring-boot:run` → Flyway "Successfully applied 1 migration … v1", gerçek DB'de
+    `carts.status` = utf8mb4_bin, `/actuator/health` UP, `/api/cart` 401, "generated security password" yok. NOT: `-pl cart-service`
+    tek başına çalışınca common'ı `~/.m2`'de arar → önce `.\mvnw.cmd -pl common -am install -DskipTests` (ya da `-am` ile derle).
+  - commons-fileupload 1.6.0: spring-cloud-starter-openfeign 5.0.3 → spring-cloud-openfeign-core 5.0.3 → feign-form-spring 13.6.1.
+  - Testler (cart-service 42): CartSchemaConstraintsTest 25 (@JdbcTest), ActuatorHealthTest 10, CartServiceApplicationTests 3, CartPropertiesTest 4.
+    Toplam: common 25, user 83, catalog 262, cart 42. `docker compose build user-service catalog-service` Dockerfile değişmeden başarılı.
+
 ## Sonraki adımlar
-- Cart Adım 0 commit'leri (A ve B ayrı), ardından Cart Adım 1 (ön koşul artık sağlanıyor: kökte `common`, iki servis kullanıyor).
+- Cart Adım 1 doğrulamaları tamam; commit kullanıcı onayı bekliyor.
+- Cart sonraki adımlar: entity/repository, kalıcı Resource Server güvenliği (common tarifi), Catalog Feign client, uçlar, Docker + compose (Adım 10).
 - order-service (rezervasyon istemcisi; fiyat anlık görüntüsü kendisinde; `RESERVATION_RELEASED` → ödeme iadesi telafisi; süre dolumu
   olayı yok, GET ile sorgulanır; istemci `docs/api/catalog-service.openapi.json`'dan). Compose'a eklenirken catalog'a
   `http://catalog-service:8082` ve `.env` `ORDER_INTERNAL_API_KEY` ile bağlanır.
