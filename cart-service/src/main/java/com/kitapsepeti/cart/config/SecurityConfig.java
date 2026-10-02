@@ -23,7 +23,8 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Yalnızca Resource Server: token'ı user-service üretir, burada JWKS ile doğrulanır ({@link JwtDecoderConfig}).
- * Herkese açık uç yalnızca health; sepetin tamamı kimlik ister (USER ve ADMIN, ayrı rol şartı yok).
+ * Herkese açık uçlar yalnızca health ve OpenAPI dokümanı/Swagger UI; sepetin tamamı kimlik ister (USER ve ADMIN, ayrı
+ * rol şartı yok).
  * Diğer yollar da kimlik ister (catalog ile aynı): kimliksiz 401, kimlikli olmayan yol 404.
  * Ortak security handler'larına istek {@link MaskedRequestPaths} üzerinden verilir (yoldaki kitap id'si logda/yanıtta yok).
  * /internal/** bu zincire hiç gelmez ({@link InternalSecurityConfig}, sıra 1).
@@ -59,6 +60,7 @@ public class SecurityConfig {
 			.logout(AbstractHttpConfigurer::disable)
 			.authorizeHttpRequests(auth -> auth
 				.requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
+				.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
 				// Aksi halde controller hatasının /error'a yönlendirilmesi de 401 olurdu.
 				.requestMatchers("/error").permitAll()
 				.requestMatchers("/api/cart/**").authenticated()

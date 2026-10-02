@@ -1,0 +1,903 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "description": "Kullanıcı sepeti: oturumdaki kullanıcının tek aktif sepeti ve servisler arası sepet anlık görüntüsü.\n\n**Erişim:**\n- Sepet (`/api/cart/**`): user-service'ten alınan JWT, `Authorization: Bearer <accessToken>` (`bearerAuth`); rol şartı yok. Kullanıcı yalnızca token'dan gelir; başka kullanıcının sepetine yol yoktur.\n- Internal (`/internal/**`): yalnızca servisler arası, `X-Internal-Api-Key` başlığı (`internalApiKey`). Kullanıcı JWT'si bu uçlarda geçersizdir.\n\n**Fiyat/stok:** Sepet yanıtları Catalog'daki güncel fiyat ve stokla birleştirilir. Catalog'a ulaşılamazsa okuma ve değişiklik uçları yine 200 döner: `catalogStatus` = `UNAVAILABLE`, satırlarda `available` ve `currentUnitPrice` null, tutarlar sepete eklendiği andaki fiyattan. Yalnızca kitap ekleme Catalog doğrulaması ister (`503 CATALOG_UNAVAILABLE`). Para alanları JSON sayıdır, 2 ondalık basamak.\n\n**Hatalar:** Tüm hatalar RFC 9457 ProblemDetail olarak `application/problem+json` ile döner (`Problem` şeması). İstemci hatayı `code` alanına göre ayırt eder; doğrulama hatalarında `errors` dizisi alan bazında mesaj içerir. Sepet limiti aşımlarında ek olarak `limit` döner (`CartLimitProblem`).\n",
+    "title": "Kitap Sepeti Cart API",
+    "version": "0.0.1-SNAPSHOT"
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Dokümanın sunulduğu sunucu"
+    }
+  ],
+  "tags": [
+    {
+      "description": "Oturumdaki kullanıcının aktif sepeti. Her yanıt güncel sepetin tamamıdır; fiyat ve stok Catalog'la birleştirilir (`catalogStatus`).",
+      "name": "Cart"
+    },
+    {
+      "description": "Yalnızca servisler arası: order-service checkout'ta kullanıcının sepetini okur.",
+      "name": "Internal"
+    }
+  ],
+  "paths": {
+    "/api/cart": {
+      "get": {
+        "description": "Aktif sepet yoksa boş sepet döner (oluşturulmaz, Catalog'a sorulmaz).",
+        "operationId": "getCart",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CartResponse"
+                }
+              }
+            },
+            "description": "Güncel sepet."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`UNAUTHORIZED`: token yok, geçersiz, süresi dolmuş ya da `sub` kullanıcı id'si (UUID) değil.",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Token yoksa `Bearer`, geçersizse `Bearer error=\"invalid_token\"`.",
+                "schema": {
+                  "type": "string",
+                  "example": "Bearer"
+                }
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INTERNAL_ERROR`: beklenmeyen hata; ayrıntı yanıtta yer almaz."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`AUTHENTICATION_UNAVAILABLE`: token doğrulanamadı çünkü user-service JWKS ucuna ulaşılamıyor; daha sonra tekrar deneyin."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Sepeti oku",
+        "tags": [
+          "Cart"
+        ]
+      }
+    },
+    "/api/cart/items": {
+      "delete": {
+        "description": "Tüm satırlar silinir, sepet aktif kalır. Sepet yoksa oluşturulmaz. Yanıt her zaman boş sepet.",
+        "operationId": "clearCart",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CartResponse"
+                }
+              }
+            },
+            "description": "Boş sepet."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`UNAUTHORIZED`: token yok, geçersiz, süresi dolmuş ya da `sub` kullanıcı id'si (UUID) değil.",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Token yoksa `Bearer`, geçersizse `Bearer error=\"invalid_token\"`.",
+                "schema": {
+                  "type": "string",
+                  "example": "Bearer"
+                }
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INTERNAL_ERROR`: beklenmeyen hata; ayrıntı yanıtta yer almaz."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`AUTHENTICATION_UNAVAILABLE`: token doğrulanamadı çünkü user-service JWKS ucuna ulaşılamıyor; daha sonra tekrar deneyin."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Sepeti boşalt",
+        "tags": [
+          "Cart"
+        ]
+      },
+      "post": {
+        "description": "Sepet yoksa açılır. Kitap sepetteyse adet mevcut adede eklenir ve satırın anlık görüntüsü (fiyat, başlık, kapak) Catalog'daki güncel haliyle yenilenir. Kitap Catalog'da doğrulanır; doğrulanamazsa sepete dokunulmaz.",
+        "operationId": "addCartItem",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddCartItemRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CartResponse"
+                }
+              }
+            },
+            "description": "Güncel sepet."
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`VALIDATION_FAILED` (alan hataları `errors` dizisinde) veya `MALFORMED_REQUEST` (okunamayan JSON)."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`UNAUTHORIZED`: token yok, geçersiz, süresi dolmuş ya da `sub` kullanıcı id'si (UUID) değil.",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Token yoksa `Bearer`, geçersizse `Bearer error=\"invalid_token\"`.",
+                "schema": {
+                  "type": "string",
+                  "example": "Bearer"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "example": {
+                  "title": "Conflict",
+                  "status": 409,
+                  "detail": "Quantity exceeds the maximum allowed per book.",
+                  "instance": "/api/cart/items",
+                  "code": "CART_QUANTITY_LIMIT_EXCEEDED",
+                  "limit": 10
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CartLimitProblem"
+                }
+              }
+            },
+            "description": "`BOOK_NOT_AVAILABLE` (kitap yok, yayında değil ya da stokta değil), `CART_LINE_LIMIT_EXCEEDED` (farklı kitap sayısı sınırı) veya `CART_QUANTITY_LIMIT_EXCEEDED` (kitap başına adet sınırı; mevcut adet + eklenen). Limit hatalarında `limit` döner. Sepet değişmez."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INTERNAL_ERROR`: beklenmeyen hata; ayrıntı yanıtta yer almaz."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`CATALOG_UNAVAILABLE`: kitap doğrulanamadı çünkü Catalog'a ulaşılamıyor (sepet değişmez) ya da `AUTHENTICATION_UNAVAILABLE`: token doğrulanamadı çünkü user-service JWKS ucuna ulaşılamıyor. İkisinde de daha sonra tekrar deneyin."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Sepete kitap ekle",
+        "tags": [
+          "Cart"
+        ]
+      }
+    },
+    "/api/cart/items/{bookId}": {
+      "delete": {
+        "description": "Idempotent: kitap sepette değilse ya da sepet yoksa da 200 (sepet oluşturulmaz).",
+        "operationId": "removeCartItem",
+        "parameters": [
+          {
+            "description": "Kitabın id'si",
+            "in": "path",
+            "name": "bookId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CartResponse"
+                }
+              }
+            },
+            "description": "Güncel sepet."
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`MALFORMED_REQUEST`: path değişkeni UUID değil."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`UNAUTHORIZED`: token yok, geçersiz, süresi dolmuş ya da `sub` kullanıcı id'si (UUID) değil.",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Token yoksa `Bearer`, geçersizse `Bearer error=\"invalid_token\"`.",
+                "schema": {
+                  "type": "string",
+                  "example": "Bearer"
+                }
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INTERNAL_ERROR`: beklenmeyen hata; ayrıntı yanıtta yer almaz."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`AUTHENTICATION_UNAVAILABLE`: token doğrulanamadı çünkü user-service JWKS ucuna ulaşılamıyor; daha sonra tekrar deneyin."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Kitabı sepetten çıkar",
+        "tags": [
+          "Cart"
+        ]
+      },
+      "patch": {
+        "description": "Adet verilen değere ayarlanır (eklenmez). Değişiklik Catalog doğrulaması istemez; satırın anlık görüntüsü korunur. Aynı adet gönderilirse sepet değişmez.",
+        "operationId": "changeCartItemQuantity",
+        "parameters": [
+          {
+            "description": "Sepetteki kitabın id'si",
+            "in": "path",
+            "name": "bookId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCartItemRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CartResponse"
+                }
+              }
+            },
+            "description": "Güncel sepet."
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`VALIDATION_FAILED` (alan hataları `errors` dizisinde) veya `MALFORMED_REQUEST` (okunamayan JSON ya da UUID olmayan path değişkeni)."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`UNAUTHORIZED`: token yok, geçersiz, süresi dolmuş ya da `sub` kullanıcı id'si (UUID) değil.",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Token yoksa `Bearer`, geçersizse `Bearer error=\"invalid_token\"`.",
+                "schema": {
+                  "type": "string",
+                  "example": "Bearer"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`RESOURCE_NOT_FOUND`: aktif sepet yok ya da kitap sepette değil."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CartLimitProblem"
+                }
+              }
+            },
+            "description": "`CART_QUANTITY_LIMIT_EXCEEDED`: adet kitap başına sınırı aşıyor; `limit` döner. Satır değişmez."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INTERNAL_ERROR`: beklenmeyen hata; ayrıntı yanıtta yer almaz."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`AUTHENTICATION_UNAVAILABLE`: token doğrulanamadı çünkü user-service JWKS ucuna ulaşılamıyor; daha sonra tekrar deneyin."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Adedi değiştir",
+        "tags": [
+          "Cart"
+        ]
+      }
+    },
+    "/internal/cart/snapshot": {
+      "post": {
+        "description": "Kullanıcının aktif sepeti, satırların sepete eklendiği andaki fiyatlarıyla (Catalog'a sorulmaz). Salt okunur; sepet değişmez. Aktif sepet yoksa da 200: `cartId` ve `updatedAt` null, `items` boş. Aktif sepet boşsa yalnızca `items` boştur.",
+        "operationId": "getCartSnapshot",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CartSnapshotRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CartSnapshotResponse"
+                }
+              }
+            },
+            "description": "Anlık görüntü."
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`VALIDATION_FAILED` (alan hataları `errors` dizisinde) veya `MALFORMED_REQUEST` (okunamayan JSON)."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`UNAUTHORIZED`: `X-Internal-Api-Key` yok veya tanınmıyor (iki durum aynı yanıtı alır).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Her zaman `ApiKey realm=\"internal\"`.",
+                "schema": {
+                  "type": "string",
+                  "example": "ApiKey realm=\"internal\""
+                }
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INTERNAL_ERROR`: beklenmeyen hata; ayrıntı yanıtta yer almaz."
+          }
+        },
+        "security": [
+          {
+            "internalApiKey": []
+          }
+        ],
+        "summary": "Sepet anlık görüntüsü",
+        "tags": [
+          "Internal"
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AddCartItemRequest": {
+        "type": "object",
+        "properties": {
+          "bookId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "quantity": {
+            "type": "integer",
+            "format": "int32",
+            "default": 1,
+            "description": "Eklenecek adet; kitap sepetteyse mevcut adede eklenir. 1–99 dışı 400 `VALIDATION_FAILED`; kitap başına iş sınırını (varsayılan 10) aşarsa 409 `CART_QUANTITY_LIMIT_EXCEEDED`.",
+            "maximum": 99,
+            "minimum": 1
+          }
+        },
+        "required": [
+          "bookId"
+        ]
+      },
+      "CartLimitProblem": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Problem"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "limit": {
+                "type": "integer",
+                "format": "int32",
+                "description": "Yapılandırılmış üst sınır: farklı kitap sayısı (`CART_LINE_LIMIT_EXCEEDED`) ya da kitap başına adet (`CART_QUANTITY_LIMIT_EXCEEDED`). İstenen değer yanıtta yer almaz.",
+                "example": 10
+              }
+            }
+          }
+        ],
+        "description": "Sepet çakışması. `CART_LINE_LIMIT_EXCEEDED` ve `CART_QUANTITY_LIMIT_EXCEEDED`'da `limit` aşılan üst sınırı taşır; `BOOK_NOT_AVAILABLE`'da `limit` yoktur."
+      },
+      "CartLineResponse": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Catalog'da satışta ve stokta ise true, değilse false; Catalog'a ulaşılamadıysa (`catalogStatus` = `UNAVAILABLE`) null."
+          },
+          "bookId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "coverUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Sepete eklendiği andaki kapak adresi; kapak yoksa null."
+          },
+          "currency": {
+            "type": "string",
+            "description": "Anlık görüntünün para birimi."
+          },
+          "currentUnitPrice": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Catalog'daki güncel birim fiyat, 2 ondalık basamak; Catalog'a ulaşılamadıysa ya da kitap satışta değilse null."
+          },
+          "lineTotal": {
+            "type": "number",
+            "description": "`quantity` × (`currentUnitPrice`, null ise `snapshotUnitPrice`), 2 ondalık basamak."
+          },
+          "priceChanged": {
+            "type": "boolean",
+            "description": "Güncel fiyat biliniyor ve anlık görüntüden farklı."
+          },
+          "quantity": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 99,
+            "minimum": 1
+          },
+          "snapshotUnitPrice": {
+            "type": "number",
+            "description": "Kitap sepete eklendiğinde (ya da en son tekrar eklendiğinde) geçerli birim fiyat, 2 ondalık basamak."
+          },
+          "title": {
+            "type": "string",
+            "description": "Sepete eklendiği andaki başlık."
+          }
+        },
+        "required": [
+          "available",
+          "bookId",
+          "coverUrl",
+          "currency",
+          "currentUnitPrice",
+          "lineTotal",
+          "priceChanged",
+          "quantity",
+          "snapshotUnitPrice",
+          "title"
+        ]
+      },
+      "CartResponse": {
+        "type": "object",
+        "properties": {
+          "catalogStatus": {
+            "$ref": "#/components/schemas/CatalogStatus"
+          },
+          "currency": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Tüm satırlarda ortak para birimi; sepet boşsa ya da birimler farklıysa null."
+          },
+          "itemCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Adetlerin toplamı."
+          },
+          "items": {
+            "type": "array",
+            "description": "Satırlar, eklenme sırasıyla.",
+            "items": {
+              "$ref": "#/components/schemas/CartLineResponse"
+            }
+          },
+          "lineCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Satır (farklı kitap) sayısı."
+          },
+          "subtotal": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "`available` değeri `false` olmayan satırların `lineTotal` toplamı, 2 ondalık basamak; boş sepette `0.00`. Satırların para birimi farklıysa null."
+          }
+        },
+        "required": [
+          "catalogStatus",
+          "currency",
+          "itemCount",
+          "items",
+          "lineCount",
+          "subtotal"
+        ]
+      },
+      "CartSnapshotItem": {
+        "type": "object",
+        "properties": {
+          "bookId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "currency": {
+            "type": "string",
+            "description": "`unitPriceSnapshot`'ın para birimi."
+          },
+          "quantity": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 99,
+            "minimum": 1
+          },
+          "title": {
+            "type": "string",
+            "description": "Sepete eklendiği andaki başlık."
+          },
+          "unitPriceSnapshot": {
+            "type": "number",
+            "description": "Sepete eklendiği (ya da en son yeniden eklendiği) andaki birim fiyat, 2 ondalık basamak."
+          }
+        },
+        "required": [
+          "bookId",
+          "currency",
+          "quantity",
+          "title",
+          "unitPriceSnapshot"
+        ]
+      },
+      "CartSnapshotRequest": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Sepeti istenen kullanıcının id'si (token'ın `sub`'ı)."
+          }
+        },
+        "required": [
+          "userId"
+        ]
+      },
+      "CartSnapshotResponse": {
+        "type": "object",
+        "properties": {
+          "cartId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Aktif sepetin id'si; aktif sepet yoksa null."
+          },
+          "items": {
+            "type": "array",
+            "description": "Satırlar, eklenme sırasıyla; sepet yoksa ya da boşsa boş.",
+            "items": {
+              "$ref": "#/components/schemas/CartSnapshotItem"
+            }
+          },
+          "updatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Sepetin son değiştiği an; aktif sepet yoksa null."
+          }
+        },
+        "required": [
+          "cartId",
+          "items",
+          "updatedAt"
+        ]
+      },
+      "CatalogStatus": {
+        "type": "string",
+        "description": "`VERIFIED`: Catalog'a ulaşıldı; satırlarda `available` ve `currentUnitPrice` güncel. `UNAVAILABLE`: Catalog'a ulaşılamadı; satırlarda `available` ve `currentUnitPrice` null, tutarlar anlık görüntüden.",
+        "enum": [
+          "VERIFIED",
+          "UNAVAILABLE"
+        ]
+      },
+      "FieldError": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "Hatalı alanın adı.",
+            "example": "quantity"
+          },
+          "message": {
+            "type": "string",
+            "description": "Doğrulama mesajı.",
+            "example": "must be less than or equal to 99"
+          }
+        },
+        "required": [
+          "field",
+          "message"
+        ]
+      },
+      "Problem": {
+        "type": "object",
+        "description": "RFC 9457 Problem Details. İstemci hatayı `code` alanına göre ayırt etmelidir; `title`/`detail` insan içindir ve değişebilir.",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Makine tarafından okunacak hata kodu.",
+            "enum": [
+              "VALIDATION_FAILED",
+              "MALFORMED_REQUEST",
+              "UNAUTHORIZED",
+              "FORBIDDEN",
+              "NOT_FOUND",
+              "RESOURCE_NOT_FOUND",
+              "METHOD_NOT_ALLOWED",
+              "NOT_ACCEPTABLE",
+              "UNSUPPORTED_MEDIA_TYPE",
+              "CONFLICT",
+              "CART_LINE_LIMIT_EXCEEDED",
+              "CART_QUANTITY_LIMIT_EXCEEDED",
+              "BOOK_NOT_AVAILABLE",
+              "CATALOG_UNAVAILABLE",
+              "AUTHENTICATION_UNAVAILABLE",
+              "INTERNAL_ERROR"
+            ],
+            "example": "BOOK_NOT_AVAILABLE"
+          },
+          "detail": {
+            "type": "string",
+            "description": "Genel açıklama; kullanıcı verisi içermez.",
+            "example": "Book is not available for sale."
+          },
+          "errors": {
+            "type": "array",
+            "description": "Yalnızca `VALIDATION_FAILED`'da: alan bazında hatalar. Gönderilen değer yer almaz.",
+            "items": {
+              "$ref": "#/components/schemas/FieldError"
+            }
+          },
+          "instance": {
+            "type": "string",
+            "format": "uri-reference",
+            "description": "İsteğin yolu; kitap id'si `:bookId` olarak maskelenir.",
+            "example": "/api/cart/items/:bookId"
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "description": "HTTP durum kodu.",
+            "example": 409
+          },
+          "title": {
+            "type": "string",
+            "description": "HTTP durumunun kısa adı.",
+            "example": "Conflict"
+          },
+          "type": {
+            "type": "string",
+            "format": "uri",
+            "description": "Problem tipi; varsayılan `about:blank` olduğunda yanıtta yer almaz."
+          }
+        },
+        "required": [
+          "code",
+          "instance",
+          "status",
+          "title"
+        ]
+      },
+      "UpdateCartItemRequest": {
+        "type": "object",
+        "properties": {
+          "quantity": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Yeni adet (mevcut adedin yerine). 1–99 dışı 400 `VALIDATION_FAILED`; kitap başına iş sınırını (varsayılan 10) aşarsa 409 `CART_QUANTITY_LIMIT_EXCEEDED`.",
+            "maximum": 99,
+            "minimum": 1
+          }
+        },
+        "required": [
+          "quantity"
+        ]
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "bearerFormat": "JWT",
+        "description": "user-service `POST /api/auth/login` yanıtındaki `accessToken`; rol şartı yok (`USER` ve `ADMIN`). Sepet token'ın `sub`'ındaki kullanıcınındır.",
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "internalApiKey": {
+        "description": "Servisler arası ham anahtar (yalnızca çağıran serviste saklanır; cart yalnızca SHA-256 özetini bilir). Kullanıcı JWT'si bu uçlarda geçersizdir.",
+        "in": "header",
+        "name": "X-Internal-Api-Key",
+        "type": "apiKey"
+      }
+    }
+  }
+}
