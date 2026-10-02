@@ -742,7 +742,7 @@
 
 - Cart Adım 7 commit + push edildi (`c692567` kod, `a3b7abe` memory-bank).
 
-- Cart Adım 8 — `POST /internal/cart/snapshot` + internal güvenlik zinciri (henüz commit edilmedi; CartCheckedOut/RabbitMQ, OpenAPI,
+- Cart Adım 8 — `POST /internal/cart/snapshot` + internal güvenlik zinciri (commit `2135ac6` + `dd01c0c`, push edildi; CartCheckedOut/RabbitMQ, OpenAPI,
   Docker YOK; common/catalog/user, migration, .env değişmedi):
   - Ana kod: `config/InternalSecurityConfig` (@Order(1)), `config/InternalAuthConfig` (özet zorunlu), `SecurityConfig` `@Order(2)`,
     `controller/internal/InternalCartController`, `service/CartSnapshotService`, `dto/internal/CartSnapshotRequest|Response|Item`,
@@ -758,11 +758,39 @@
     ile snapshot da 401 → `.env`'deki CART_INTERNAL_KEY_ORDER_SHA256 bu anahtarın özeti değil (64 hex, uygulama açılıyor; OS ortam
     değişkeni yok). İki kez denendi, kullanıcı uçtan uca testi atlamayı seçti; 200 yolu yalnızca testlerde doğrulandı. Değeri
     `CATALOG_INTERNAL_KEY_ORDER_SHA256` ile aynı yapmak ya da yeniden üretmek gerekiyor. user_db'de 2 yeni e2e kullanıcısı.
+    ÇÖZÜLDÜ (Adım 9 ön adımı): kullanıcı özeti yeniden üretti; yeni süreçte açılan cart'a gerçek anahtar + rastgele userId → 200
+    `{"cartId":null,"updatedAt":null,"items":[]}`, logda anahtar yok.
+
+- Cart Adım 9 — OpenAPI (henüz commit edilmedi; Docker YOK; common/catalog/user, migration, .env değişmedi; uç davranışı, DTO alan
+  adları, durum kodları değişmedi — yalnızca anotasyon):
+  - `pom.xml` springdoc-openapi-starter-webmvc-ui (sürüm kök BOM'dan, 3.1.1). application.yml `springdoc` (catalog ile aynı:
+    packages-to-scan `com.kitapsepeti.cart.controller`, paths `/api/**, /internal/**`, order-by-keys, `SPRINGDOC_ENABLED`) +
+    `app.version: "@project.version@"`. `SecurityConfig` (kullanıcı zinciri) permitAll'a `/v3/api-docs/**`, `/swagger-ui/**`,
+    `/swagger-ui.html`; internal zinciri yalnızca `/internal/**` eşlediği için docs'u etkilemiyor (testli).
+  - `config/OpenApiConfig` (kurallar systemPatterns "cart-service OpenAPI"), controller'larda `@Tag`/`@Operation`/`@ApiResponse`,
+    DTO'larda `@Schema` (required/nullable, 1–99, açıklamalar; para alanları `type: number`, format yok, açıklamada "2 ondalık basamak").
+  - Internal uç kararı: catalog internal uçlarını OpenAPI'de (tag `Internal – Stock`) + ayrıca md'de belgeliyor → cart internal ucu da
+    OpenAPI'de, tag `Internal`, `internalApiKey`. Ayrı md yazılmadı (docs/api/README yok).
+  - Sözleşme `docs/api/cart-service.openapi.json`: 4 path, 6 operasyon; şemalar AddCartItemRequest, UpdateCartItemRequest,
+    CartResponse, CartLineResponse, CatalogStatus, CartSnapshotRequest, CartSnapshotResponse, CartSnapshotItem, Problem,
+    CartLimitProblem, FieldError. Problem.code enum = CartErrorCode.API_CODES sırası.
+  - Testler (cart 301 = 287 + 14): `config/OpenApiContractTest` 1 (drift; bir alan bozulunca yol + değer + yeniden üretim komutuyla
+    kırıldığı doğrulandı, geri alındı), `config/OpenApiDocsTest` 12 (anonim docs/swagger, internal başlığı docs'u etkilemez, tam 6
+    operasyon, test-only/actuator path ve şema yok (probe uçları bağlamda var), tag sırası, path önekine göre güvenlik + 401 başlıkları,
+    operasyon başına tam yanıt kodu kümesi, 409/503 kodları + `limit`, enum = API_CODES sırası, hatalar yalnızca problem+json,
+    sınırlar/nullable/para, gerçek hata yanıtları (POST 409 limit 10, PATCH 404, DELETE bozuk UUID 400, POST 400, GET 401 Bearer,
+    internal 401 ApiKey) dokümanla uyuşuyor), `config/OpenApiRequiredFieldsTest` 1 (boş sepet, dolu VERIFIED + satıştan kalkmış satır,
+    Catalog kapalı UNAVAILABLE, karışık para birimi, dolu/boş/aktif-boş snapshot; coverUrl nullable kaldırılınca kırıldığı doğrulandı).
+  - Root `clean verify`: common 25, user 83, catalog 276, cart 301 (2 skipped = CatalogLiveTest).
+  - Yerel: `/v3/api-docs` 200 (4 path, 6 operasyon), `/swagger-ui/index.html` 200, `/swagger-ui.html` 302 → index; `/api/cart` token'sız 401.
+  - Belgelenmeyen gerçek yollar (catalog ile aynı tercih): 406/415, ilk-sepet yarışında ikinci kısıt ihlali → 409 CONFLICT (pratikte
+    olmaz), kilit zaman aşımı → 500 kapsamında.
 
 ## Sonraki adımlar
 - Cart sonraki adımlar: checkout zinciri (CartCheckedOut tüketimi Order fazında; checkout + yeni sepet aynı TX'te olursa arada `flush()`
-  — flush tuzağı), yol maskelemeyi common'a taşıma (Order fazının başında ayrı adım), OpenAPI (code enum = CartErrorCode.API_CODES;
-  maskeli `instance` örneği `/api/cart/items/:bookId`; internalApiKey şeması), Docker + compose (`CART_INTERNAL_KEY_ORDER_SHA256` env).
+  — flush tuzağı), yol maskelemeyi common'a taşıma (Order fazının başında ayrı adım), Docker + compose (Adım 10;
+  `CART_INTERNAL_KEY_ORDER_SHA256` env). Order'ın sepet istemcisi `docs/api/cart-service.openapi.json`'dan (internal snapshot dahil).
+- Gateway fazı: `/v3/api-docs` + Swagger UI üç serviste permitAll; Gateway'de dışarıya kapatılacak (ya da `SPRINGDOC_ENABLED=false`).
 - order-service (rezervasyon istemcisi; fiyat anlık görüntüsü kendisinde; `RESERVATION_RELEASED` → ödeme iadesi telafisi; süre dolumu
   olayı yok, GET ile sorgulanır; istemci `docs/api/catalog-service.openapi.json`'dan). Compose'a eklenirken catalog'a
   `http://catalog-service:8082` ve `.env` `ORDER_INTERNAL_API_KEY` ile bağlanır.

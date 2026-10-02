@@ -82,6 +82,10 @@
   catalog-service: `http://localhost:8082/swagger-ui.html`, sözleşme `docs/api/catalog-service.openapi.json` (OpenApiContractTest yazar).
   Admin denemesi: Authorize → bearerAuth'a user-service login `accessToken`'ı (role ADMIN); internal: internalApiKey'e `.env`
   `ORDER_INTERNAL_API_KEY`.
+  cart-service: `http://localhost:8083/swagger-ui.html`, sözleşme `docs/api/cart-service.openapi.json` (yeniden üretim:
+  `.\mvnw.cmd -pl cart-service test "-Dtest=OpenApiContractTest" "-Dopenapi.contract.update=true"`; common kurulu değilse `-am`
+  + `-Dsurefire.failIfNoSpecifiedTests=false`). Sepet: bearerAuth'a herhangi bir kullanıcı token'ı; internal: `ORDER_INTERNAL_API_KEY`.
+  Docs/Swagger üç serviste de permitAll; Gateway fazında dışarıya kapatılacak.
 - PowerShell tuzağı (tekrar yaşandı): `.env`'yi okurken `-match '^\s*([A-Za-z_]...'` tr-TR'de adında `I` geçen satırları ATLAR
   (`CATALOG_INTERNAL_KEY_ORDER_SHA256`, `RABBITMQ_USER`...) → internal istemci kapalı açılır, anahtarla da 401. Her zaman `-cmatch`.
   Ayrıca `Invoke-WebRequest().Content` UTF-8 yanıtı yanlış çözer; karşılaştırma için `WebClient.DownloadData` + UTF8.GetString.

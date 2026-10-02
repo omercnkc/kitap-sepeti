@@ -260,6 +260,18 @@
   `List.of()`) `@Schema(requiredMode = REQUIRED)`; emin olunmayan/NULL olabilen alan işaretlenmez, nullable işareti de konmaz
   (user-service gibi: opsiyonel = `required` dışında). Yeni response alanında bu karar verilmeli; `OpenApiRequiredFieldsTest`
   gerçek yanıtları şemaya karşı kontrol eder (yeni 2xx şeması ekleyince o teste de örnek çağrı eklenmeli, yoksa kırılır).
+- cart-service OpenAPI (Adım 9, catalog kalıbı): erişim yol önekinden (`/internal/` → internalApiKey, diğer HER yol → bearerAuth;
+  public operasyon yok). Customizer gövdeliye 400 (VALIDATION_FAILED/MALFORMED_REQUEST), yalnızca path değişkenliye 400
+  (MALFORMED_REQUEST), kullanıcı uçlarına 401 (`WWW-Authenticate: Bearer`) + 503 AUTHENTICATION_UNAVAILABLE, internal'a 401
+  (`ApiKey realm="internal"`), hepsine 500 ekler. Catalog'dan farkı: `{`'li yola otomatik 404 YOK (DELETE /items/{bookId} idempotent
+  200); 404/409/uca özel 503 controller'da `@ApiResponse`. Limit 409'ları `CartLimitProblem` (allOf Problem + `limit`).
+  `@CurrentUserId` `SpringDocUtils.addAnnotationsToIgnore` ile dokümandan gizli (yoksa sorgu parametresi görünür).
+  `CatalogStatus` `@Schema(enumAsRef = true)`. Tag'ler `Cart`, `Internal` (sıralı).
+- cart response DTO'ları catalog'dan FARKLI: Jackson null'ları yazdığı için TÜM alanlar `requiredMode = REQUIRED`; null olabilenler
+  ayrıca `types = { "<tip>", "null" }` (OpenAPI 3.1; uuid/date-time'da `format` elle). Nullable: CartResponse currency/subtotal,
+  CartLineResponse coverUrl/currentUnitPrice/available, CartSnapshotResponse cartId/updatedAt. `OpenApiRequiredFieldsTest` (cart)
+  required → var, null → şemada nullable, şemada olmayan alan yok, JSON tipi/enum uyumu ve her nullable alanın en az bir örnekte null
+  görülmesini denetler; yeni nullable alan ya da 2xx şeması eklenirse oraya örnek çağrı eklenmeli.
 - Para alanları JSON'da sayı: `BigDecimal`, scale 2 (`setScale(2)`), Jackson varsayılanı; metne çevirme. İstisna: outbox
   olay payload'larında para METİN (`"149.90"`), çünkü payload MySQL `JSON` kolonunda durur ve MySQL kesirli sayıyı DOUBLE'a çevirip
   sondaki sıfırları atar (`149.90` → `149.9`).

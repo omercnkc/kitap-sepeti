@@ -80,12 +80,16 @@
   Değişiklik yoksa damgalama yok. Yoldaki kitap id'si hata yanıtında/logda `:bookId` olarak maskelenir. cart-service 264 test
   (2 skipped); uçtan uca a–f geçti.
 
-- Cart Adım 8 (henüz commit edilmedi): `POST /internal/cart/snapshot` (X-Internal-Api-Key, catalog ile aynı @Order(1) zinciri; salt
-  okunur tek SQL, aktif sepet yoksa cartId null). `CART_INTERNAL_KEY_ORDER_SHA256` yoksa/bozuksa cart açılmaz. cart-service 287 test
-  (2 skipped).
+- Cart Adım 8 (commit `2135ac6` + `dd01c0c`, push edildi): `POST /internal/cart/snapshot` (X-Internal-Api-Key, catalog ile aynı
+  @Order(1) zinciri; salt okunur tek SQL, aktif sepet yoksa cartId null). `CART_INTERNAL_KEY_ORDER_SHA256` yoksa/bozuksa cart açılmaz.
+  cart-service 287 test (2 skipped). Gerçek anahtarla uçtan uca 200, Adım 9 ön adımında doğrulandı.
+- Cart Adım 9 (henüz commit edilmedi): OpenAPI — springdoc, `OpenApiConfig` (yol önekine göre bearerAuth/internalApiKey, standart
+  hatalar, `CartLimitProblem`), sözleşme `docs/api/cart-service.openapi.json` (4 path, 6 operasyon, internal dahil), drift +
+  docs + required/nullable testleri. cart-service 301 test (2 skipped).
 
 ## Yapılacaklar
-- Cart servisi (Adım 9+: yol maskelemeyi common'a taşıma, OpenAPI, Docker; checkout tüketimi Order fazında).
+- Cart servisi (Adım 10: Docker + compose; yol maskelemeyi common'a taşıma; checkout tüketimi Order fazında).
+- Gateway fazı: docs/Swagger'ı (üç servis) dışarıya kapatmak.
 - Outbox kodunu common'a taşıma (ayrı adım; şu an servis başına kopya).
 - order-service (catalog rezervasyon istemcisi).
 - Search için: yayınevi/yazar/kategori yeniden adlandırması yayındaki kitaplar için olay üretmiyor → yeniden indeksleme gerekecek.
@@ -121,7 +125,8 @@
 - Süre dolumu görevi tutarsız bir siparişi (kitap rezervi < adet) her turda yeniden dener ve her seferinde WARN yazar; elle düzeltilene
   kadar o sipariş `held` kalır.
 - Tıkanan süre dolumu siparişleri kuyruğun başını tıkayabilir (batch dolarsa), outbox'taki tanınmayan event_type sorunuyla birlikte çözülecek.
-- catalog `/v3/api-docs` ve Swagger UI her profilde açık (compose dahil; `SPRINGDOC_ENABLED=false` ile kapanır); internal uç şekilleri de görünür.
+- catalog ve cart `/v3/api-docs` ve Swagger UI her profilde açık (compose dahil; `SPRINGDOC_ENABLED=false` ile kapanır); internal uç
+  şekilleri de görünür (sır yok). Gateway fazında kapatılacak.
 - catalog JWKS önbelleği 5 dk: user-service kapandıktan sonra admin uçları önbellek süresi boyunca 200, sonra 503 (Gateway fazı backlog'u).
 - `BookUpserted.priceAmount` metin, HTTP'deki `priceAmount` sayı (outbox payload kolonu MySQL JSON; sayı DOUBLE'a dönüşür).
   Sayıya geçmek için payload kolonunu metin tipine çeviren yeni migration + `eventVersion` kararı gerekir.
