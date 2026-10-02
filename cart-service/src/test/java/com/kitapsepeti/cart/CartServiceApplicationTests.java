@@ -2,23 +2,19 @@ package com.kitapsepeti.cart;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Clock;
+import java.time.ZoneOffset;
+
+import com.kitapsepeti.cart.config.ClockConfig;
 import com.kitapsepeti.cart.service.CartProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.cloud.openfeign.FeignClientFactory;
 import org.springframework.context.ApplicationContext;
-import org.springframework.context.annotation.Import;
 import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.test.context.ActiveProfiles;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
 
-// ActuatorHealthTest ile aynı yapılandırma: tek context, tek MySQL konteyneri.
-@SpringBootTest
-@AutoConfigureMockMvc
-@Import(TestcontainersConfiguration.class)
-@ActiveProfiles("test")
-class CartServiceApplicationTests {
+class CartServiceApplicationTests extends ApiTestSupport {
 
 	@Autowired
 	private ApplicationContext context;
@@ -34,11 +30,22 @@ class CartServiceApplicationTests {
 	}
 
 	@Test
+	void noTokenSigningInfrastructure() {
+		assertThat(context.getBeanNamesForType(JwtEncoder.class)).isEmpty();
+	}
+
+	@Test
 	void cartLimitsAreBound() {
 		CartProperties properties = context.getBean(CartProperties.class);
 
 		assertThat(properties.maxQuantityPerItem()).isEqualTo(10);
 		assertThat(properties.maxLines()).isEqualTo(50);
+	}
+
+	@Test
+	void applicationClockIsUtcAndTestsGetTheMutableClock() {
+		assertThat(context.getBean(ClockConfig.class).clock().getZone()).isEqualTo(ZoneOffset.UTC);
+		assertThat(context.getBean(Clock.class)).isSameAs(clock);
 	}
 
 }

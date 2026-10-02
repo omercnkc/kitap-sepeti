@@ -8,29 +8,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.kitapsepeti.cart.TestcontainersConfiguration;
+import com.kitapsepeti.cart.ApiTestSupport;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpointGroup;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpointGroups;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.json.JsonCompareMode;
-import org.springframework.test.web.servlet.MockMvc;
 
-@SpringBootTest
-@AutoConfigureMockMvc
-@Import(TestcontainersConfiguration.class)
-@ActiveProfiles("test")
-class ActuatorHealthTest {
-
-	@Autowired
-	private MockMvc mockMvc;
+class ActuatorHealthTest extends ApiTestSupport {
 
 	@Autowired
 	private HealthEndpointGroups groups;
@@ -52,7 +40,7 @@ class ActuatorHealthTest {
 
 	@ParameterizedTest
 	@ValueSource(strings = { "/", "/api/cart", "/actuator", "/actuator/env", "/actuator/info" })
-	void everythingElseIsUnauthorized(String path) throws Exception {
+	void everythingElseNeedsToken(String path) throws Exception {
 		mockMvc.perform(get(path))
 			.andExpect(status().isUnauthorized())
 			.andExpect(header().string("WWW-Authenticate", "Bearer"))

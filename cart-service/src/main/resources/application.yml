@@ -27,8 +27,16 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Açık anahtar ilk doğrulamada çekilir ve önbelleğe alınır; açılışta istek atılmaz.
+          jwk-set-uri: ${USER_SERVICE_JWKS_URI:http://localhost:8081/.well-known/jwks.json}
 
 app:
+  jwt:
+    issuer: kitapsepeti-user-service
   cart:
     # DB'deki ck_cart_items_quantity (1–99) bunun üst sınırıdır.
     max-quantity-per-item: 10
@@ -61,6 +69,7 @@ management:
       group:
         liveness:
           include: livenessState
-        # catalog-service bilinçli olarak yok: Catalog kapalıyken sepet okunabilir olmalı.
+        # catalog-service ve user-service (JWKS) bilinçli olarak yok: Catalog kapalıyken sepet okunabilir olmalı,
+        # JWKS kesintisi ayrı bir 503 (AUTHENTICATION_UNAVAILABLE) olarak görünür.
         readiness:
           include: readinessState, db
