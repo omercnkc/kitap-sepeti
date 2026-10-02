@@ -65,6 +65,7 @@ class OpenApiRequiredFieldsTest extends ApiTestSupport {
 
 		check("get", "/api/books", 200, get("/api/books"));
 		check("get", "/api/books/{id}", 200, get("/api/books/{id}", bookId));
+		check("get", "/api/books/lookup", 200, get("/api/books/lookup").param("ids", bookId));
 		check("get", "/api/categories", 200, get("/api/categories"));
 		check("get", "/api/admin/books", 200, admin(get("/api/admin/books")));
 		check("get", "/api/admin/books/{id}", 200, admin(get("/api/admin/books/{id}", bookId)));

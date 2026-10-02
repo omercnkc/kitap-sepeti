@@ -2928,6 +2928,66 @@
         ]
       }
     },
+    "/api/books/lookup": {
+      "get": {
+        "description": "En fazla 50 id (tekrarlar dahil). Yalnızca yayındaki kitaplar döner; bulunamayan, taslak ve arşiv kitaplar hata değildir, yanıtta yer almaz. Tekrarlı id tek kez, istekteki ilk geçiş sırasıyla döner.",
+        "operationId": "lookupBooks",
+        "parameters": [
+          {
+            "description": "Kitap id'leri; virgülle ayrılmış ya da tekrarlı parametre. Tekrarlı id tek kez döner.",
+            "in": "query",
+            "name": "ids",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "maxItems": 50,
+              "minItems": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookLookupResponse"
+                }
+              }
+            },
+            "description": "Bulunan yayındaki kitaplar (hiçbiri bulunamazsa boş `items`)."
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`VALIDATION_FAILED` (alan hataları `errors` dizisinde) veya `MALFORMED_REQUEST` (okunamayan JSON ya da bozuk path değişkeni)."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INTERNAL_ERROR`: beklenmeyen hata; ayrıntı yanıtta yer almaz."
+          }
+        },
+        "security": [],
+        "summary": "Kitapları id listesiyle toplu getir",
+        "tags": [
+          "Books"
+        ]
+      }
+    },
     "/api/books/{id}": {
       "get": {
         "operationId": "getBook",
@@ -3702,6 +3762,21 @@
           "priceAmount",
           "publisher",
           "title"
+        ]
+      },
+      "BookLookupResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "description": "Bulunan yayındaki kitaplar; istekteki sırayla, her id en fazla bir kez.",
+            "items": {
+              "$ref": "#/components/schemas/BookSummaryResponse"
+            }
+          }
+        },
+        "required": [
+          "items"
         ]
       },
       "BookSummaryResponse": {

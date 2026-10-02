@@ -54,7 +54,7 @@ class OpenApiDocsTest extends ApiTestSupport {
 	@Test
 	void documentsExactlyTheRealOperationsAndNoTestEndpoints() throws Exception {
 		assertThat(operations(docs()).keySet()).containsExactlyInAnyOrder(
-				"GET /api/books", "GET /api/books/{id}", "GET /api/categories",
+				"GET /api/books", "GET /api/books/lookup", "GET /api/books/{id}", "GET /api/categories",
 				"GET /api/admin/books", "POST /api/admin/books", "GET /api/admin/books/{id}",
 				"PATCH /api/admin/books/{id}", "DELETE /api/admin/books/{id}", "POST /api/admin/books/{id}/publish",
 				"POST /api/admin/books/{id}/archive", "POST /api/admin/books/{id}/stock-adjustments",
@@ -75,7 +75,7 @@ class OpenApiDocsTest extends ApiTestSupport {
 		DocumentContext docs = docs();
 
 		assertThat(docs.<Map<String, Object>>read("$")).doesNotContainKey("security");
-		for (String path : List.of("/api/books", "/api/books/{id}", "/api/categories")) {
+		for (String path : List.of("/api/books", "/api/books/lookup", "/api/books/{id}", "/api/categories")) {
 			assertThat(docs.<List<Object>>read("$.paths['%s'].get.security".formatted(path))).as(path).isEmpty();
 			assertThat(docs.<Map<String, Object>>read("$.paths['%s'].get.responses".formatted(path))).as(path)
 				.doesNotContainKeys("401", "403", "503");

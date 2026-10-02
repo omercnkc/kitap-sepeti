@@ -1,5 +1,7 @@
 package com.kitapsepeti.catalog.repository;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -36,6 +38,13 @@ public interface BookRepository extends JpaRepository<Book, UUID>, JpaSpecificat
 	@Override
 	@EntityGraph(attributePaths = "publisher")
 	Page<Book> findAll(Specification<Book> spec, Pageable pageable);
+
+	/**
+	 * Verilen id'lerden verilen durumdakiler, yayınevi aynı sorguda; sıra garanti edilmez. Yazarlar lazy kalır ve
+	 * erişildiğinde {@code default_batch_fetch_size} ile tek toplu sorguda gelir.
+	 */
+	@EntityGraph(attributePaths = "publisher")
+	List<Book> findByIdInAndStatus(Collection<UUID> ids, BookStatus status);
 
 	/**
 	 * Kitap satırı transaction sonuna kadar kilitli ({@code SELECT ... FOR UPDATE}); ilişkiler lazy yüklenir.

@@ -8,12 +8,18 @@ import static com.kitapsepeti.catalog.repository.BookSpecifications.priceAtLeast
 import static com.kitapsepeti.catalog.repository.BookSpecifications.priceAtMost;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import com.kitapsepeti.catalog.dto.request.BookSearchRequest;
 import com.kitapsepeti.catalog.dto.request.BookSort;
 import com.kitapsepeti.catalog.dto.response.BookDetailResponse;
+import com.kitapsepeti.catalog.dto.response.BookLookupResponse;
 import com.kitapsepeti.catalog.dto.response.BookSummaryResponse;
 import com.kitapsepeti.catalog.dto.response.PageResponse;
 import com.kitapsepeti.catalog.entity.Book;
@@ -50,6 +56,22 @@ public class BookQueryService {
 		PageRequest pageRequest = PageRequest.of(request.page(), request.size(), sortOf(request.sort()));
 		return PageResponse.of(this.bookRepository.findAll(specificationOf(request), pageRequest),
 				BookMapper::toSummary);
+	}
+
+	/**
+	 * Verilen id'lerden yayındakiler, istekteki ilk geçiş sırasıyla; tekrarlı id bir kez, bulunamayan/taslak/arşiv
+	 * atlanır. Kitap sayısından bağımsız iki sorgu: kitaplar + yayınevi, yazarlar (toplu).
+	 */
+	public BookLookupResponse lookup(List<UUID> ids) {
+		List<UUID> distinctIds = List.copyOf(new LinkedHashSet<>(ids));
+		Map<UUID, Book> published = this.bookRepository.findByIdInAndStatus(distinctIds, BookStatus.PUBLISHED)
+			.stream()
+			.collect(Collectors.toMap(Book::getId, Function.identity()));
+		return new BookLookupResponse(distinctIds.stream()
+			.map(published::get)
+			.filter(Objects::nonNull)
+			.map(BookMapper::toSummary)
+			.toList());
 	}
 
 	/** @throws ResourceNotFoundException kitap yoksa veya yayında değilse */

@@ -3,8 +3,10 @@ package com.kitapsepeti.catalog.controller;
 import java.util.UUID;
 
 import com.kitapsepeti.catalog.config.OpenApiConfig;
+import com.kitapsepeti.catalog.dto.request.BookLookupRequest;
 import com.kitapsepeti.catalog.dto.request.BookSearchRequest;
 import com.kitapsepeti.catalog.dto.response.BookDetailResponse;
+import com.kitapsepeti.catalog.dto.response.BookLookupResponse;
 import com.kitapsepeti.catalog.dto.response.BookSummaryResponse;
 import com.kitapsepeti.catalog.dto.response.PageResponse;
 import com.kitapsepeti.catalog.service.BookQueryService;
@@ -42,6 +44,17 @@ public class BookController {
 	@ApiResponse(responseCode = "200", description = "Sayfa (son sayfadan sonrası boş `items` döner).")
 	public PageResponse<BookSummaryResponse> search(@Valid @ParameterObject @ModelAttribute BookSearchRequest request) {
 		return bookQueryService.search(request);
+	}
+
+	/** Literal yol {@code /{id}}'den önce eşleşir ("lookup" UUID olarak çözülmeye çalışılmaz). */
+	@GetMapping("/lookup")
+	@Operation(operationId = "lookupBooks", summary = "Kitapları id listesiyle toplu getir",
+			description = "En fazla " + BookLookupRequest.MAX_IDS + " id (tekrarlar dahil). Yalnızca yayındaki kitaplar "
+					+ "döner; bulunamayan, taslak ve arşiv kitaplar hata değildir, yanıtta yer almaz. Tekrarlı id tek kez, "
+					+ "istekteki ilk geçiş sırasıyla döner.")
+	@ApiResponse(responseCode = "200", description = "Bulunan yayındaki kitaplar (hiçbiri bulunamazsa boş `items`).")
+	public BookLookupResponse lookup(@Valid @ParameterObject @ModelAttribute BookLookupRequest request) {
+		return bookQueryService.lookup(request.ids());
 	}
 
 	@GetMapping("/{id}")
