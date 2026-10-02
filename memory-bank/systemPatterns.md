@@ -337,6 +337,22 @@
 - Catalog kesintisinde GET hata vermez: assembler `CatalogUnavailableException`'ı yakalar, tek WARN `GET /api/cart -> CATALOG_UNAVAILABLE
   (cause=<kök neden>, served from snapshot)` (ProblemDetails.log biçimi, istek RequestContextHolder'dan), UNAVAILABLE döner.
   `IllegalStateException` (Catalog'un beklenmedik 4xx'i) yukarı çıkar → 500.
+- Uçlar ve API tablosu (satır yolda bookId ile adreslenir; tüm değiştiren uçlar GET ile aynı `CartResponse`'u döner):
+  `GET /api/cart`, `POST /api/cart/items` {bookId, quantity?}, `PATCH /api/cart/items/{bookId}` {quantity}, `DELETE /api/cart/items/{bookId}`,
+  `DELETE /api/cart/items`. Hepsi yalnızca AKTİF sepete dokunur; checked_out/abandoned sepet hiç değişmez.
+- PATCH adet: Catalog çağrısı yok (yalnızca assembler'ın lookup'ı), snapshot DEĞİŞMEZ. TX: sepet `FOR UPDATE` → sepet ya da satır yoksa
+  404 RESOURCE_NOT_FOUND (detail "Book is not in the cart.", bookId yok) → adet > `max-quantity-per-item` 409 QUANTITY + `limit` (satır
+  değişmez) → `changeQuantity(q, clock)`. DTO 1–99 (400). Yayından kalkmış kitabın adedi de değişir (available false); Catalog
+  kesintisinde değişiklik uygulanır, 200 UNAVAILABLE.
+- DELETE satır: idempotent 200; sepet yoksa boş yanıt (sepet AÇILMAZ, Catalog çağrılmaz); satır varsa `removeItem(id, clock)`. Son satır
+  silinse de sepet aktif kalır, sonraki POST aynı sepeti kullanır.
+- DELETE tümü: `clear(clock)`; sepet silinmez, aktif ve boş kalır. Yanıt her zaman boş (Catalog çağrılmaz). Sepet yoksa açılmaz.
+- Damgalama kararı: DEĞİŞİKLİK YOKSA DAMGA YOK — aynı adetle PATCH (UPDATE SQL'i bile yok), olmayan satırı silmek, zaten boş sepeti
+  boşaltmak `updated_at`'e dokunmaz. Değişiklikte satır + sepet `updated_at` = Clock; satır silmede sepet damgalanır.
+- Yol maskeleme: `exception/MaskedRequestPaths` hata yazan her noktada (cart GlobalExceptionHandler override'ları, assembler WARN'ı,
+  SecurityConfig'te sarılmış common security handler'ları) `/api/cart/items/<x>` → `/api/cart/items/:bookId` (ProblemDetail `instance` +
+  log). `{}` kullanılmaz (common `URI.create` → geçersiz → instance null). Path'te bozuk UUID → 400 MALFORMED_REQUEST (TypeMismatch,
+  common'ın varsayılan dalı; mevcut davranış).
 - Test: `support/FakeCatalog` (CatalogStub yanıtlayıcısı; harita = yayındaki kitaplar, `failWith` ile kesinti); yarış senaryoları
   `ApiTestSupport.carts` spy'ı (`@MockitoSpyBean`) ile deterministik; gerçek eşzamanlılık `runConcurrently` (MockMvc, gerçek thread'ler).
 

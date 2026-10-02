@@ -715,12 +715,34 @@
     401 için 2 BookUpserted (fiyat 145.00'e döndü).
   - Not: doğrulama mesajları JVM dilinde (tr) geliyor (`'99' değerinden küçük yada eşit olmalı`); girilen değer yok (mevcut davranış).
 
-- Cart Adım 6 commit + push edildi (`3a378d6` kod, memory-bank ayrı commit).
+- Cart Adım 6 commit + push edildi (`3a378d6` kod, `f95ad17` memory-bank).
+
+- Cart Adım 7 — `PATCH /api/cart/items/{bookId}`, `DELETE /api/cart/items/{bookId}`, `DELETE /api/cart/items` (henüz commit edilmedi;
+  internal snapshot, OpenAPI, Docker YOK; catalog/user/common, migration değişmedi):
+  - Kod: `CartTransactions.changeQuantity/removeItem/clear` (READ_COMMITTED, aktif sepet `findActiveByUserIdForUpdate`),
+    `CartService` aynı adlı 3 metot (TX → assembler), `dto/request/UpdateCartItemRequest` (`@NotNull @Min(1) @Max(99) Integer quantity`),
+    `CartController` 3 uç (hepsi GET ile aynı `CartResponse`). Kurallar ve damgalama kararları systemPatterns "Sepet servisi (cart-service)".
+  - YENİ: `exception/MaskedRequestPaths` — yoldaki kitap id'si hata yanıtının `instance`'ına ve `METHOD URI -> CODE` log satırına
+    girmesin diye `/api/cart/items/<x>` → `/api/cart/items/:bookId` (süslü parantez değil: common `URI.create` ile instance üretir,
+    `{}` geçersiz URI → instance boş kalırdı). Uygulandığı yerler: cart `GlobalExceptionHandler` (isteği alan tüm taban handler'ları
+    override edilip maskeli istekle `super`'e; `handleExceptionInternal` WebRequest'i sarar), `CartViewAssembler` WARN'ı, `SecurityConfig`
+    (common entry point / access denied / failure handler lambda ile sarılır → 401/403/503). Yalnızca yönlendirmeden sonra; dispatch etkilenmez.
+    Diğer yollar aynen (ör. test probe `/api/cart/_catalog/books/<id>` logu değişmedi).
+  - Testler (cart 264 = 237 + 27): `controller/CartItemChangesTest` 24 (20 metot, biri 5 parametreli), CartConcurrencyTest +3 (5 eşzamanlı
+    PATCH 2..6 → hepsi 200, son değer kümeden; DELETE + PATCH 5 tur → DELETE 200, PATCH 200|404, satır yok; clear + POST 5 tur → satırlar
+    boş ya da yalnızca yeni kitap, tek aktif sepet). 500 yok.
+  - Root `clean verify`: common 25, user 83, catalog 276, cart 264 (2 skipped).
+  - Uçtan uca (cart spring-boot:run + Docker user/catalog; yeni e2e kullanıcısı, Adım 6 kullanıcısının kimlik bilgisi yok → sepet aynı
+    biçimde yeniden kuruldu: 401×2, 404×3): a) PATCH 401 → 5: 200 (snapshot 145.00, itemCount 8) b) PATCH 11 → 409 limit 10, instance
+    `/api/cart/items/:bookId`, DB adedi 5 c) DELETE 404 → 200 (1 satır) d) tekrar → 200 e) DELETE tümü → boş, sepet active|0 f) 405 ekle →
+    aynı sepet id'si; kullanıcıda 1/1 sepet, birden fazla aktif sepetli kullanıcı 0. Token'sız 401, bozuk UUID 400 MALFORMED_REQUEST.
+    Log: token/sub/e-posta/parola/kitap id'si/`kitap-degil` yok; hata satırları maskeli. Yerel veri: user_db'de 1 yeni e2e kullanıcısı,
+    cart_db'de 1 sepet (405×1).
+  - `CartService.md` repoda YOK (aranan: `**/CartService*.md`, sepet/cart adlı tüm .md) → API tablosu tutarlılığı kontrol edilemedi.
 
 ## Sonraki adımlar
-- Cart sonraki adımlar: PATCH (adet) / DELETE (satır, sepeti boşalt) uçları — aynı iki katman + Clock; satır silip aynı kitabı
-  ekleyen ya da checkout + yeni sepet açan akış yazılırsa arada `flush()` (flush tuzağı); internal snapshot/checkout zinciri,
-  OpenAPI (code enum = CartErrorCode.API_CODES), Docker + compose.
+- Cart sonraki adımlar: internal snapshot/checkout zinciri (checkout + yeni sepet aynı TX'te olursa arada `flush()` — flush tuzağı),
+  OpenAPI (code enum = CartErrorCode.API_CODES; maskeli `instance` örneği `/api/cart/items/:bookId`), Docker + compose.
 - order-service (rezervasyon istemcisi; fiyat anlık görüntüsü kendisinde; `RESERVATION_RELEASED` → ödeme iadesi telafisi; süre dolumu
   olayı yok, GET ile sorgulanır; istemci `docs/api/catalog-service.openapi.json`'dan). Compose'a eklenirken catalog'a
   `http://catalog-service:8082` ve `.env` `ORDER_INTERNAL_API_KEY` ile bağlanır.
