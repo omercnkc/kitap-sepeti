@@ -4,3 +4,16 @@ spring:
   datasource:
     username: test
     password: test
+  jpa:
+    properties:
+      hibernate:
+        # Sorgu sayısı testleri için (Statistics.getPrepareStatementCount); yalnızca test profilinde.
+        generate_statistics: true
+        # Üretilen SQL'i doğrulayan testler için (ör. FOR UPDATE); kayıt varsayılan kapalı.
+        session_factory:
+          statement_inspector: com.kitapsepeti.cart.support.SqlCapture
+
+logging:
+  level:
+    # generate_statistics her session sonunda INFO "Session Metrics" yazar; gürültü kapatılır.
+    org.hibernate.engine.internal.StatisticalLoggingSessionEventListener: WARN
