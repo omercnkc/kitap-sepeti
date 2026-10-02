@@ -61,12 +61,16 @@
 - cart-service Adım 2: `Cart` (aggregate root) + `CartItem` + `CartStatus`/converter, `CartRepository`
   (EntityGraph ile tek sorgu okuma, `FOR UPDATE` kilit), kilit beklemesi 5 sn (Hikari `connection-init-sql`). cart-service 90 test.
   Commit `333d19a` + `376ab3a`, push edildi.
-- cart-service Adım 3 (henüz commit edilmedi): kalıcı Resource Server güvenliği (JWKS, lazy; JWKS kesintisi 503), `@CurrentUserId`
+- cart-service Adım 3: kalıcı Resource Server güvenliği (JWKS, lazy; JWKS kesintisi 503), `@CurrentUserId`
   (sub → UUID, geçersiz sub 401 invalid_token), `CartErrorCode` + API_CODES, limit/kitap/catalog exception'ları, GlobalExceptionHandler +
   DbConstraintCodes, ClockConfig. Test anahtarı çalışma anında üretiliyor. cart-service 150 test; uçtan uca a–d geçti.
+  Commit `2119d3f` + `76e8a46`, push edildi.
+- Cart Adım 4 (catalog-service, henüz commit edilmedi): public `GET /api/books/lookup?ids=...` (en fazla 50; yalnızca yayındakiler,
+  istek sırası, tekrarsız; sabit 2 SQL). Sözleşmeye yeni path + `BookLookupResponse`. catalog-service 276 test. cart bunu
+  `GET /api/cart`'ta kullanacak.
 
 ## Yapılacaklar
-- Cart servisi (Adım 4+: Feign client, servis + uçlar, internal zincir, OpenAPI, Docker).
+- Cart servisi (Adım 5+: catalog Feign client (lookup), servis + uçlar, internal zincir, OpenAPI, Docker).
 - Outbox kodunu common'a taşıma (ayrı adım; şu an servis başına kopya).
 - order-service (catalog rezervasyon istemcisi).
 - Search için: yayınevi/yazar/kategori yeniden adlandırması yayındaki kitaplar için olay üretmiyor → yeniden indeksleme gerekecek.

@@ -646,9 +646,28 @@
     readiness 200; start → aynı token 404. Loglarda token/Bearer/e-posta yok; .env değerlerinden yalnızca RabbitMQ kullanıcı adı
     ("kitapsepeti" alt dizesi, zararsız). user_db'de 1 yeni e2e kullanıcısı.
 
+- Cart Adım 3 commit + push edildi (`2119d3f` kod, `76e8a46` memory-bank).
+
+- Cart Adım 4 — catalog-service'e toplu okuma ucu (henüz commit edilmedi; cart-service/user-service/common/migration değişmedi):
+  - `GET /api/books/lookup?ids=...` (public; mevcut `GET /api/books/**` kuralı + `ignoringGet` kapsıyor, bozuk/süresi dolmuş
+    Authorization yok sayılır). Yanıt `BookLookupResponse { items: BookSummaryResponse[] }` (`items` required): yalnızca yayındakiler;
+    bulunamayan/taslak/arşiv sessizce yok; tekrarlı id bir kez; sıra = istekteki ilk geçiş. Stok adedi YOK (yalnızca `inStock`).
+    cart bunu `GET /api/cart`'ta fiyat/stok tazelemek için kullanacak (Feign client sonraki adımda).
+  - Parametre: `BookLookupRequest` (`@ModelAttribute` + `@ParameterObject`, BookSearchRequest kalıbı); `MAX_IDS = 50` tek yerde
+    (limit tekrarları da sayar). Virgüllü (`ids=a,b`) ve tekrarlı (`ids=a&ids=b`) Spring varsayılanıyla ikisi de çalışır.
+    Eksik / `ids=` / 51 id / bozuk UUID / boş eleman (`a,,b`) → hepsi 400 VALIDATION_FAILED, `errors[].field` = `ids…`;
+    gönderilen değerler yanıtta yok (bağlama hatası mesajı "invalid value", limit mesajı "size must be between 1 and 50").
+    `/lookup` literal yolu `/{id}`'den önce eşleşir (MALFORMED_REQUEST değil).
+  - Sorgu: `BookRepository.findByIdInAndStatus` (`@EntityGraph("publisher")`) → `books join publishers where id in (...) and status=?`
+    + yazarlar `default_batch_fetch_size` ile tek toplu sorgu. 1 id ve 50 id için 2 SQL (testle sabitlendi). İndeks/migration gerekmedi (PK).
+  - OpenAPI: Books tag, `security: []`, 400/500 customizer'dan; `ids` şeması `minItems 1 / maxItems 50`. Sözleşme diff'i yalnızca
+    yeni path + `BookLookupResponse` şeması. OpenApiDocsTest (operasyon listesi + public döngüsü) ve OpenApiRequiredFieldsTest güncellendi.
+  - Testler: `BookLookupControllerTest` 14 (catalog 276). Root `clean verify`: common 25, user 83, catalog 276, cart 150.
+  - Docker (seed id'leri): 2 yayında + 1 taslak → 2 item; 51 id → 400; token'sız ve bozuk Bearer → 200.
+
 ## Sonraki adımlar
-- Cart Adım 3 doğrulamaları tamam; commit kullanıcı onayı bekliyor.
-- Cart sonraki adımlar: Catalog Feign client (CatalogUnavailableException/BookNotAvailableException burada kullanılacak), servis + uçlar
+- Cart Adım 4 doğrulamaları tamam; commit kullanıcı onayı bekliyor.
+- Cart sonraki adımlar: Catalog Feign client (`GET /api/books/lookup` + `GET /api/books/{id}`) (CatalogUnavailableException/BookNotAvailableException burada kullanılacak), servis + uçlar
   (Adım 6–7: flush sırası çözümü — checkout/yeniden ekleme öncesi ara flush ya da satırı silmek yerine güncellemek; limitler
   CartLimitExceededException ile), internal zincir (Adım 8), OpenAPI (Adım 9: code enum = CartErrorCode.API_CODES), Docker + compose.
 - order-service (rezervasyon istemcisi; fiyat anlık görüntüsü kendisinde; `RESERVATION_RELEASED` → ödeme iadesi telafisi; süre dolumu
