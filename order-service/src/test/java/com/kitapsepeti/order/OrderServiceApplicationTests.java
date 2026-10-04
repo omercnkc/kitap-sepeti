@@ -10,7 +10,11 @@ import com.kitapsepeti.common.outbox.OutboxEvent;
 import com.kitapsepeti.common.outbox.OutboxRelay;
 import com.kitapsepeti.common.outbox.OutboxRepository;
 import com.kitapsepeti.common.outbox.OutboxService;
+import com.kitapsepeti.order.entity.Order;
+import com.kitapsepeti.order.entity.OrderItem;
+import com.kitapsepeti.order.entity.OrderStatusHistory;
 import com.kitapsepeti.order.outbox.EventRoutingKeys;
+import com.kitapsepeti.order.repository.OrderRepository;
 import com.kitapsepeti.order.outbox.OutboxPublisher;
 import jakarta.persistence.EntityManagerFactory;
 import org.junit.jupiter.api.Test;
@@ -22,8 +26,8 @@ import org.springframework.stereotype.Controller;
 import org.springframework.util.ClassUtils;
 
 /**
- * İskelet: bağlam açılır, Flyway V1 uygulanır, ddl validate geçer. Sipariş entity'si, repository'si, controller'ı,
- * Feign ve resilience4j henüz yok (sonraki adımlar). Actuator yüzeyi {@code config.ActuatorHealthTest}'te.
+ * Bağlam açılır, Flyway V1 uygulanır, sipariş entity'leriyle ddl validate geçer. Controller, Feign ve resilience4j
+ * henüz yok (sonraki adımlar). Actuator yüzeyi {@code config.ActuatorHealthTest}'te.
  */
 class OrderServiceApplicationTests extends ApiTestSupport {
 
@@ -45,15 +49,24 @@ class OrderServiceApplicationTests extends ApiTestSupport {
 		assertThat(context.getBean(Clock.class).getZone()).isEqualTo(ZoneOffset.UTC);
 	}
 
-	/** ddl validate'in kapsadığı tek entity ortak outbox; sipariş entity'leri Adım 2'de. */
+	/** ddl validate'in kapsadığı entity'ler: sipariş aggregate'i ve ortak outbox. Kalem/geçmiş için ayrı repository yok. */
 	@Test
-	void onlyOutboxEntityAndRepositoryAreMapped() {
+	void orderAndOutboxEntitiesAndRepositoriesAreMapped() {
 		assertThat(entityManagerFactory.getMetamodel().getEntities())
 			.extracting(entity -> (Object) entity.getJavaType())
-			.containsExactly(OutboxEvent.class);
+			.containsExactlyInAnyOrder(Order.class, OrderItem.class, OrderStatusHistory.class, OutboxEvent.class);
 		assertThat(context.getBeansOfType(Repository.class).values())
-			.allSatisfy(repository -> assertThat(repository).isInstanceOf(OutboxRepository.class))
-			.hasSize(1);
+			.extracting(repository -> (Object) repositoryInterface(repository))
+			.containsExactlyInAnyOrder(OrderRepository.class, OutboxRepository.class);
+	}
+
+	private static Class<?> repositoryInterface(Object proxy) {
+		for (Class<?> type : ClassUtils.getAllInterfacesAsSet(proxy)) {
+			if (type == OrderRepository.class || type == OutboxRepository.class) {
+				return type;
+			}
+		}
+		return proxy.getClass();
 	}
 
 	@Test
