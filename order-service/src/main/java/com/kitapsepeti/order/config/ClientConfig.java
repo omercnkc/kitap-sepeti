@@ -1,6 +1,6 @@
 package com.kitapsepeti.order.config;
 
-import com.kitapsepeti.order.client.CircuitBreakerProperties;
+import com.kitapsepeti.common.resilience.CircuitBreakerProperties;
 import com.kitapsepeti.order.client.InternalApiKey;
 import com.kitapsepeti.order.client.InternalClientConfiguration;
 import org.springframework.beans.factory.annotation.Value;

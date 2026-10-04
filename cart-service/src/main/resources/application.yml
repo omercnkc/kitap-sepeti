@@ -74,6 +74,14 @@ app:
     issuer: kitapsepeti-user-service
   catalog:
     base-url: ${CATALOG_BASE_URL:http://localhost:8082}
+  # Catalog çağrılarının circuit breaker'ı (config.CatalogCircuitBreakerConfig). Son 20 çağrının en az 10'u varken
+  # hata oranı %50'ye ulaşınca açılır; açıkken istek gönderilmez, 10 sn sonra 3 deneme çağrısı.
+  circuit-breaker:
+    sliding-window-size: 20
+    minimum-calls: 10
+    failure-rate-threshold: 50
+    open-duration: 10s
+    half-open-calls: 3
   # /internal/** istemcileri. Ham anahtar burada değil; yalnızca SHA-256 özeti (64 hex). Catalog'dan farklı olarak
   # özet boşsa uygulama açılmaz (InternalAuthConfig).
   internal-auth:

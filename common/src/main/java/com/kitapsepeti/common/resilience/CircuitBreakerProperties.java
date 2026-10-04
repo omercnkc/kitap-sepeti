@@ -1,4 +1,4 @@
-package com.kitapsepeti.order.client;
+package com.kitapsepeti.common.resilience;
 
 import java.time.Duration;
 
@@ -9,7 +9,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
 /**
- * Her bağımlı servis için ayrı circuit breaker'ın ortak ayarı ({@code app.circuit-breaker.*}). Pencere sayı tabanlı.
+ * Bağımlı servis circuit breaker'larının ortak ayarı ({@code app.circuit-breaker.*}). Pencere sayı tabanlı. Servis
+ * {@code @EnableConfigurationProperties} ile kaydeder.
  *
  * @param slidingWindowSize son kaç çağrıya bakılır
  * @param minimumCalls hata oranı hesaplanmadan önce gereken çağrı sayısı

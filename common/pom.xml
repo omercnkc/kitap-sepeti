@@ -16,7 +16,7 @@
 	</parent>
 	<artifactId>kitap-sepeti-common</artifactId>
 	<name>KitapSepeti Common</name>
-	<description>Servislerin ortak hata modeli (ProblemDetail), güvenlik bileşenleri ve transactional outbox</description>
+	<description>Servislerin ortak hata modeli (ProblemDetail), güvenlik bileşenleri, transactional outbox ve circuit breaker kurulumu</description>
 
 	<dependencies>
 		<dependency>
@@ -42,6 +42,12 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-amqp</artifactId>
+			<optional>true</optional>
+		</dependency>
+		<!-- Sürüm kök POM'daki Spring Cloud BOM'undan; Spring Cloud starter'ı gerekmez. -->
+		<dependency>
+			<groupId>io.github.resilience4j</groupId>
+			<artifactId>resilience4j-circuitbreaker</artifactId>
 			<optional>true</optional>
 		</dependency>
 

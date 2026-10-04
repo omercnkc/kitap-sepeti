@@ -9,6 +9,8 @@ import com.kitapsepeti.cart.support.JwksServer;
 import com.kitapsepeti.cart.support.MutableClock;
 import com.kitapsepeti.cart.support.MutableClockConfiguration;
 import com.kitapsepeti.cart.support.TestJwt;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -51,6 +53,13 @@ public abstract class ApiTestSupport {
 	@Autowired
 	protected MutableClock clock;
 
+	/**
+	 * Paylaşılan bağlamda bir testin açtığı devre sonraki teste taşınmasın diye her test sonunda kapatılır (kapatmanın
+	 * WARN satırı açan testin çıktısında kalır).
+	 */
+	@Autowired
+	protected CircuitBreaker catalogCircuitBreaker;
+
 	/** Gerçek repository; yarış senaryosu testleri tek tek metotları taklit eder (her testten sonra sıfırlanır). */
 	@MockitoSpyBean
 	protected CartRepository carts;
@@ -68,6 +77,11 @@ public abstract class ApiTestSupport {
 		CATALOG.reset();
 		jdbc.update("DELETE FROM cart_items");
 		jdbc.update("DELETE FROM carts");
+	}
+
+	@AfterEach
+	void closeCatalogCircuit() {
+		catalogCircuitBreaker.reset();
 	}
 
 	protected static RequestPostProcessor bearer(String token) {
