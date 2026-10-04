@@ -39,6 +39,9 @@ public final class OrderReasons {
 	/** Ödeme süresi içinde sonuçlanmadı (zaman aşımı görevi). */
 	public static final String ORDER_EXPIRED = "ORDER_EXPIRED";
 
+	/** Checkout sırasında DB veya iç hata nedeniyle süreç yarıda kesildi. */
+	public static final String CHECKOUT_INTERRUPTED = "CHECKOUT_INTERRUPTED";
+
 	private OrderReasons() {
 	}
 

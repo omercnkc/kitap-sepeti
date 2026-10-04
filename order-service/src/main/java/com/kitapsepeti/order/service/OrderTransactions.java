@@ -72,6 +72,12 @@ public class OrderTransactions {
 		return transition(orderId, order -> order.markStockHeld(this.clock));
 	}
 
+	/** Catalog rezervasyonu bırakıldı: {@code requested/held → released}. Yalnızca sipariş failed ise uygulanır. */
+	@Transactional(isolation = Isolation.READ_COMMITTED)
+	public Transition markStockReleased(UUID orderId) {
+		return transition(orderId, order -> order.markStockReleased(this.clock));
+	}
+
 	/** {@code pending → failed}; stok durumu korunur (bırakma Adım 5). */
 	@Transactional(isolation = Isolation.READ_COMMITTED)
 	public Transition markFailed(UUID orderId, String failureCode) {

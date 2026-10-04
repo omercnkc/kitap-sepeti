@@ -28,7 +28,10 @@ public enum OrderErrorCode implements ErrorCode {
 	INVALID_QUANTITY(HttpStatus.UNPROCESSABLE_CONTENT, Level.INFO, "An item quantity is out of the allowed range."),
 	INVALID_PRICE(HttpStatus.UNPROCESSABLE_CONTENT, Level.INFO, "A book price cannot be used for an order."),
 	INVALID_CURRENCY(HttpStatus.UNPROCESSABLE_CONTENT, Level.INFO, "A book currency cannot be used for an order."),
-	PAYMENT_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, Level.WARN, "Payment is temporarily unavailable; retry later.");
+	PAYMENT_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, Level.WARN, "Payment is temporarily unavailable; retry later."),
+	ORDER_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, Level.WARN, "Order service is temporarily unavailable; retry later."),
+	CHECKOUT_INTERRUPTED(HttpStatus.SERVICE_UNAVAILABLE, Level.WARN,
+			"Checkout was interrupted; retry or check order status later.");
 
 	private final HttpStatus status;
 

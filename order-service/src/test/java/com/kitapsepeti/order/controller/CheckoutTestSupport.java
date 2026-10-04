@@ -7,6 +7,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlMatching;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 
 import java.util.List;
@@ -46,6 +47,8 @@ abstract class CheckoutTestSupport extends ApiTestSupport {
 	static final String RESERVATIONS = "/internal/stock/reservations";
 
 	static final String PAYMENTS = "/internal/payments";
+
+	static final String RELEASE_PATH_REGEX = "/internal/stock/reservations/[^/]+/release";
 
 	/** Adres değerleri logda aranır; başka hiçbir metinde geçmeyecek kadar özgün. */
 	static final String RECIPIENT = "Gizlialici Soyadxq";
@@ -115,6 +118,7 @@ abstract class CheckoutTestSupport extends ApiTestSupport {
 			this.breakers.get(downstream).reset();
 		}
 		this.clock.reset();
+		org.mockito.Mockito.reset(this.transactions);
 		this.userId = UUID.randomUUID();
 		this.token = TestJwt.user(this.userId.toString());
 	}
@@ -126,6 +130,7 @@ abstract class CheckoutTestSupport extends ApiTestSupport {
 			this.breakers.get(downstream).reset();
 		}
 		this.clock.reset();
+		org.mockito.Mockito.reset(this.transactions);
 	}
 
 	ResultActions checkout() throws Exception {
@@ -196,6 +201,20 @@ abstract class CheckoutTestSupport extends ApiTestSupport {
 		PAYMENT.server().stubFor(post(urlEqualTo(PAYMENTS)).willReturn(response));
 	}
 
+	static void stubRelease(ResponseDefinitionBuilder response) {
+		CATALOG.server().stubFor(post(urlMatching(RELEASE_PATH_REGEX)).willReturn(response));
+	}
+
+	static void stubReleaseReleased() {
+		stubRelease(json(200, """
+				{"orderId":"{{request.pathSegments.[3]}}","status":"released","expiresAt":"2026-10-04T10:15:00Z","items":[]}""")
+			.withTransformers("response-template"));
+	}
+
+	static void stubReleaseNotFound() {
+		stubRelease(problem(404, "RESOURCE_NOT_FOUND"));
+	}
+
 	/** Mutlu yol: tek kitap, stok tutuldu, ödeme başlatıldı. */
 	static Book stubHappyPath() {
 		Book book = Book.of("Mutlu Kitap", "149.90");
@@ -233,6 +252,10 @@ abstract class CheckoutTestSupport extends ApiTestSupport {
 
 	static List<LoggedRequest> paymentRequests() {
 		return PAYMENT.server().findAll(postRequestedFor(urlEqualTo(PAYMENTS)));
+	}
+
+	static List<LoggedRequest> releaseRequests() {
+		return CATALOG.server().findAll(postRequestedFor(urlMatching(RELEASE_PATH_REGEX)));
 	}
 
 	static List<LoggedRequest> cartRequests() {

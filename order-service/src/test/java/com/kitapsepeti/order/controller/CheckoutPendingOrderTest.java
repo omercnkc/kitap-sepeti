@@ -28,9 +28,6 @@ import org.springframework.mock.web.MockHttpServletResponse;
  */
 class CheckoutPendingOrderTest extends CheckoutTestSupport {
 
-	@Autowired
-	private OrderTransactions transactions;
-
 	private record Outcome(int status, String code, String id, String orderId) {
 	}
 

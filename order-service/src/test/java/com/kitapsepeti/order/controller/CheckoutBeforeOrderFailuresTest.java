@@ -27,9 +27,6 @@ import org.springframework.test.web.servlet.ResultActions;
  */
 class CheckoutBeforeOrderFailuresTest extends CheckoutTestSupport {
 
-	@Autowired
-	private OrderTransactions transactions;
-
 	@AfterEach
 	void noOrderReservationOrPayment() {
 		assertThat(reserveRequests()).isEmpty();

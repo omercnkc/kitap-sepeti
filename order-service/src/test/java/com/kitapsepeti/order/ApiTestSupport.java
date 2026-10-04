@@ -2,6 +2,7 @@ package com.kitapsepeti.order;
 
 import java.util.UUID;
 
+import com.kitapsepeti.order.service.OrderTransactions;
 import com.kitapsepeti.order.support.JwksServer;
 import com.kitapsepeti.order.support.StubServer;
 import com.kitapsepeti.order.support.TestClockConfiguration;
@@ -15,6 +16,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
@@ -45,6 +47,9 @@ public abstract class ApiTestSupport {
 
 	@Autowired
 	protected JdbcTemplate jdbc;
+
+	@MockitoSpyBean
+	protected OrderTransactions transactions;
 
 	@DynamicPropertySource
 	static void remoteProperties(DynamicPropertyRegistry registry) {
