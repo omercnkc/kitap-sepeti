@@ -86,19 +86,23 @@
 - Cart Adım 9 (commit `6fcd291` + `bb2e0cf`, push edildi): OpenAPI — springdoc, `OpenApiConfig` (yol önekine göre bearerAuth/internalApiKey, standart
   hatalar, `CartLimitProblem`), sözleşme `docs/api/cart-service.openapi.json` (4 path, 6 operasyon, internal dahil), drift +
   docs + required/nullable testleri. cart-service 301 test (2 skipped).
-- Cart Adım 10 (henüz commit edilmedi): `cart-service/Dockerfile` (catalog kopyası, non-root 10001) + compose kaydı (yalnızca mysql'e
+- Cart Adım 10 (commit `77ff615`, push edildi): `cart-service/Dockerfile` (catalog kopyası, non-root 10001) + compose kaydı (yalnızca mysql'e
   bağımlı, sırlar `${VAR:?}`), health yalnızca yerel bileşenler (Spring Cloud refreshScope/discoveryComposite kapalı), `docs/docker.md`
   cart bölümü. cart-service 312 test (2 skipped). Docker uçtan uca (sepet akışı, internal snapshot, Catalog kapalıyken UNAVAILABLE/503,
   restart kalıcılığı, JWKS) geçti. **Cart servisi tamamlandı.**
 
-- Payment Adım 1 (henüz commit edilmedi): `payment-service` modülü (8087; webmvc, data-jpa, flyway, validation, actuator, common;
+- Payment Adım 1 (commit `5c51261` + `b577ad9`, push edildi): `payment-service` modülü (8087; webmvc, data-jpa, flyway, validation, actuator, common;
   security/amqp/springdoc/openfeign yok), `infra/mysql/init/30-payment-db.sh` + compose mysql env (`PAYMENT_DB_*`, `${VAR:?}`),
   V1 (payments, provider_events, outbox — outbox catalog'la birebir). payment-service 60 test (49 şema/kısıt + 11 bağlam/health).
   Yerel `payment_db` + `payment_svc` (yetki yalnızca `payment_db.*`), V1 `spring-boot:run` ile uygulandı.
+- Payment Adım 2 (henüz commit edilmedi): `Payment` (initiate → attachProviderReference; succeed/fail → TransitionResult;
+  matches), `ProviderEvent` (@Immutable), katı küçük harf converter'lar (ortak taban), kilitsiz repository'ler, `PaymentProvider`
+  soyutlaması + tek bean (`app.payment.provider`, yalnızca mock açılır), `MockPaymentProvider`, `MockOutcomeRule` (kuruş = fail-cents →
+  CARD_DECLINED), `PaymentProperties` (fail-cents 0–99). payment-service 177 test.
 
 ## Yapılacaklar
-- Payment (Faz 7) sonraki adımlar: entity/repository, internal ödeme oluşturma ucu (API key, Order), mock sağlayıcı + imzalı webhook
-  (HMAC), outbox + RabbitMQ ile sonucun Order'a gitmesi, OpenAPI, Docker + compose (Adım 8).
+- Payment (Faz 7) sonraki adımlar: internal ödeme oluşturma ucu (API key, Order), mock sağlayıcı imzalı webhook (HMAC),
+  outbox + RabbitMQ ile sonucun Order'a gitmesi, OpenAPI, Docker + compose (Adım 8).
 - Cart ertelenenler: CartCheckedOut tüketimi (Order fazı); yol maskeleme + boş özet politikasını common'a taşıma; Catalog OpenAPI nullable.
 - Gateway fazı: docs/Swagger'ı (üç servis) dışarıya kapatmak.
 - Outbox kodunu common'a taşıma (ayrı adım; şu an servis başına kopya).
@@ -114,6 +118,9 @@
   user-service/JWKS kapalıysa son bilinen anahtarla doğrulamaya devam (şu an önbellek süresi içinde 200, sonrasında 503).
 
 ## Bilinen sorunlar
+- payment `provider_payment_id` / `provider_event_id` `utf8mb4_0900_ai_ci`: referans araması ve iki UNIQUE kısıt büyük/küçük harf
+  duyarsız. Mock için sorun değil; harf duyarlı kimlikli gerçek sağlayıcı eklenmeden V2 (`utf8mb4_bin`) değerlendirilmeli.
+- payment `app.payment.provider=` (boş) açılışı durdurmaz, varsayılan mock'a düşer (Spring Binder davranışı).
 - cart flush sırası (Hibernate INSERT → UPDATE → DELETE; orphanRemoval da DELETE'i sona bırakır): aynı flush'ta satırı silip aynı
   kitabı eklemek `uk_cart_items_cart_book`, checkout + yeni aktif sepet `uk_carts_active_user` verir. Adım 6–7 akışları bu yolu
   kullanmaz (tekrar ekleme satırı UPDATE eder; silme/boşaltma yalnızca siler, yeniden ekleme ayrı istek). İleride satır silen/checkout

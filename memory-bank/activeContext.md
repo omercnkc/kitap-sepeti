@@ -786,7 +786,7 @@
   - Belgelenmeyen gerçek yollar (catalog ile aynı tercih): 406/415, ilk-sepet yarışında ikinci kısıt ihlali → 409 CONFLICT (pratikte
     olmaz), kilit zaman aşımı → 500 kapsamında.
 
-- Cart Adım 10 — Docker + compose (henüz commit edilmedi; catalog/user Dockerfile + compose kayıtları, common, migration, .env
+- Cart Adım 10 — Docker + compose (commit `77ff615`, push edildi; catalog/user Dockerfile + compose kayıtları, common, migration, .env
   değişmedi). CART SERVİSİ TAMAMLANDI (Adım 0–10).
   - `cart-service/Dockerfile`: catalog'unkinin birebir kopyası (servis adı + `EXPOSE 8083`); 21-jdk build → 21-jre runtime, uid/gid
     10001 `app`, layered extract, Dockerfile HEALTHCHECK yok (compose'ta), ARG/ENV'de sır yok. İmaj 618 MB disk / 189 MB içerik.
@@ -821,7 +821,7 @@
   - Sipariş başına TEK ödeme (`uk_payments_order`).
   - Sonuç outbox + RabbitMQ ile Order'a gider.
   - Kullanıcıya açık uç yok: JWT / Resource Server YOK. Yalnızca internal (API key) ve webhook (HMAC imza). OpenFeign hiç gerekmiyor.
-- Payment Adım 1 — iskelet + DB + V1 (henüz commit edilmedi; Cart Adım 10 da commit'siz duruyor; diğer servisler, common, migration'ları
+- Payment Adım 1 — iskelet + DB + V1 (commit `5c51261` + memory-bank `b577ad9`, push edildi; diğer servisler, common, migration'ları
   değişmedi; uç/entity/güvenlik/amqp yok):
   - Kök pom `<module>payment-service</module>`; artifactId `payment-service` (spesifikasyondaki `kitap-sepeti-payment-service` yerine:
     diğer servisler `<ad>-service`, yalnızca common `kitap-sepeti-` önekli; Dockerfile kalıbı `<svc>/target/<svc>-*.jar`). Test
@@ -843,10 +843,33 @@
     outbox DDL = catalog, outbox kolonları/default/geçersiz JSON).
   - Root `clean verify`: common 25, user 83, catalog 276, cart 312 (2 skipped), payment 60. `spring-boot:run` → health UP, V1 uygulandı,
     log'da WARN yok.
+  - Commit mesajı notu: kullanıcı sonradan commit'leri "feat(cart): add Dockerfile and compose service with local-only health" /
+    "feat(payment): add payment-service module with payment_db and V1 schema" / "docs: update memory bank for cart step 10 and payment
+    step 1" olarak ayırmak istedi; içerik ayrımı zaten aynıydı (`77ff615`, `5c51261`, `b577ad9`) ama push edilmişti → yeniden adlandırma
+    force push gerektirir (yasak), dokunulmadı.
+
+- Payment Adım 2 — entity, repository, alan geçişleri, sağlayıcı soyutlaması, mock sonuç kuralı (henüz commit edilmedi; uç, güvenlik,
+  amqp, outbox kodu, webhook, HTTP istemcisi YOK; migration, diğer modüller, common değişmedi):
+  - Kod (`com.kitapsepeti.payment`): `entity/` DbEnum, StrictDbEnumConverter, PaymentStatus(+Converter), PaymentProviderType(+Converter),
+    ProviderEventType(+Converter), TransitionResult, Payment, ProviderEvent; `repository/` PaymentRepository, ProviderEventRepository;
+    `provider/` PaymentProvider, ProviderPayment, ProviderPaymentRequest, MockPaymentProvider, MockOutcome, MockOutcomeRule;
+    `config/` PaymentProperties, PaymentConfig, ClockConfig; application.yml `app.payment` bloğu. Kurallar systemPatterns "Ödeme alanı".
+  - Sapmalar: ID akışı "attach" (kullanıcı seçti); üç ayrı converter yerine ortak taban; MAX_AMOUNT kontrolü; `MockOutcomeRule` bean'i;
+    "setter yok" testi derlemeyle sağlanıyor (setter yok, protected ctor); boş `app.payment.provider=` mock'a düşüyor (açılmayı durdurmuyor).
+  - Bulgu: `provider_payment_id` (ve `provider_event_id`) kolonları `utf8mb4_0900_ai_ci` → `findByProviderTypeAndProviderPaymentId`
+    büyük/küçük harf duyarsız eşler ("MOCK_FIND" = "mock_find", testte belgelendi) ve `uk_payments_provider_ref` /
+    `uk_provider_events_provider_event` yalnızca harf büyüklüğü farklı iki referansı çakıştırır. Mock referansları küçük harf UUID →
+    sorun yok; büyük/küçük harf duyarlı kimlikli gerçek sağlayıcıda (ör. Stripe) V2 ile `utf8mb4_bin` düşünülmeli.
+  - Testler (payment 177 = 60 + 117): PaymentTest 44, DbEnumConvertersTest 24, MockOutcomeRuleTest 17, PaymentPropertiesTest 12,
+    PaymentRepositoryTest 11 (@DataJpaTest + Testcontainers), ProviderEventTest 6, MockPaymentProviderTest 2,
+    PaymentServiceApplicationTests 12 (+1: tek MOCK sağlayıcı bean'i, UTC Clock), PaymentSchemaConstraintsTest 49.
+  - Root `clean verify`: common 25, user 83, catalog 276, cart 312 (2 skipped), payment 177. `spring-boot:run` → Hibernate validate geçti,
+    health + readiness UP, log'da WARN/ERROR 0.
 
 ## Sonraki adımlar
-- Payment Adım 2+: entity/repository (UUIDv7, Clock), DbConstraints eşlemesi, internal ödeme oluşturma ucu (API key; Order),
-  mock sağlayıcı + HMAC webhook, outbox + RabbitMQ (PaymentSucceeded/PaymentFailed → Order), OpenAPI, Docker + compose (Adım 8).
+- Payment Adım 3+: internal ödeme oluşturma ucu (API key; Order; initiate → save → provider.create → attach), DbConstraints eşlemesi,
+  mock HMAC webhook (MockOutcomeRule + TransitionResult + ProviderEvent tekrar koruması), outbox + RabbitMQ (PaymentSucceeded/PaymentFailed
+  → Order), OpenAPI, Docker + compose (Adım 8).
 - Cart ertelenenler: (1) CartCheckedOut tüketimi Order fazında (checkout + yeni sepet aynı TX'te olursa arada `flush()` — flush tuzağı);
   (2) yol maskelemeyi (`MaskedRequestPaths`) ve boş özet politikasını (internal key özeti boş/bozuksa açılmama) common'a taşıma
   (Order fazının başında ayrı adım); (3) Catalog OpenAPI'de nullable alanları `types = {"x","null"}` ile işaretleme (cart'taki gibi).

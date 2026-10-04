@@ -332,6 +332,33 @@
   yorumsuz/boşluk-normalize metin karşılaştırır → catalog outbox'ı değişirse payment testi kırılır). Kart verisi kolonu yok
   (information_schema testi: card/pan/cvv/cvc/expiry geçen kolon yok).
 
+## Ödeme alanı (payment-service, Adım 2)
+- Enum kolonları: `entity/DbEnum` (`dbValue()`) + ortak `StrictDbEnumConverter<E>` taban sınıfı (her enum için üç satırlık
+  `@Converter` alt sınıfı; `autoApply` yok, alanda `@Convert`). Okuma BİREBİR: 'Initiated', 'SUCCEEDED', 'Mock', 'PAYMENT.SUCCEEDED',
+  '' → `IllegalArgumentException("Unknown <label> in database: '<v>'; expected one of [...]")`. null ↔ null.
+  PaymentStatus initiated/succeeded/failed (`isFinal()`), PaymentProviderType mock/iyzico/paytr/stripe, ProviderEventType
+  "payment.succeeded"/"payment.failed".
+- ID AKIŞI (kullanıcı kararı "attach"): `Payment.initiate(...)` sağlayıcı referansı ALMAZ → save (id Hibernate `@UuidGenerator(VERSION_7)`,
+  cart ile aynı) → `provider.create(new ProviderPaymentRequest(payment.getId(), amount, currency))` → `attachProviderReference(ref, clock)`.
+  attach: ilk kez → true + updatedAt; aynı ref → false, damga yok (idempotent); başka ref → ISE; final durumda referanssız → ISE;
+  boş / >128 → IAE.
+- Durum geçişleri `TransitionResult` döner: APPLIED (durum + updatedAt değişir), ALREADY_IN_STATE (aynı final durum tekrar; zaman
+  DEĞİŞMEZ), CONFLICTING_FINAL (succeeded ↔ failed; HİÇBİR şey değişmez). Webhook tekrarları/çelişen olaylar exception değil sonuçla
+  ayrılır (Adım 6'da çağıran karar verir). `fail` failureCode'u (`^[A-Z][A-Z0-9_]{0,63}$`) durumdan ÖNCE doğrular (IAE).
+- Tutar: null → NPE, ≤ 0 / 2'den fazla ondalık (10.001 yuvarlanmaz) / > 9999999999.99 (DECIMAL(12,2)) → IAE; `setScale(2, UNNECESSARY)`.
+  `matches(userId, amount, currency)` tutarı `compareTo` ile (10.5 = 10.50), null-safe false.
+- Setter YOK, protected no-arg ctor; değişmeyen kolonlar `updatable = false`. Zamanlar Clock'tan, MICROS (cart kalıbı).
+- `ProviderEvent`: `@Immutable`, `record(provider, providerEventId, paymentId, eventType, clock)`; `paymentId` düz UUID (ilişki yok).
+  Tekrar olay → `uk_provider_events_provider_event` → `DataIntegrityViolationException` (`DbConstraints.isViolated` ile ayırt edilir).
+- Repository'ler kilitsiz: `PaymentRepository.findByOrderId`, `findByProviderTypeAndProviderPaymentId`; `ProviderEventRepository` yalnızca CRUD.
+- Sağlayıcı: `provider/PaymentProvider` (`type()`, `create(ProviderPaymentRequest) → ProviderPayment(providerPaymentId, redirectUrl?)`).
+  TEK bean, `config/PaymentConfig` `app.payment.provider`'a göre switch ile kurar; mock dışı değer (iyzico/paytr/stripe) → ISE
+  "Payment provider '<v>' is not supported yet; use 'mock'" → uygulama açılmaz; tanınmayan değer bağlamada düşer.
+  `MockPaymentProvider` @Component DEĞİL; referans `"mock_" + UUID`, redirect null.
+- `MockOutcomeRule(failCents)` saf sınıf (bean olarak da kayıtlı): tutarın kuruşu = failCents → `MockOutcome.failed("CARD_DECLINED")`,
+  aksi `succeeded()`. `MockOutcome(failureCode)` record'u (`isSucceeded()`; static `succeeded()` record accessor'ıyla çakıştığı için
+  boolean bileşen yok).
+
 ## Aggregate entity'leri (cart-service)
 - Aggregate root (`Cart`) satırları `@OneToMany(mappedBy, cascade = ALL, orphanRemoval = true)` + `@OrderBy` ile `List`'te tutar;
   getter salt okunur görünüm, değişiklik yalnızca root'un metotlarıyla. Satırın ayrı repository'si yok. Satır constructor'ı package-private.

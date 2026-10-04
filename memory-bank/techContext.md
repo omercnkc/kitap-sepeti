@@ -29,7 +29,10 @@
   `.\mvnw.cmd -pl payment-service spring-boot:run` (önce `.\mvnw.cmd -pl common -am install -DskipTests`), testler
   `.\mvnw.cmd -pl payment-service -am test`. Bağımlılıklar yalnızca webmvc, data-jpa, flyway(-mysql), validation, actuator, mysql, common;
   security/amqp/springdoc/openfeign YOK (testle kilitli; security/amqp sonraki adımlarda eklenecek, openfeign hiç). Compose servis
-  kaydı/Dockerfile yok (Adım 8).
+  kaydı/Dockerfile yok (Adım 8). `spring-boot:run` DB bilgisini `spring.config.import` ile `.env`'den kendisi okur (env vermek gerekmez).
+- payment `app.payment.*` (`config/PaymentProperties`, @Validated): `provider` (varsayılan mock; v1'de yalnızca mock açılır),
+  `mock.fail-cents` 0–99 (varsayılan 99). DİKKAT: `app.payment.provider=` (boş) hata vermez, Binder boş değeri null yapıp
+  `@DefaultValue("mock")`'a düşer (testle sabitlendi). Bağlam testleri `ApplicationContextRunner().withUserConfiguration(PaymentConfig.class)`.
 - Compose host portları YALNIZCA `127.0.0.1` (8081, 8082, 8083, 3306, 5672, 15672, adminer 8090): LAN'dan erişilmez, localhost'tan
   erişilir; container'lar arası servis adıyla erişim etkilenmez.
 - Spring Cloud: release train `2025.1.3` (Oakwood; Boot 4.0.x/4.1.x, 4.1 desteği 2025.1.2'den itibaren), kök POM BOM import.
