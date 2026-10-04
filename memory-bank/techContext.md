@@ -28,8 +28,10 @@
   `infra/mysql/init/30-payment-db.sh`; compose mysql env'inde `${VAR:?}` → .env'de yoksa HİÇBİR compose komutu çalışmaz). Çalıştırma
   `.\mvnw.cmd -pl payment-service spring-boot:run` (önce `.\mvnw.cmd -pl common -am install -DskipTests`), testler
   `.\mvnw.cmd -pl payment-service -am test`. Bağımlılıklar webmvc, data-jpa, flyway(-mysql), validation, actuator, security (Adım 3),
-  mysql, common; amqp/springdoc/openfeign YOK (testle kilitli; amqp sonraki adımlarda, openfeign hiç). Compose servis kaydı/Dockerfile
-  yok. `spring-boot:run` DB bilgisini ve internal anahtar özetini `spring.config.import` ile `.env`'den kendisi okur.
+  amqp (Adım 4), mysql, common; springdoc/openfeign YOK (testle kilitli). Compose servis kaydı/Dockerfile yok. `spring-boot:run` DB,
+  RabbitMQ (`RABBITMQ_HOST/PORT/USER/PASSWORD`, catalog ile aynı adlar) ve internal anahtar özetini `spring.config.import` ile
+  `.env`'den kendisi okur. Testler RabbitMQ'yu `RabbitTestcontainersConfiguration` (rabbitmq:4-management) ile alır;
+  outbox worker testte kapalı (`app.outbox.enabled: false`), relay testleri açar.
 - payment internal anahtarı: `.env` `PAYMENT_INTERNAL_KEY_ORDER_SHA256` (Order'ın ham anahtarı `ORDER_INTERNAL_API_KEY`'in SHA-256 hex
   özeti; `.env.example`'da boş). Yok/boş/bozuk → payment-service açılmaz. Testler JVM'de üretilen anahtarı `InternalTestKeys.register`
   (DynamicPropertySource) ile verir.

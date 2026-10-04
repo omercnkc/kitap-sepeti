@@ -232,13 +232,18 @@
 - Worker testlerde varsayılan kapalı (`app.outbox.enabled: false`); açan test ayrı context kurar.
 - Tüm servisler aynı `kitapsepeti.events` exchange'ine yayınlar; her serviste tanım BİREBİR aynı olmalı
   (`new TopicExchange(name, true, false)`, argümansız). Farklı durable/autoDelete/argüman → broker PRECONDITION_FAILED
-  ile kanalı kapatır. Outbox henüz `common`'da DEĞİL: worker sınıfları servis başına kopya (user-service ↔ catalog-service; taşıma ayrı adım).
+  ile kanalı kapatır. Outbox henüz `common`'da DEĞİL: worker sınıfları servis başına kopya (user-service ↔ catalog-service ↔
+  payment-service; taşıma Order fazında ayrı adım).
+- payment outbox farkı: payload'da `eventId` (= outbox id = `message_id`) var; id INSERT'ten önce
+  `UuidVersion7Strategy.INSTANCE.generateUuid(null)` ile üretilir, `OutboxService.append(type, id, eventType, eventId -> payload)`
+  `EntityManager.persist` ile yazar. Sonuç olayları `PaymentResults`'ta durum geçişiyle aynı TX'te, yalnızca APPLIED'da.
 - catalog testlerinde RabbitMQ konteyneri ayrı `RabbitTestcontainersConfiguration`; tam context açan testler import eder,
   dilim testleri (`@DataJpaTest`, `@JdbcTest`) etmez.
 - JPQL/SQL bulk UPDATE `@UpdateTimestamp`/`@Version`'ı atlar; `updated_at` yine de kolonun `ON UPDATE CURRENT_TIMESTAMP(6)`
   tanımıyla DB saatine güncellenir (değer değiştiren her UPDATE'te).
 - Adlandırma: `aggregate_type` küçük harf varlık adı (`user`, `book`); `event_type` PascalCase geçmiş zaman/olgu (`UserRegistered`,
-  `BookUpserted`, `BookRemoved`); routing key `<varlık>.<olay>` küçük harf (`user.registered`, `book.upserted`, `book.removed`).
+  `BookUpserted`, `BookRemoved`, `PaymentSucceeded`, `PaymentFailed`); routing key `<varlık>.<olay>` küçük harf
+  (`user.registered`, `book.upserted`, `book.removed`, `payment.succeeded`, `payment.failed`).
   Payload record'u `service/event/<Olay>Event` (`TYPE`, `VERSION`, ilk alan `eventVersion`). Payload'a iç sayaç/versiyon/durum konmaz.
 
 ## API dokümanı (OpenAPI)

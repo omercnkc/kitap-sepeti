@@ -99,16 +99,18 @@
   matches), `ProviderEvent` (@Immutable), katı küçük harf converter'lar (ortak taban), kilitsiz repository'ler, `PaymentProvider`
   soyutlaması + tek bean (`app.payment.provider`, yalnızca mock açılır), `MockPaymentProvider`, `MockOutcomeRule` (kuruş = fail-cents →
   CARD_DECLINED), `PaymentProperties` (fail-cents 0–99). payment-service 177 test.
-- Payment Adım 3 (henüz commit edilmedi): V2 (sağlayıcı kimlikleri `utf8mb4_bin`), security (internal API key zinciri `order-service`
+- Payment Adım 4 (henüz commit edilmedi): `PaymentResults` (durum geçişi + outbox aynı TX), outbox → RabbitMQ yayıncısı
+  (catalog kopyası, `kitapsepeti.events`, `payment.succeeded`/`payment.failed`), olay belgeleri. payment-service 247 test.
+- Payment Adım 3 (commit `e5b4132` + `1dad3a0`, push edildi): V2 (sağlayıcı kimlikleri `utf8mb4_bin`), security (internal API key zinciri `order-service`
   + denyAll varsayılan zincir, anonim 403 challenge'sız), `POST /internal/payments` (idempotent, 201/200/409/503) +
   `GET /internal/payments/{id}`, yol maskeleme (log dahil). payment-service 220 test. Yerelde V2 uygulandı, uçtan uca geçti.
 
 ## Yapılacaklar
-- Payment (Faz 7) sonraki adımlar: mock sağlayıcı imzalı webhook (HMAC) + mock dispatcher, outbox + RabbitMQ ile sonucun Order'a
-  gitmesi, OpenAPI, Docker + compose.
+- Payment (Faz 7) sonraki adımlar: mock sağlayıcı imzalı webhook (HMAC) + mock dispatcher + kurtarma görevi, OpenAPI,
+  Docker + compose.
+- Outbox kodunu common'a taşıma (Order fazı başında): user-service, catalog-service ve payment-service'te üç kopya.
 - Cart ertelenenler: CartCheckedOut tüketimi (Order fazı); yol maskeleme + boş özet politikasını common'a taşıma; Catalog OpenAPI nullable.
 - Gateway fazı: docs/Swagger'ı (üç servis) dışarıya kapatmak.
-- Outbox kodunu common'a taşıma (ayrı adım; şu an servis başına kopya).
 - order-service (catalog rezervasyon istemcisi).
 - Search için: yayınevi/yazar/kategori yeniden adlandırması yayındaki kitaplar için olay üretmiyor → yeniden indeksleme gerekecek.
 - Backlog: admin PATCH'te bilinmeyen alanlar (stok, status) sessizce yok sayılıyor; ileride 400 düşünülebilir.
@@ -121,6 +123,8 @@
   user-service/JWKS kapalıysa son bilinen anahtarla doğrulamaya devam (şu an önbellek süresi içinde 200, sonrasında 503).
 
 ## Bilinen sorunlar
+- Kök `/actuator/health` (catalog ve payment) RabbitMQ kapalıyken 503 DOWN ve her çağrıda stack trace'li WARN
+  (RabbitHealthIndicator); readiness etkilenmez. Healthcheck'ler readiness kullanmalı.
 - payment: aynı siparişe eşzamanlı ilk isteklerde sağlayıcı birden fazla çağrılabilir (yalnızca ilk referans yazılır, diğerleri WARN ile
   atılır). Mock'ta zararsız; gerçek sağlayıcıda sahipsiz ödeme oturumu kalabilir (idempotency anahtarı = paymentId ile çözülmeli).
 - payment `app.payment.provider=` (boş) açılışı durdurmaz, varsayılan mock'a düşer (Spring Binder davranışı).

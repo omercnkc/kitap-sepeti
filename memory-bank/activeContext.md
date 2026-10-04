@@ -895,9 +895,43 @@
     (flyway_schema_history 1, 2), health UP. Uçtan uca: anahtarsız 401 (ApiKey challenge), POST 201 → aynı 200 → farklı tutar 409 →
     GET 200, durum initiated, referans `mock_`; loglarda id/tutar/referans/anahtar/özet yok.
 
+  - Commit `e5b4132` (kod) + `1dad3a0` (memory-bank), push edildi.
+
+- Payment Adım 4 — ödeme sonucu servisi + outbox → RabbitMQ (henüz commit edilmedi; webhook, provider_events yazımı, mock
+  dispatcher, kurtarma görevi YOK; migration, diğer modüller ve common değişmedi):
+  - Outbox kodu catalog'dan KOPYA (Order fazında common'a taşıma adayı; user-service ↔ catalog ↔ payment artık üç kopya):
+    `entity/OutboxEvent`, `repository/OutboxRepository` (SKIP LOCKED batch), `outbox/` OutboxRelay, OutboxPublisher,
+    OutboxProperties, EventRoutingKeys, OutboxPublishException; `config/RabbitConfig` (açılışta `AmqpAdmin.initialize()`),
+    `config/SchedulingConfig` (yalnızca outbox koşulu; catalog'daki AnyNestedCondition gereksiz), `service/OutboxService`.
+  - Exchange `kitapsepeti.events` (topic, durable, autoDelete değil — user/catalog ile ORTAK; kullanıcının örneği
+    "kitapsepeti.payment" sistem kuralına aykırı olduğu için kullanılmadı). Routing key `payment.succeeded` / `payment.failed`.
+    Mesaj: messageId = outbox id = payload `eventId`, type = event_type, contentType application/json, encoding UTF-8,
+    timestamp = created_at, persistent, header aggregateType/aggregateId (catalog ile aynı).
+  - Catalog'dan farklar: (1) OutboxEvent id'si INSERT'ten önce `UuidVersion7Strategy.INSTANCE.generateUuid(null)` ile üretilir
+    (catalog'daki `@UuidGenerator(VERSION_7)` ile aynı üretici) çünkü payload'da `eventId` var; `OutboxService.append(..., Function<UUID,
+    Object>)` payload'ı id'den kurar ve `EntityManager.persist` kullanır (atanmış id'de `save` → merge + SELECT olurdu).
+    (2) `CachingConnectionFactory` logger'ı WARN (RabbitMQ kullanıcı adı INFO'da yazılmasın; catalog backlog'u).
+  - Olaylar: `service/event/PaymentSucceededEvent(eventVersion, eventId, paymentId, orderId, amount, currency, occurredAt)`,
+    `PaymentFailedEvent(+ failureCode)`; aggregate_type `payment`; amount metin (`setScale(2).toPlainString()`); occurredAt = geçişin
+    updated_at'i; userId yok; Succeeded'da failureCode alanı YOK (olay tipine göre ayrı record, catalog BookRemoved gibi).
+    `docs/events/payment-succeeded.md`, `payment-failed.md` (book-upserted biçimi).
+  - `PaymentResults.recordSucceeded/recordFailed` (@Transactional READ_COMMITTED, REQUIRED): `findByIdForUpdate` (yoksa 404 exc.)
+    → succeed/fail → APPLIED ise aynı TX'te outbox; ALREADY_IN_STATE/CONFLICTING_FINAL olay yok; CONFLICTING_FINAL → WARN
+    "Conflicting payment result ignored" (değer yok). TransitionResult döner.
+  - Readiness: catalog ile aynı `readinessState, db` (RabbitMQ yok; outbox tamponlar). Kök `/actuator/health` rabbit katkısını
+    içerir → broker kapalıyken 503 DOWN ve RabbitHealthIndicator stack trace'li WARN yazar (catalog'da da aynı); compose/healthcheck
+    readiness kullanmalı.
+  - Testler (payment 247 = 220 − 1 amqp classpath parametresi + 1 readiness testi + 27): PaymentResultsTest 11, OutboxRelayIT 5,
+    OutboxRelayDatabaseFailureTest 3, EventRoutingKeysTest 2, EventsExchangeCompatibilityTest 2, OutboxRelayBrokerOutageIT 1
+    (kendi sabit portlu broker'ı; kesintide POST 201, readiness UP, satır bekler, broker dönünce yayın), OutboxDisabledTest 1,
+    OutboxRelayUnknownEventTypeTest 1, OutboxSkipLockedTest 1. `ApiTestSupport` artık RabbitMQ konteynerini de import eder ve
+    `@MockitoSpyBean OutboxService` taşır; TX proxy'li spy'a stub `AopTestUtils.getUltimateTargetObject(outbox)` üzerinden kurulur.
+  - Root `clean verify`: common 25, user 83, catalog 276, cart 312 (2 skipped), payment 247. `spring-boot:run` (Docker RabbitMQ):
+    health UP, readiness 200, WARN/ERROR 0; broker'da `kitapsepeti.events topic durable`.
+
 ## Sonraki adımlar
-- Payment Adım 4+: mock HMAC webhook (MockOutcomeRule + TransitionResult + ProviderEvent tekrar koruması; `/webhooks/**` için
-  SecurityConfig'e kural), mock dispatcher, outbox + RabbitMQ (PaymentSucceeded/PaymentFailed → Order), OpenAPI, Docker + compose.
+- Payment Adım 5+: mock HMAC webhook (`PaymentResults`'ı kendi TX'inden çağırır; ProviderEvent tekrar koruması; `/webhooks/**` için
+  SecurityConfig'e kural), mock dispatcher, kurtarma görevi, OpenAPI, Docker + compose.
   Order istemcisi `.env` `ORDER_INTERNAL_API_KEY` ile `X-Internal-Api-Key` gönderir (payment özeti `PAYMENT_INTERNAL_KEY_ORDER_SHA256`).
 - Cart ertelenenler: (1) CartCheckedOut tüketimi Order fazında (checkout + yeni sepet aynı TX'te olursa arada `flush()` — flush tuzağı);
   (2) yol maskelemeyi (`MaskedRequestPaths`) ve boş özet politikasını (internal key özeti boş/bozuksa açılmama) common'a taşıma
