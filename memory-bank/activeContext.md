@@ -1058,7 +1058,8 @@
     `POST /internal/stock/reservations/<uuid>/commit` → 401, instance `/internal/stock/reservations/:orderId/commit`; cart bilinmeyen
     kitap PATCH → 404 `/api/cart/items/:bookId`; iki servisin loglarında UUID 0.
 
-- Order Adım 0b — outbox → common (COMMIT EDİLMEDİ; davranış, payload, routing key, mesaj özellikleri, migration DEĞİŞMEDİ).
+- Order Adım 0b — outbox → common (commit `df98e92` + docs `80dea5c`, push edildi; davranış, payload, routing key, mesaj özellikleri,
+  migration DEĞİŞMEDİ).
   Ayrıntı ve yeni servis tarifi: systemPatterns "Ortak outbox".
   - Karşılaştırma: Relay/Publisher/Properties/PublishException/Repository kodu, DDL (yorumlar hariç), `app.outbox` yml, mesaj özellikleri,
     log metinleri üç serviste aynıydı. Korunan farklar: payment'ın "id payload'dan önce" yaklaşımı ortak API oldu (`persist`); her servis
@@ -1083,6 +1084,33 @@
     catalog admin token yok → üç DB'de yayınlanmamış outbox 0. Kuyruk silindi. Üç serviste "Created new connection"/`amqp://<kullanıcı>@` 0.
     Yerel user_db'de 1 yeni e2e kullanıcısı, payment_db'de 1 yeni ödeme.
 
+- Order Adım 1 — order-service iskeleti + order_db (commit `f190299`, push edildi). Ayrıntı: systemPatterns "order-service".
+  - DB: `infra/mysql/init/40-order-db.sh` (30-payment kalıbı), compose mysql env'ine `ORDER_DB_USER/PASSWORD` (`${VAR:?}`),
+    `.env.example`. Script mevcut volume'da 3 kez çalıştırıldı (idempotent); order kullanıcısı yalnızca `order_db` görür
+    (`USAGE ON *.*` + `ALL ON order_db.*`). order-service compose'a EKLENMEDİ (Adım 11); Dockerfile yok.
+  - Modül: kök pom'a `<module>order-service</module>`; port 8088, paket `com.kitapsepeti.order`. Bağımlılıklar payment ile aynı +
+    `security-oauth2-resource-server` (cart'taki JWT doğrulaması); openfeign/resilience4j YOK (testle kilitli, Adım 3).
+  - Kod: `OrderServiceApplication` (`@AutoConfigurationPackage({ App, OutboxEvent })`, UserDetailsService auto-config hariç),
+    `config/{ClockConfig, OutboxConfig, SchedulingConfig, JwtDecoderConfig, SecurityConfig}`, `outbox/{EventRoutingKeys (BOŞ eşleme),
+    OutboxPublisher}`, `security/{JwtProperties, JwtSubjects}`, `exception/GlobalExceptionHandler` (boş). Sipariş entity/repository/
+    controller YOK (Adım 2/4). `RequestPathMasker.uuidOnly()` (desen yok; `/api/orders/{orderId}` Adım 4'te).
+  - Security: `/api/**` authenticated (USER/ADMIN), health + docs + `/error` permitAll, geri kalan denyAll (kimliksiz 401 Bearer
+    challenge, token'lı 403). Internal zincir YOK.
+  - V1 `V1__init_order.sql`: orders, order_items, order_status_history, outbox (DDL user/payment ile birebir).
+  - Testler 164: OrderSchemaConstraintsTest 114, SecurityRulesTest 26, ActuatorHealthTest 15, OrderServiceApplicationTests 7,
+    RequestPathMaskerCoverageTest 1, StartupLogHygieneTest 1 (ayrı MySQL, çalışma anında üretilen DB/Rabbit kimlikleri; açılış
+    logunda kullanıcı adı/parola, `jdbc:...@`, `user=/password=` yok). Not: `SpringApplicationBuilder` testte `.main(App.class)`
+    ister, yoksa "Started ForkedBooter" yazar.
+  - Root `clean verify` yeşil: common 60, user 86, catalog 285, cart 313 (2 skipped = CatalogLiveTest, `66b3d01`'den beri; 0b ile
+    ilgisiz), payment 367, order 164.
+  - Yerel `spring-boot:run` (`.env` `spring.config.import` ile süreç içinde): V1 uygulandı, readiness UP, `/api/orders` token'sız 401,
+    WARN/ERROR yok; `flyway_schema_history` v1 success=1; tablolar flyway_schema_history, order_items, order_status_history, orders,
+    outbox. Servis durduruldu.
+  - Bulgular: Cart DB üst sınırı `ck_cart_items_quantity BETWEEN 1 AND 99` (iş kuralı `app.cart.max-quantity-per-item: 10`) →
+    order_items aynı 1–99. Catalog `price_amount >= 0` (ücretsiz kitap) ama `orders.total_amount > 0` ve `subtotal > 0`:
+    tamamı ücretsiz sepetin siparişi şemada reddedilir (kısıt BİLEREK değiştirilmedi; Adım 4'te checkout'ta açık hata kodu
+    gerekecek, ör. `ORDER_TOTAL_ZERO`, ya da ürün kararı).
+
 ## Sonraki adımlar
 - PROJE KARARI (Ekim 2026, UI paralel): UI (Angular 13) Order ile PARALEL başlıyor — ayrı agent, ayrı worktree
   (`..\kitapSepeti-ui`, branch `ui`), yalnızca `frontend/` + `memory-bank/frontend.md` + `.cursor/rules/frontend-angular13.mdc`.
@@ -1103,7 +1131,7 @@
   - v1 kuponsuz.
   - Önce kayıt sonra dış çağrı: sipariş satırı kendi TX'inde yazılır, sonra rezervasyon/ödeme çağrıları.
   - Stok commit/release Catalog internal HTTP ile (`/internal/stock/reservations/{orderId}/commit|release`).
-- Order planı: 0a common sertleştirme (YAPILDI) → 0b outbox → common (YAPILDI, commit edilmedi) → 1 modül/db → 2 domain → 3 Feign + CB → 4 checkout mutlu yol +
+- Order planı: 0a common sertleştirme (YAPILDI) → 0b outbox → common (YAPILDI, push'landı) → 1 modül/db (YAPILDI, push'landı) → 2 domain → 3 Feign + CB → 4 checkout mutlu yol +
   GET {id} → 5 hata yolları/telafi → 6 ödeme sonucu tüketicisi → 7 Cart CartCheckedOut tüketicisi → 8 timeout görevi → 9 liste →
   10 OpenAPI/olay belgeleri → 11 Docker.
 - order-service eklenirken: `RequestPathMasker` bean'i (`/api/orders/{orderId}` vb.) ve `InternalAuthConfig` (gerekirse) — common
@@ -1134,4 +1162,6 @@
 - Açık konu (catalog OpenAPI): `/v3/api-docs` her profilde açık (user-service ile aynı) → internal uçların şekli de herkese görünür
   (sır yok); prod'da `SPRINGDOC_ENABLED=false` düşünülmeli.
 - Yeni servisler eklendikçe kök POM kontrol listesini uygula (bkz. systemPatterns.md; [5] common, [6] Dockerfile).
-- Order Adım 1: order-service modülü + db (outbox için systemPatterns "Ortak outbox" kullanım kalıbını uygula).
+- Order Adım 2: domain (entity + repository; şema V1'de hazır, ddl validate). Ardından Adım 3 Feign + CB, Adım 4'te
+  `RequestPathMasker` deseni `/api/orders/{orderId}` + sipariş hata kodları/DB kısıtı eşlemesi (`GlobalExceptionHandler`).
+- Açık konu (Order): tamamı ücretsiz sepet (Catalog fiyat 0) ↔ `total_amount > 0`; checkout'ta hangi koda düşeceği Adım 4'te.

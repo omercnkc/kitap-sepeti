@@ -135,12 +135,16 @@
   sözleşmeleri yine yazılacak.
 - Payment artık işleri: iyzico sandbox; eşzamanlı ilk isteklerde birden fazla sağlayıcı çağrısı (gerçek sağlayıcıda idempotency
   anahtarı); outbox yayın hatası WARN'ındaki eventId (artık common `OutboxRelay`).
-- Order Adım 0b YAPILDI (commit edilmedi): outbox `common.outbox`'ta (entity + repository dahil); servislerde yalnızca olay sınıfları,
-  routing key eşlemesi, ince `OutboxPublisher` alt sınıfı ve `config/OutboxConfig`. Masker kapsama testi dört serviste.
-  Testler: common 60, user 86, catalog 285, cart 313, payment 367.
+- Order Adım 0b YAPILDI (commit `df98e92` + `80dea5c`, push edildi): outbox `common.outbox`'ta (entity + repository dahil); servislerde
+  yalnızca olay sınıfları, routing key eşlemesi, ince `OutboxPublisher` alt sınıfı ve `config/OutboxConfig`. Masker kapsama testi dört
+  serviste. Testler: common 60, user 86, catalog 285, cart 313, payment 367.
+- Order Adım 1 YAPILDI (commit `f190299`, push edildi): order-service modülü (8088) + `order_db` (init script 40, compose mysql env, `.env.example`),
+  security iskeleti (JWT, denyAll), common outbox bağlantısı (boş routing key), V1 (orders, order_items, order_status_history, outbox).
+  order 164 test; root verify: common 60, user 86, catalog 285, cart 313 (2 skipped), payment 367, order 164. Yerel `spring-boot:run`
+  → V1 uygulandı, readiness UP.
 - Cart ertelenenler: CartCheckedOut tüketimi (Order Adım 7); Catalog OpenAPI nullable. (Yol maskeleme + özet politikası common'a
   taşındı → Order Adım 0a.)
-- Order planı (PROJE KARARI, Ekim 2026): 0a common sertleştirme (yapıldı) → 0b outbox → common (yapıldı) → 1 modül/db → 2 domain → 3 Feign + CB
+- Order planı (PROJE KARARI, Ekim 2026): 0a common sertleştirme (yapıldı) → 0b outbox → common (yapıldı) → 1 modül/db (yapıldı) → 2 domain → 3 Feign + CB
   → 4 checkout mutlu yol + GET {id} → 5 hata yolları/telafi → 6 ödeme sonucu tüketicisi → 7 Cart CartCheckedOut tüketicisi → 8 timeout
   görevi → 9 liste → 10 OpenAPI/olay belgeleri → 11 Docker. Kararlar activeContext "Sonraki adımlar"da.
 - Gateway fazı: docs/Swagger'ı (dört servis) dışarıya kapatmak.

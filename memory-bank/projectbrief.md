@@ -11,4 +11,4 @@ KitapSepeti: Spring Boot tabanlı, çok servisli (mikroservis) bir kitap satış
 - PROJE KARARI (Ekim 2026): sıra Payment → Order → Gateway → UI → (vakit kalırsa) Notifications. Notifications v1 yalnızca uygulama
   içi bildirim (OrderPaid/OrderFailed; e-posta, tercih, şablon yok). Order fazında `order-paid.md` ve `order-failed.md` olay
   sözleşmeleri yine yazılacak.
-- Sıradaki: `order-service`.
+- Devam eden: `order-service` (8088; Adım 1 iskelet + `order_db` V1 yapıldı, sıradaki Adım 2 domain).

@@ -507,6 +507,36 @@
   aksi `succeeded()`. `MockOutcome(failureCode)` record'u (`isSucceeded()`; static `succeeded()` record accessor'ıyla çakıştığı için
   boolean bileşen yok).
 
+## order-service (Order Adım 1 iskeleti; port 8088, `order_db`)
+- İskelet = payment Adım 1 kalıbı + cart'ın Resource Server güvenliği (JwtDecoderConfig + `JwtSubjects`: sub katı UUID, değilse
+  `BadJwtException` → 401). Zincir TEK: `/api/**` authenticated, health (GET) + `/v3/api-docs/**` + Swagger + `/error` permitAll,
+  `anyRequest().denyAll()` (kimliksiz 401 + Bearer challenge, token'lı 403). Internal API zinciri YOK (order internal uç sunmaz;
+  istemci olarak `ORDER_INTERNAL_API_KEY` gönderecek, Adım 3).
+- Outbox: common kalıbı (`OutboxConfig` + `EventRoutingKeys` şimdilik BOŞ `OutboxRoutingKeys.of(Map.of())` → her olay tipi ISE;
+  olaylar eklenince eşleme + sözleşme dosyası birlikte). `SchedulingConfig` yalnızca `app.outbox.enabled=true` iken.
+- Readiness = readinessState + db (rabbit ve diğer servisler yok); yalnızca health expose.
+- V1 şema kararları (`V1__init_order.sql`):
+  - `orders.status` 'pending' | 'paid' | 'failed' — v1'de 'cancelled' YOK; ödeme zaman aşımı = `failed` + `failure_code 'ORDER_EXPIRED'`.
+  - `orders.stock_state` 'requested' | 'held' | 'committed' | 'released'; 'requested' ile BAŞLAR (önce kayıt, sonra Catalog çağrısı).
+    Tutarlılık: pending → requested|held; paid → held|committed; committed → yalnızca paid (failed: requested|held|released serbest).
+  - Kullanıcı başına tek pending: VIRTUAL `active_pending_user_id` + `uk_orders_pending_user` (cart'ın active_user_id kalıbı).
+    `uk_orders_payment` (payment_id NULL'ları çakışmaz); paid → payment_id zorunlu; `(status='failed') = (failure_code IS NOT NULL)`.
+  - Tutarlar DECIMAL(12,2): subtotal > 0, 0 ≤ discount ≤ subtotal, total = subtotal − discount ve > 0. `coupon_code` VARCHAR(40) bin,
+    CHECK YOK (v1 kuponsuz, biçim kupon özelliğinde).
+  - `address_snapshot` JSON NOT NULL + `JSON_TYPE = 'OBJECT'` (alanlar Adım 4'te DTO'da doğrulanır). `currency` CHAR(3) bin + regex.
+  - `failure_code` ve history `reason`: bin + `REGEXP_LIKE(x, '^[A-Z][A-Z0-9_]*$', 'c')`.
+  - `order_items`: title_snapshot VARCHAR(300) (= catalog books.title), quantity 1–99 (= `ck_cart_items_quantity`), unit_price ≥ 0
+    (= catalog), `line_total = unit_price * quantity`, UNIQUE (order_id, book_id) (FK indeksi de bu), FK RESTRICT.
+  - `order_status_history`: from_status NULL yalnızca ilk satırda ve ilk satır yalnızca → 'pending'
+    (`(from_status IS NULL) = (to_status = 'pending')`), `from_status <> to_status`; ix (order_id, created_at, id); FK RESTRICT.
+  - İndeksler: orders (user_id, created_at, id), (status, created_at), (stock_state, updated_at); cart_id indeksi YOK.
+  - Zamanlarda DB default yok (outbox.created_at hariç); status/stock_state/currency/discount_amount'ta default var (payment gibi).
+- BİLİNEN ÇELİŞKİ: Catalog fiyat 0'a izin verir, `orders.subtotal/total_amount > 0` → tamamı ücretsiz sepet siparişi DB'de reddedilir
+  (bilerek; checkout Adım 4'te açık hata kodu vermeli).
+- Testler: `OrderSchemaConstraintsTest` (`@JdbcTest`, birden fazla kısıtı ihlal eden satırda `assertCheckViolation(..., a, b)` →
+  MySQL'in bildirdiği ilk kısıt bunlardan biri), `StartupLogHygieneTest` (ayrı MySQL + üretilmiş kimlikler; `SpringApplicationBuilder`
+  `.main(App.class)` olmadan "Started ForkedBooter" yazar).
+
 ## Aggregate entity'leri (cart-service)
 - Aggregate root (`Cart`) satırları `@OneToMany(mappedBy, cascade = ALL, orphanRemoval = true)` + `@OrderBy` ile `List`'te tutar;
   getter salt okunur görünüm, değişiklik yalnızca root'un metotlarıyla. Satırın ayrı repository'si yok. Satır constructor'ı package-private.

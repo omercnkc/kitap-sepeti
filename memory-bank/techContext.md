@@ -34,6 +34,12 @@
   RabbitMQ (`RABBITMQ_HOST/PORT/USER/PASSWORD`, catalog ile aynı adlar) ve internal anahtar özetini `spring.config.import` ile
   `.env`'den kendisi okur. Testler RabbitMQ'yu `RabbitTestcontainersConfiguration` (rabbitmq:4-management) ile alır;
   outbox worker testte kapalı (`app.outbox.enabled: false`), relay testleri açar.
+- order-service: port 8088, şema `order_db`, kullanıcı `.env` `ORDER_DB_USER/PASSWORD` (`infra/mysql/init/40-order-db.sh`; parola
+  yalnızca harf/rakam; compose mysql env'inde `${VAR:?}`). Çalıştırma `.\mvnw.cmd -pl order-service spring-boot:run` (önce
+  `.\mvnw.cmd -pl common -am install -DskipTests`); DB/RabbitMQ/JWKS ayarlarını `spring.config.import` ile `.env`'den kendisi okur
+  (`USER_SERVICE_JWKS_URI` yoksa `http://localhost:8081/.well-known/jwks.json`). Testler `.\mvnw.cmd -pl order-service -am test`
+  (MySQL + RabbitMQ Testcontainers). Bağımlılıklar: payment ile aynı + security-oauth2-resource-server; openfeign/resilience4j YOK
+  (Adım 3'e kadar testle kilitli). Compose'da YOK (Adım 11).
 - payment internal anahtarı: `.env` `PAYMENT_INTERNAL_KEY_ORDER_SHA256` (Order'ın ham anahtarı `ORDER_INTERNAL_API_KEY`'in SHA-256 hex
   özeti; `.env.example`'da boş). Yok/boş/bozuk → payment-service açılmaz. Testler JVM'de üretilen anahtarı `InternalTestKeys.register`
   (DynamicPropertySource) ile verir.
