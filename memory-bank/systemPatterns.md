@@ -65,9 +65,16 @@
     `/api/admin/publishers/{publisherId}`, `/api/admin/categories/{categoryId}` (+ `/parent`), `/internal/stock/reservations/{orderId}`
     (+ `/commit`, `/release`); cart `/api/cart/items/{bookId}`; payment `/internal/payments/{paymentId}`.
     YENİ UÇ YOLDA ID TAŞIYORSA DESEN EKLE.
+  - `patterns()` (kayıt sırasıyla desenler) ve `covers(mappingPattern)` (Order Adım 0b): controller eşleme kalıbıyla aynı BİÇİMDE
+    (segment sayısı, değişken konumları, literal'ler; değişken adı/regex önemsiz) bir desen var mı; `*` içeren kalıp → false.
+  - KAPSAMA TESTİ (servis başına `config/RequestPathMaskerCoverageTest`, user/catalog/cart/payment): `RequestMappingHandlerMapping`
+    ("requestMappingHandlerMapping") içindeki `{` içeren her kalıp `covers` olmalı; eksikse test kalıbı adıyla kırılır. Kapsam: handler
+    sınıfının code source'u uygulama sınıfınınkiyle aynı (`target/classes`) → test probe controller'ları (`test-classes`) ve framework
+    uçları (jar) dışarıda. payment istisnası: `/webhooks/{provider}` (sağlayıcı adı id değil; 404 `instance`'ı ham yolu gösterir).
 - Bu paketlerdeki sınıfların logger'ı artık `com.kitapsepeti.common.security(.internal).*` (mesaj metni aynı).
 - common'a GİRMEYEN: güvenlik kuralları/yollar (SecurityConfig), user-service'in kendi anahtarlı JwtDecoder'ı (RsaKeyConfig),
-  catalog JwtProperties, InternalSecurityConfig, outbox (ayrı adım; hâlâ servis başına kopya).
+  catalog JwtProperties, InternalSecurityConfig, servisin olay sınıfları/routing key eşlemesi/`SchedulingConfig`.
+- `common.outbox` (Order Adım 0b): bkz. "Olaylar (transactional outbox)". spring-boot-starter-amqp de optional.
 
 ### Yeni servis common'ı nasıl kullanır (tarif)
 1. Servis POM'una `com.kitapsepeti:kitap-sepeti-common` (versiyonsuz) ekle.
@@ -258,13 +265,41 @@
 - Üretici kuyruk tanımlamaz; consumer kendi kuyruğunu declare/bind eder. Yeni olay tipi = `EventRoutingKeys`'e
   routing key + `docs/events/<olay>.md`.
 - Worker testlerde varsayılan kapalı (`app.outbox.enabled: false`); açan test ayrı context kurar.
-- Tüm servisler aynı `kitapsepeti.events` exchange'ine yayınlar; her serviste tanım BİREBİR aynı olmalı
+- Tüm servisler aynı `kitapsepeti.events` exchange'ine yayınlar; TEK tanım `common.outbox.OutboxConfiguration.eventsExchange`
   (`new TopicExchange(name, true, false)`, argümansız). Farklı durable/autoDelete/argüman → broker PRECONDITION_FAILED
-  ile kanalı kapatır. Outbox henüz `common`'da DEĞİL: worker sınıfları servis başına kopya (user-service ↔ catalog-service ↔
-  payment-service; taşıma Order fazında ayrı adım).
-- payment outbox farkı: payload'da `eventId` (= outbox id = `message_id`) var; id INSERT'ten önce
-  `UuidVersion7Strategy.INSTANCE.generateUuid(null)` ile üretilir, `OutboxService.append(type, id, eventType, eventId -> payload)`
-  `EntityManager.persist` ile yazar. Sonuç olayları `PaymentResults`'ta durum geçişiyle aynı TX'te, yalnızca APPLIED'da.
+  ile kanalı kapatır.
+- payment payload'ında `eventId` (= outbox id = `message_id`) var; user/catalog payload'ında yok (servisin seçimi).
+  Sonuç olayları `PaymentResults`'ta durum geçişiyle aynı TX'te, yalnızca APPLIED'da.
+
+### Ortak outbox (`common.outbox`, Order Adım 0b) — Order/Notifications için KULLANIM KALIBI
+- common'da: `OutboxEvent` (entity, `outbox` tablosu; id `OutboxEvent.newId()` = UUIDv7, `@UuidGenerator(VERSION_7)` ile aynı strateji),
+  `OutboxRepository` (`lockUnpublishedBatch`, FOR UPDATE SKIP LOCKED), `OutboxService` (bean değil; `OutboxConfiguration` kaydeder),
+  `OutboxPublisher` (routing key'i ctor'daki `OutboxRoutingKeys`'ten alır), `OutboxRelay`, `OutboxProperties` (`app.outbox.*`),
+  `OutboxPublishException`, `OutboxRoutingKeys` (`of(Map)`; bilinmeyen tip → `IllegalStateException("No routing key for event type X")`),
+  `OutboxConfiguration` (exchange + `OutboxService` + `app.outbox.enabled=true` ise `OutboxRelay` + açılışta `AmqpAdmin.initialize()`).
+- Yazma API'si: `outboxService.append(aggregateType, aggregateId, eventType, eventId -> payload)` — id payload'dan ÖNCE üretilir, satır
+  id'si = fabrikaya verilen id; `append(..., Object payload)` eventId'siz kısayol. İkisi de `Propagation.MANDATORY`; `EntityManager.persist`.
+- Yeni servis (Order/Notifications) yapacakları:
+  1. Migration'a `outbox` tablosunu user/catalog/payment ile BİREBİR aynı DDL ile ekle (payment `PaymentSchemaConstraintsTest`
+     catalog ve user DDL'ini karşılaştırır; yeni servis de benzer test koymalı). Entity `ddl-auto: validate` ile doğrulanır.
+  2. Ana sınıfa `@AutoConfigurationPackage(basePackageClasses = { <Uygulama>.class, OutboxEvent.class })` (entity + repository taraması;
+     `@DataJpaTest` de okur, `@JdbcTest` etkilenmez). UYGULAMA SINIFI DA YAZILMALI: doğrudan konan anotasyon `@SpringBootApplication`'ın
+     varsayılan paketinin yerine geçer (yalnızca OutboxEvent yazılınca servisin repository'leri bulunmaz → context açılmaz). `@EnableJpaRepositories`/`@EntityScan` KULLANMA (servis kendi paketlerini de kaybeder / `@JdbcTest` kırılır).
+  3. `outbox/EventRoutingKeys` (`OutboxRoutingKeys.of(Map.of(Olay.TYPE, "<varlık>.<olay>"))` + statik `forEventType`) ve
+     `outbox/OutboxPublisher extends common OutboxPublisher` (ctor `(RabbitTemplate, OutboxProperties)` → `super(..., EventRoutingKeys::forEventType)`;
+     `@Component` DEĞİL).
+  4. `config/OutboxConfig`: `@Import(OutboxConfiguration.class)` + `@Bean OutboxPublisher outboxPublisher(RabbitTemplate, OutboxProperties)`.
+  5. `config/SchedulingConfig` (`@EnableScheduling`, `app.outbox.enabled` koşullu; başka iş varsa AnyJobEnabled kalıbı) + `Clock` bean'i.
+  6. yml: `spring.rabbitmq` (connection-timeout 5s, publisher-confirm-type correlated), `app.outbox` (enabled true, kitapsepeti.events,
+     2s, 50, 5s), `logging.level.org.springframework.amqp.rabbit.connection.CachingConnectionFactory: WARN` (INFO satırı kullanıcı adı yazar);
+     test profili `app.outbox.enabled: false`.
+- Log satırları (kategori `com.kitapsepeti.common.outbox.*`): WARN "Outbox poll skipped, database unavailable: {Sınıf}", DEBUG "Published {}
+  outbox event(s)", WARN "Outbox publish failed, will retry on next poll: id={}, eventType={}, error={}", WARN "RabbitMQ unavailable at
+  startup; exchange will be declared on first connection ({})".
+- BİLİNEN SORUNLAR (common outbox; Adım 0b'de bilerek DEĞİŞTİRİLMEDİ):
+  - Routing key'i olmayan `event_type` satırı kuyruğu tıkar: `IllegalStateException` gönderimden önce fırlar, relay her turda aynı satırda
+    WARN yazıp durur; arkasındaki satırlar hiç yayınlanmaz.
+  - Yayın hatası WARN'ı `id=<eventId>` yazar (olay id'si logda görünür).
 - catalog testlerinde RabbitMQ konteyneri ayrı `RabbitTestcontainersConfiguration`; tam context açan testler import eder,
   dilim testleri (`@DataJpaTest`, `@JdbcTest`) etmez.
 - JPQL/SQL bulk UPDATE `@UpdateTimestamp`/`@Version`'ı atlar; `updated_at` yine de kolonun `ON UPDATE CURRENT_TIMESTAMP(6)`

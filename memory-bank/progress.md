@@ -134,19 +134,19 @@
   içi bildirim (OrderPaid/OrderFailed; e-posta, tercih, şablon yok). Order fazında `order-paid.md` ve `order-failed.md` olay
   sözleşmeleri yine yazılacak.
 - Payment artık işleri: iyzico sandbox; eşzamanlı ilk isteklerde birden fazla sağlayıcı çağrısı (gerçek sağlayıcıda idempotency
-  anahtarı); outbox kodunu common'a taşıma (Order fazı); outbox yayın hatası WARN'ındaki eventId.
-- Outbox kodunu common'a taşıma (Order Adım 0b): user-service, catalog-service ve payment-service'te üç kopya.
+  anahtarı); outbox yayın hatası WARN'ındaki eventId (artık common `OutboxRelay`).
+- Order Adım 0b YAPILDI (commit edilmedi): outbox `common.outbox`'ta (entity + repository dahil); servislerde yalnızca olay sınıfları,
+  routing key eşlemesi, ince `OutboxPublisher` alt sınıfı ve `config/OutboxConfig`. Masker kapsama testi dört serviste.
+  Testler: common 60, user 86, catalog 285, cart 313, payment 367.
 - Cart ertelenenler: CartCheckedOut tüketimi (Order Adım 7); Catalog OpenAPI nullable. (Yol maskeleme + özet politikası common'a
   taşındı → Order Adım 0a.)
-- Order planı (PROJE KARARI, Ekim 2026): 0a common sertleştirme (yapıldı) → 0b outbox → common → 1 modül/db → 2 domain → 3 Feign + CB
+- Order planı (PROJE KARARI, Ekim 2026): 0a common sertleştirme (yapıldı) → 0b outbox → common (yapıldı) → 1 modül/db → 2 domain → 3 Feign + CB
   → 4 checkout mutlu yol + GET {id} → 5 hata yolları/telafi → 6 ödeme sonucu tüketicisi → 7 Cart CartCheckedOut tüketicisi → 8 timeout
   görevi → 9 liste → 10 OpenAPI/olay belgeleri → 11 Docker. Kararlar activeContext "Sonraki adımlar"da.
 - Gateway fazı: docs/Swagger'ı (dört servis) dışarıya kapatmak.
 - order-service (catalog rezervasyon istemcisi).
 - Search için: yayınevi/yazar/kategori yeniden adlandırması yayındaki kitaplar için olay üretmiyor → yeniden indeksleme gerekecek.
 - Backlog: admin PATCH'te bilinmeyen alanlar (stok, status) sessizce yok sayılıyor; ileride 400 düşünülebilir.
-- Backlog: Spring AMQP `CachingConnectionFactory` INFO satırı ("Created new connection … amqp://<kullanıcı>@rabbitmq") RabbitMQ
-  kullanıcı adını loga yazıyor (parola yok; user-service ve catalog-service). İstenirse o logger WARN'a çekilebilir.
 - Logout, e-posta/parola değiştirme, CORS.
 - Diğer servisler (katalog, sepet, sipariş vb. — henüz kararlaştırılmadı) ve olay consumer'ları.
 - CI pipeline (testler + image build).

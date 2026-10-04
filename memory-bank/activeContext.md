@@ -1058,6 +1058,31 @@
     `POST /internal/stock/reservations/<uuid>/commit` → 401, instance `/internal/stock/reservations/:orderId/commit`; cart bilinmeyen
     kitap PATCH → 404 `/api/cart/items/:bookId`; iki servisin loglarında UUID 0.
 
+- Order Adım 0b — outbox → common (COMMIT EDİLMEDİ; davranış, payload, routing key, mesaj özellikleri, migration DEĞİŞMEDİ).
+  Ayrıntı ve yeni servis tarifi: systemPatterns "Ortak outbox".
+  - Karşılaştırma: Relay/Publisher/Properties/PublishException/Repository kodu, DDL (yorumlar hariç), `app.outbox` yml, mesaj özellikleri,
+    log metinleri üç serviste aynıydı. Korunan farklar: payment'ın "id payload'dan önce" yaklaşımı ortak API oldu (`persist`); her servis
+    kendi `SchedulingConfig`'ini tutar (catalog: outbox VEYA stok süre dolumu; payment: outbox VEYA mock kurtarma).
+  - Entity + repository COMMON'da (DDL'ler aynı); servis ana sınıfında
+    `@AutoConfigurationPackage(basePackageClasses = { <Uygulama>.class, OutboxEvent.class })`. İlk denemede yalnızca OutboxEvent yazıldı →
+    servisin repository'leri bulunmadı (doğrudan anotasyon varsayılan paketin yerine geçiyor); düzeltildi.
+  - Servislerden silinen (×3): `entity/OutboxEvent`, `repository/OutboxRepository`, `service/OutboxService`, `outbox/OutboxRelay`,
+    `outbox/OutboxProperties`, `outbox/OutboxPublishException`, `config/RabbitConfig`. Kalan: `outbox/EventRoutingKeys`
+    (`OutboxRoutingKeys.of`), `outbox/OutboxPublisher` (common'ın ince alt sınıfı; testler aynı tipi kullanmaya devam etsin diye),
+    YENİ `config/OutboxConfig`. `AuthService`/`BookAdminService`/`StockReservationTransactions`/`PaymentResults` yalnızca import.
+  - Log: kategori `com.kitapsepeti.common.outbox.*` (metin aynı). user + catalog yml'ine `CachingConnectionFactory: WARN` (payment'taki gibi).
+  - Masker: `RequestPathMasker.patterns()` + `covers()`; dört serviste `config/RequestPathMaskerCoverageTest` (main code source filtresi;
+    payment istisnası `/webhooks/{provider}`). Kırma denemesi: cart'a geçici `GET /api/cart/_coverage/{probeId}` → test
+    `Expecting empty but was: ["/api/cart/_coverage/{probeId}"]` ile kırıldı, geri alındı.
+  - Testler: common 39 → 60 (OutboxRelayTest 6, OutboxPublisherTest 5, OutboxServiceTest 4, OutboxConfigurationTest 3,
+    OutboxRoutingKeysTest 1, RequestPathMaskerTest +2). user 85 → 86, catalog 284 → 285, cart 312 → 313 (+1 kapsama testi her biri);
+    payment 365 → 367 (+1 kapsama, +1 `outboxDdlIsIdenticalToUsers`). Servis testlerinde yalnızca import değişti (+ iki
+    EventsExchangeCompatibilityTest javadoc'u). Root `clean verify` yeşil.
+  - Docker: user/catalog/payment yeniden derlendi, healthy. Geçici kuyruk (`#`) ile: kayıt → `UserRegistered`/`user.registered`;
+    payment internal 149.90 → `PaymentSucceeded`/`payment.succeeded` (anahtar kullanıcı onayıyla .env'den yalnızca belleğe okundu);
+    catalog admin token yok → üç DB'de yayınlanmamış outbox 0. Kuyruk silindi. Üç serviste "Created new connection"/`amqp://<kullanıcı>@` 0.
+    Yerel user_db'de 1 yeni e2e kullanıcısı, payment_db'de 1 yeni ödeme.
+
 ## Sonraki adımlar
 - PROJE KARARI (Ekim 2026, UI paralel): UI (Angular 13) Order ile PARALEL başlıyor — ayrı agent, ayrı worktree
   (`..\kitapSepeti-ui`, branch `ui`), yalnızca `frontend/` + `memory-bank/frontend.md` + `.cursor/rules/frontend-angular13.mdc`.
@@ -1078,14 +1103,14 @@
   - v1 kuponsuz.
   - Önce kayıt sonra dış çağrı: sipariş satırı kendi TX'inde yazılır, sonra rezervasyon/ödeme çağrıları.
   - Stok commit/release Catalog internal HTTP ile (`/internal/stock/reservations/{orderId}/commit|release`).
-- Order planı: 0a common sertleştirme (YAPILDI) → 0b outbox → common → 1 modül/db → 2 domain → 3 Feign + CB → 4 checkout mutlu yol +
+- Order planı: 0a common sertleştirme (YAPILDI) → 0b outbox → common (YAPILDI, commit edilmedi) → 1 modül/db → 2 domain → 3 Feign + CB → 4 checkout mutlu yol +
   GET {id} → 5 hata yolları/telafi → 6 ödeme sonucu tüketicisi → 7 Cart CartCheckedOut tüketicisi → 8 timeout görevi → 9 liste →
   10 OpenAPI/olay belgeleri → 11 Docker.
 - order-service eklenirken: `RequestPathMasker` bean'i (`/api/orders/{orderId}` vb.) ve `InternalAuthConfig` (gerekirse) — common
   politika aynen geçerli.
 - Payment artık işleri: (1) iyzico sandbox sağlayıcısı; (2) aynı siparişe eşzamanlı ilk isteklerde birden fazla sağlayıcı çağrısı
-  (gerçek sağlayıcıda idempotency anahtarı = paymentId); (3) outbox kodunu common'a taşıma (Order fazı); (4) outbox yayın hatası
-  WARN'ındaki eventId (`OutboxRelay`: `id=…, eventType=…`) kaldırılmalı/maskelenmeli.
+  (gerçek sağlayıcıda idempotency anahtarı = paymentId); (3) outbox yayın hatası WARN'ındaki eventId (artık common `OutboxRelay`:
+  `id=…, eventType=…`) kaldırılmalı/maskelenmeli.
 - Order istemcisi `.env` `ORDER_INTERNAL_API_KEY` ile `X-Internal-Api-Key` gönderir (payment özeti `PAYMENT_INTERNAL_KEY_ORDER_SHA256`);
   compose'da `http://payment-service:8087`, istemci `docs/api/payment-service.openapi.json`'dan.
 - Cart ertelenenler: (1) CartCheckedOut tüketimi Order Adım 7'de (checkout + yeni sepet aynı TX'te olursa arada `flush()` — flush
@@ -1097,17 +1122,16 @@
   olayı yok, GET ile sorgulanır; istemci `docs/api/catalog-service.openapi.json`'dan). Compose'a eklenirken catalog'a
   `http://catalog-service:8082` ve `.env` `ORDER_INTERNAL_API_KEY` ile bağlanır.
 - Backlog: `BookUpserted.priceAmount` sayıya geçecekse outbox payload kolonunu metin tipine çeviren yeni migration gerekir.
-- Backlog: Spring AMQP `CachingConnectionFactory` INFO satırı RabbitMQ kullanıcı adını yazıyor (iki serviste); logger WARN'a çekilebilir.
 - Backlog: yayınevi/yazar/kategori yeniden adlandırılınca yayındaki kitaplar için olay ÜRETİLMİYOR; Search servisi gelince
   yeniden indeksleme (ya da bu değişikliklerde etkilenen kitaplar için BookUpserted) gerekecek.
 - Backlog: admin PATCH'te bilinmeyen alanlar (stok, status) sessizce yok sayılıyor; ileride 400 düşünülebilir.
 - Logout, e-posta/parola değiştirme, consumer servisler, CORS.
 - Açık konular: DataSourceHealthIndicator stack trace gürültüsü; CI pipeline yok (drift testi yalnızca yerel `mvnw test`'te).
-- Açık konu (user-service VE catalog-service): outbox'ta yayınlanmış satırların temizliği (retention) yok; bilinmeyen event_type
-  kuyruğun başını tıkar (her turda WARN, sonraki satırlar bekler).
+- Açık konu (common outbox; user, catalog, payment): yayınlanmış satırların temizliği (retention) yok; bilinmeyen event_type
+  kuyruğun başını tıkar (her turda WARN, sonraki satırlar bekler). Bkz. systemPatterns "Ortak outbox" bilinen sorunlar.
 - Açık konu (catalog): tıkanan süre dolumu siparişleri kuyruğun başını tıkayabilir (batch dolarsa), outbox'taki tanınmayan
   event_type sorunuyla birlikte çözülecek.
 - Açık konu (catalog OpenAPI): `/v3/api-docs` her profilde açık (user-service ile aynı) → internal uçların şekli de herkese görünür
   (sır yok); prod'da `SPRINGDOC_ENABLED=false` düşünülmeli.
 - Yeni servisler eklendikçe kök POM kontrol listesini uygula (bkz. systemPatterns.md; [5] common, [6] Dockerfile).
-- Order Adım 0b: outbox kodunu (OutboxRelay/Publisher/Properties/RabbitConfig) common'a taşımak.
+- Order Adım 1: order-service modülü + db (outbox için systemPatterns "Ortak outbox" kullanım kalıbını uygula).
