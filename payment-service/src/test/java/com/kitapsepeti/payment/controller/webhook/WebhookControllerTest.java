@@ -343,6 +343,8 @@ class WebhookControllerTest extends WebhookTestSupport {
 				Map.entry("eventId##", body("e".repeat(129), ref, "payment.succeeded", AMOUNT, "TRY", null)),
 				Map.entry("eventId###", body(null, ref, "payment.succeeded", AMOUNT, "TRY", null)),
 				Map.entry("providerPaymentId", body(newEventId(), null, "payment.succeeded", AMOUNT, "TRY", null)),
+				Map.entry("providerPaymentId#", body(newEventId(), "", "payment.succeeded", AMOUNT, "TRY", null)),
+				Map.entry("providerPaymentId##", body(newEventId(), "   ", "payment.succeeded", AMOUNT, "TRY", null)),
 				Map.entry("currency", body(newEventId(), ref, "payment.succeeded", AMOUNT, "try", null)),
 				Map.entry("failureCode", body(newEventId(), ref, "payment.failed", AMOUNT, "TRY", "card declined")));
 

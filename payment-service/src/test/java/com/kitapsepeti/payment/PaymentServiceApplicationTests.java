@@ -1,11 +1,6 @@
 package com.kitapsepeti.payment;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Clock;
 import java.time.ZoneOffset;
@@ -13,27 +8,18 @@ import java.time.ZoneOffset;
 import com.kitapsepeti.payment.entity.PaymentProviderType;
 import com.kitapsepeti.payment.provider.PaymentProvider;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.health.actuate.endpoint.HealthEndpointGroup;
-import org.springframework.boot.health.actuate.endpoint.HealthEndpointGroups;
-import org.springframework.boot.health.registry.HealthContributorRegistry;
 import org.springframework.context.ApplicationContext;
-import org.springframework.http.HttpHeaders;
 import org.springframework.util.ClassUtils;
 
-/** Bağlam açılır, Flyway V1 + V2 uygulanır, ddl validate geçer; feign yok (springdoc Adım 7'de eklendi). */
+/**
+ * Bağlam açılır, Flyway V1 + V2 uygulanır, ddl validate geçer; feign yok (springdoc Adım 7'de eklendi). Actuator
+ * yüzeyi {@code config.ActuatorHealthTest}'te.
+ */
 class PaymentServiceApplicationTests extends ApiTestSupport {
 
 	@Autowired
 	private ApplicationContext context;
-
-	@Autowired
-	private HealthEndpointGroups groups;
-
-	@Autowired
-	private HealthContributorRegistry registry;
 
 	@Test
 	void contextLoadsAndFlywayAppliedV1AndV2() {
@@ -53,46 +39,6 @@ class PaymentServiceApplicationTests extends ApiTestSupport {
 	void feignIsNotOnClasspath() {
 		assertThat(ClassUtils.isPresent("org.springframework.cloud.openfeign.FeignClient", getClass().getClassLoader()))
 			.isFalse();
-	}
-
-	@Test
-	void healthProbesAreUpWithoutDetails() throws Exception {
-		mockMvc.perform(get("/actuator/health"))
-			.andExpect(status().isOk())
-			.andExpect(content().json("{\"status\":\"UP\",\"groups\":[\"liveness\",\"readiness\"]}", true));
-		mockMvc.perform(get("/actuator/health/liveness"))
-			.andExpect(status().isOk())
-			.andExpect(content().json("{\"status\":\"UP\"}", true));
-		mockMvc.perform(get("/actuator/health/readiness"))
-			.andExpect(status().isOk())
-			.andExpect(content().json("{\"status\":\"UP\"}", true));
-	}
-
-	/** Catalog ile aynı: readiness yalnızca DB; RabbitMQ kapalıyken ödeme oluşturma çalışır, olaylar outbox'ta bekler. */
-	@Test
-	void readinessDependsOnDatabaseButNotOnRabbitMq() {
-		assertThat(registry.getContributor("rabbit")).as("rabbit health contributor kayıtlı").isNotNull();
-		assertThat(registry.getContributor("db")).as("db health contributor kayıtlı").isNotNull();
-
-		HealthEndpointGroup readiness = groups.get("readiness");
-		assertThat(readiness.isMember("readinessState")).isTrue();
-		assertThat(readiness.isMember("db")).isTrue();
-		assertThat(readiness.isMember("rabbit")).isFalse();
-
-		HealthEndpointGroup liveness = groups.get("liveness");
-		assertThat(liveness.isMember("livenessState")).isTrue();
-		assertThat(liveness.isMember("db")).isFalse();
-		assertThat(liveness.isMember("rabbit")).isFalse();
-	}
-
-	/** Güvenlik eklenince (Adım 3) diğer actuator yolları varsayılan zincirin denyAll'una takılır: 403, challenge yok. */
-	@ParameterizedTest
-	@ValueSource(strings = { "/actuator", "/actuator/env", "/actuator/beans", "/actuator/info", "/actuator/metrics" })
-	void otherActuatorEndpointsAreDenied(String path) throws Exception {
-		mockMvc.perform(get(path))
-			.andExpect(status().isForbidden())
-			.andExpect(jsonPath("$.code").value("FORBIDDEN"))
-			.andExpect(header().doesNotExist(HttpHeaders.WWW_AUTHENTICATE));
 	}
 
 }

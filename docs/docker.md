@@ -4,15 +4,15 @@ Tüm komutlar repo kökünden. Değerler kökteki `.env`'den okunur (şablon: `.
 Compose `env_file` kullanmaz; her servise yalnızca gereken değişkenler `${VAR}` ile verilir.
 
 ```powershell
-docker compose build user-service catalog-service cart-service
+docker compose build user-service catalog-service cart-service payment-service
 docker compose up -d
-docker compose ps        # mysql, rabbitmq, user-service, catalog-service, cart-service → healthy
+docker compose ps        # mysql, rabbitmq, user-service, catalog-service, cart-service, payment-service → healthy
 ```
 
 Volume'ları silen `docker compose down -v` veritabanını ve kuyrukları da siler; durdurmak için `docker compose stop`.
 Yerelde `spring-boot:run` ile açık bir servis varsa aynı portu kullandığı için önce o kapatılmalı.
 
-Host portları yalnızca `127.0.0.1`'e bağlıdır (8081, 8082, 8083, 3306, 5672, 15672, adminer 8090): makinenin kendisinden
+Host portları yalnızca `127.0.0.1`'e bağlıdır (8081, 8082, 8083, 8087, 3306, 5672, 15672, adminer 8090): makinenin kendisinden
 `localhost` ile erişilir, ağdaki başka cihazlardan erişilemez. Container'lar birbirine compose ağı üzerinden servis
 adıyla bağlanır (`mysql:3306`, `rabbitmq:5672`, `user-service:8081`, `catalog-service:8082`); bu bağlama etkilenmez.
 
@@ -89,3 +89,52 @@ docker compose logs -f cart-service
 
 Sepet denemesi için Docker'daki user-service'ten alınan herhangi bir kullanıcının `accessToken`'ı Swagger'da `bearerAuth`'a
 girilir. Internal snapshot için `internalApiKey`'e `.env`'deki `ORDER_INTERNAL_API_KEY` girilir.
+
+## payment-service
+
+| | |
+|---|---|
+| İmaj | `kitapsepeti/payment-service:local` (`payment-service/Dockerfile`, build context = repo kökü) |
+| Container | `kitapsepeti-payment-service`, port `8087` |
+| Swagger UI | http://localhost:8087/swagger-ui.html (OpenAPI: `/v3/api-docs`, sözleşme `docs/api/payment-service.openapi.json`) |
+| Health | `/actuator/health/liveness`, `/actuator/health/readiness` (yalnızca `status`); diğer actuator uçları kapalı (403) |
+| Sağlayıcı | yalnızca `mock` (kart verisi alınmaz ve saklanmaz) |
+
+`.env`'de dolu olması gereken değişkenler (DB kullanıcısı, özet ve secret compose'da `${VAR:?}` ile zorunlu; biri boşsa
+`docker compose` hata verir):
+
+| Değişken | Açıklama |
+|---|---|
+| `PAYMENT_DB_USER`, `PAYMENT_DB_PASSWORD` | `payment_db` kullanıcısı (MySQL init script'i `30-payment-db.sh` de aynı değerlerle oluşturur). |
+| `RABBITMQ_USER`, `RABBITMQ_PASSWORD` | Outbox olaylarının (`payment.succeeded`, `payment.failed`) yayınlandığı broker kullanıcısı (diğer servislerle ortak). |
+| `PAYMENT_INTERNAL_KEY_ORDER_SHA256` | `ORDER_INTERNAL_API_KEY`'in SHA-256 özeti (64 hex). Boşsa ya da 64 hex değilse payment-service açılmaz. |
+| `PAYMENT_MOCK_WEBHOOK_SECRET` | Mock webhook imza anahtarı (HMAC-SHA256), en az 32 karakter. Boşsa ya da kısaysa payment-service açılmaz. |
+
+Compose'da sabit verilenler: `PAYMENT_DB_HOST=mysql`, `PAYMENT_DB_PORT=3306`, `RABBITMQ_HOST=rabbitmq`,
+`RABBITMQ_PORT=5672`. Mock webhook adresi verilmez: uygulama webhook'u container içinde kendi portuna
+(`http://localhost:8087/webhooks/mock`) gönderir.
+
+Bağımlılıklar:
+
+- `mysql` ve `rabbitmq` healthy olmadan başlamaz (catalog ile aynı; yalnızca başlangıç sırası). Başka servise bağımlılık
+  yoktur (JWT yok; order-service yalnızca istemci).
+- Readiness yalnızca DB'ye bakar. RabbitMQ kapalıyken servis healthy kalır: ödeme oluşturma ve webhook çalışır, sonuç
+  olayları outbox'ta bekler ve broker dönünce yayınlanır (kök `/actuator/health` bu sırada `DOWN` görünür; compose
+  readiness'a bakar). Kesinti boyunca outbox her turda bir WARN yazar.
+
+Mock akışı: `POST /internal/payments` ödemeyi `initiated` olarak oluşturur (201; aynı `orderId` ile tekrar 200). Kayıt
+commit edildikten ~0,5 sn sonra mock sağlayıcı imzalı webhook'u uygulamanın kendi `/webhooks/mock` ucuna gönderir; ödeme
+`succeeded` olur, kuruşu 99 olan tutarlar `failed` + `CARD_DECLINED`. Gönderim kaybolursa (servis yeniden başladı, kuyruk
+doldu) kurtarma görevi 30 sn'de bir 10 sn'den eski `initiated` ödemelerin webhook'unu yeniden gönderir. Sonuç
+`GET /internal/payments/{paymentId}` ile sorgulanır.
+
+Yeniden üretme ve başlatma:
+
+```powershell
+docker compose build payment-service
+docker compose up -d payment-service
+docker compose logs -f payment-service
+```
+
+Internal uçlar için Swagger'da `internalApiKey`'e `.env`'deki `ORDER_INTERNAL_API_KEY` girilir. Webhook ucu imza ister;
+Swagger'dan elle denemek yerine mock akışının kendisi kullanılır.

@@ -26,7 +26,7 @@ public record WebhookEvent(
 		@Schema(description = "Sağlayıcının olay kimliği; tekrar teslimde aynıdır (tekrar olay 204 alır, işlenmez).")
 		@NotNull @Size(min = 1, max = 128) @Pattern(regexp = "^[A-Za-z0-9_-]+$") String eventId,
 		@Schema(description = "Ödeme oluşturulurken sağlayıcının verdiği referans; boş ya da yalnızca boşluk olamaz.")
-		@NotBlank @Size(max = 128) String providerPaymentId,
+		@NotBlank @Size(min = 1, max = 128) String providerPaymentId,
 		@Schema(description = "Olayın türü.", allowableValues = { "payment.succeeded", "payment.failed" })
 		@NotNull @Pattern(regexp = "^payment\\.(succeeded|failed)$") String type,
 		@Schema(description = "Ödemenin tutarı, JSON metni ve tam 2 ondalık basamak (sayı gönderilirse gövde "

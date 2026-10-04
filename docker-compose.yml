@@ -162,6 +162,45 @@ services:
       start_period: 40s
     mem_limit: 768m
 
+  payment-service:
+    build:
+      context: .
+      dockerfile: payment-service/Dockerfile
+    image: kitapsepeti/payment-service:local
+    container_name: kitapsepeti-payment-service
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8087:8087"
+    # Başka servise bağımlılık yok (JWT yok; order-service yalnızca istemci). rabbitmq catalog'daki gibi yalnızca
+    # başlangıç sırası için beklenir; sonrasında broker kapalıyken servis healthy kalır.
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    # .env toplu verilmez (env_file yok); yalnızca gereken değişkenler. Sırlar zorunlu: boşsa compose başlamaz
+    # (payment zaten özetsiz/secret'sız açılmaz). Mock webhook adresi verilmez: uygulama kendi portuna
+    # (container içi localhost:8087) gönderir.
+    environment:
+      PAYMENT_DB_HOST: mysql
+      PAYMENT_DB_PORT: "3306"
+      PAYMENT_DB_USER: ${PAYMENT_DB_USER:?PAYMENT_DB_USER .env içinde tanımlı olmalı}
+      PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD:?PAYMENT_DB_PASSWORD .env içinde tanımlı olmalı}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      PAYMENT_INTERNAL_KEY_ORDER_SHA256: ${PAYMENT_INTERNAL_KEY_ORDER_SHA256:?PAYMENT_INTERNAL_KEY_ORDER_SHA256 .env içinde tanımlı olmalı}
+      PAYMENT_MOCK_WEBHOOK_SECRET: ${PAYMENT_MOCK_WEBHOOK_SECRET:?PAYMENT_MOCK_WEBHOOK_SECRET .env içinde tanımlı olmalı}
+    # Readiness yalnızca DB'ye bakar; RabbitMQ kapalıyken servis healthy kalır (olaylar outbox'ta bekler).
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "--max-time", "4", "-o", "/dev/null", "http://localhost:8087/actuator/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    mem_limit: 768m
+
   # Opsiyonel geliştirme aracı (yalnızca bakmak için): docker compose --profile tools up -d adminer
   adminer:
     image: adminer:latest

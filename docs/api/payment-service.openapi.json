@@ -580,7 +580,7 @@
             "type": "string",
             "description": "Ödeme oluşturulurken sağlayıcının verdiği referans; boş ya da yalnızca boşluk olamaz.",
             "maxLength": 128,
-            "minLength": 0
+            "minLength": 1
           },
           "type": {
             "type": "string",
