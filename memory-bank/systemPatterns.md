@@ -507,11 +507,11 @@
   aksi `succeeded()`. `MockOutcome(failureCode)` record'u (`isSucceeded()`; static `succeeded()` record accessor'ıyla çakıştığı için
   boolean bileşen yok).
 
-## order-service (Order Adım 1 iskeleti + Adım 2 domain; port 8088, `order_db`)
+## order-service (Order Adım 1 iskeleti + Adım 2 domain + Adım 3a istemciler; port 8088, `order_db`)
 - İskelet = payment Adım 1 kalıbı + cart'ın Resource Server güvenliği (JwtDecoderConfig + `JwtSubjects`: sub katı UUID, değilse
   `BadJwtException` → 401). Zincir TEK: `/api/**` authenticated, health (GET) + `/v3/api-docs/**` + Swagger + `/error` permitAll,
   `anyRequest().denyAll()` (kimliksiz 401 + Bearer challenge, token'lı 403). Internal API zinciri YOK (order internal uç sunmaz;
-  istemci olarak `ORDER_INTERNAL_API_KEY` gönderecek, Adım 3).
+  istemci olarak `ORDER_INTERNAL_API_KEY` gönderir, Adım 3a → "Order istemcileri").
 - Outbox: common kalıbı (`OutboxConfig` + `EventRoutingKeys` şimdilik BOŞ `OutboxRoutingKeys.of(Map.of())` → her olay tipi ISE;
   olaylar eklenince eşleme + sözleşme dosyası birlikte). `SchedulingConfig` yalnızca `app.outbox.enabled=true` iken.
 - Readiness = readinessState + db (rabbit ve diğer servisler yok); yalnızca health expose.
@@ -570,12 +570,73 @@
   springdoc'un getirdiği Jackson 2 (`JacksonJsonFormatMapper`); Jackson 3'e geçerse bilinmeyen alan varsayılanı sessizce yok sayar;
   her iki durumda eksik alan sessizce null. Converter: Jackson 3 ağaç API'si, yazarken 8 alanın hepsi (null'lar dahil), okurken TAM
   8 alan (bilinmeyen/eksik/tekrar/metin olmayan → IAE, mesajda değer yok), değer kuralları record kurucusunda.
+  KURAL (ileride): `AddressSnapshot`'a alan EKLENİRSE converter okurken yeni alanın YOKLUĞUNU kabul etmeli (eski satırlarda yok →
+  null/varsayılan); "tam 8 alan" katılığı yalnızca bugünkü alanlar için. Eski alan kaldırılırsa da eski satırlardaki fazla alan tolere edilmeli.
 - `OrderRepository`: `findByIdForUpdate` (`@Lock(PESSIMISTIC_WRITE)` + `@Query`, `innodb_lock_wait_timeout=5` → 5 sn sonra
   `PessimisticLockingFailureException`), `findByIdAndUserId` (`@EntityGraph("items")`, sahiplik kontrolü), `findPendingByUserId`
   (default metot → `findByUserIdAndStatus(userId, PENDING)`). Kalem/geçmiş için ayrı repository yok (aggregate üzerinden).
 - Testler: `OrderSchemaConstraintsTest` (`@JdbcTest`, birden fazla kısıtı ihlal eden satırda `assertCheckViolation(..., a, b)` →
   MySQL'in bildirdiği ilk kısıt bunlardan biri), `StartupLogHygieneTest` (ayrı MySQL + üretilmiş kimlikler; `SpringApplicationBuilder`
   `.main(App.class)` olmadan "Started ForkedBooter" yazar).
+
+### Order istemcileri (Order Adım 3a; `gateway/` + `client/`)
+- İki katman (cart→catalog kalıbının genişletilmişi): `gateway/` domain'e bakan arayüzler + sealed sonuçlar (yalnızca java.* ve
+  gateway tipleri; `GatewayTypesTest` kilitler), `client/` Feign arayüzleri + DTO'lar + `Feign*Gateway` implementasyonları.
+  Gateway exception ATMAZ (yalnızca yerel programlama hatasında IAE: >50 kitap, tekrar kitap, boş rezervasyon, adet 1–100 dışı).
+  - `CartGateway.snapshot(userId)` → `Snapshot(cartId, List<StockLine>)` | `Empty` (aktif sepet yok ya da boş) | `Unavailable`.
+  - `CatalogGateway.lookup(ids)` → `Found(Map<UUID, CatalogBook>, Set<UUID> notFound)` (`CatalogBook.inStock` = satılabilir adet > 0,
+    yeterlilik garantisi DEĞİL; `sellable(id)`) | `Unavailable`. Boş girdide çağrı yok. Lookup PUBLIC uç → anahtar GÖNDERİLMEZ.
+  - `reserve(orderId, lines)` → `Reserved(expiresAt)` (201 ya da 200+held) | `NotHeld(COMMITTED|RELEASED)` (200 tekrar, stok tutulmuyor
+    olabilir) | `Insufficient(bookIds)` (409 INSUFFICIENT_STOCK) | `NotSellable(bookIds)` (409 BOOK_NOT_AVAILABLE) | `Rejected(status,
+    code)` (409 RESERVATION_MISMATCH, 400, 401) | `NotPerformed` | `Unknown`.
+  - `commit(orderId)` → `Committed` (200; zaten committed da) | `AlreadyReleased` (409 RESERVATION_RELEASED → ödenmişse İADE telafisi)
+    | `Rejected` (404 RESOURCE_NOT_FOUND, 400, 401) | `NotPerformed` | `Unknown`.
+  - `release(orderId)` → `Released` (200; zaten released; 404 RESOURCE_NOT_FOUND = rezervasyon hiç yok, Catalog kodunda doğrulandı)
+    | `AlreadyCommitted` (409 RESERVATION_COMMITTED) | `Rejected` (kodsuz/başka kodlu 404 = yanlış adres, 400, 401) | `NotPerformed` | `Unknown`.
+  - `PaymentGateway.initiate(orderId, userId, amount, currency)` → `Initiated(paymentId, PaymentState)` (201 ya da 200 tekrar; durum
+    succeeded/failed olabilir) | `Rejected` (409 PAYMENT_ORDER_MISMATCH/CONFLICT, 400, 401) | `NotPerformed` | `Unknown`
+    (503 PAYMENT_PROVIDER_UNAVAILABLE dahil: ödeme satırı oluşmuş olabilir, aynı istek tamamlar).
+- KURAL — NotPerformed / Unknown (Adım 5 telafisinin temeli):
+  - `NotPerformed` = istek karşıya ULAŞMADI: bağlantı reddedildi, bağlantı zaman aşımı (1 sn), adres çözülemedi, circuit breaker açık.
+    Yan etki YOK → telafi gerekmez, güvenle tekrar edilebilir.
+  - `Unknown` = gönderildi, sonuç BİLİNMİYOR: okuma zaman aşımı (3 sn), yanıttan önce kopma, 5xx, 3xx, okunamayan gövde, zorunlu alan
+    eksik, 2xx ama başka sipariş/beklenmeyen durum. İşlem karşıda UYGULANMIŞ OLABİLİR → aynı idempotent istekle tekrar ya da sorgu
+    (Catalog `GET /internal/stock/reservations/{orderId}`, Payment `GET /internal/payments/{id}`; ikisi de 3a'da istemcide YOK).
+  - Okumalar (snapshot, lookup) yan etkisiz → tek sonuç `Unavailable` (4xx dahil).
+  - Ayrım `RemoteCalls.notConnected`: neden zincirinde `ConnectException`/`HttpConnectTimeoutException`/`UnknownHostException`/
+    `NoRouteToHostException` → NotPerformed; diğer `RetryableException`/IO → Unknown.
+- `RemoteCalls.execute(downstream, operation, call, validator, mapper)`: CB izni (`tryAcquirePermission`; yoksa ağ çağrısı yok →
+  NotSent) → Feign çağrısı (`ResponseEntity<T>`) → boş gövde/`validator` ihlali `InvalidResponseException` → `CallOutcome`
+  (Success | Problem(status, code, bookIds) | NotSent | Failed) → gateway'in `mapper`'ı. CB kaydı: 2xx geçerli ve 4xx = BAŞARI (karşı
+  taraf ayakta; iş hatası devreyi açmaz), bağlantı/zaman aşımı/5xx/3xx/geçersiz 2xx = HATA.
+- Circuit breaker: `DownstreamCircuitBreakers` — Resilience4j API'si DOĞRUDAN, instance başına (cart, catalog, payment), ayarlar
+  `app.circuit-breaker.*` (`CircuitBreakerProperties`, validated): COUNT_BASED pencere 20, en az 10 çağrı, %50 hata, 10 sn açık, yarı
+  açıkta 3 çağrı, otomatik OPEN→HALF_OPEN kapalı, uygulama `Clock`'u (`CircuitBreakerConfig.Builder.clock`; test `MutableClock` ile ileri
+  sarar). Durum değişimi WARN `Circuit breaker <ad> <eski> -> <yeni>`. Spring Cloud CB kapalı: `spring.cloud.circuitbreaker.resilience4j.
+  enabled=false` (CircuitBreakerFactory bean'i yok), `spring.cloud.openfeign.circuitbreaker.enabled=false`; health/readiness'a girmez
+  (`management.health.circuitbreakers.enabled=false`; stub'lar kapalı + devreler açıkken readiness UP testli).
+- Feign: JDK HttpClient (`feign-java11`; `spring.cloud.openfeign.http2client.enabled=true`, `httpclient.http2.version=HTTP_1_1`,
+  `connection-timeout 1000`, `follow-redirects false`). NEDEN: varsayılan HttpURLConnection gövdeli POST'a gelen 401'de yanıt yerine
+  `HttpRetryException` verir (anahtar reddi teknik hata gibi görünürdü). `client.config.{default,cart,catalog,payment}`: connect 1000,
+  read 3000, logger-level none. İstemci başına yapılandırma `InternalClientConfiguration` (BİLEREK `@Configuration` DEĞİL, yoksa global
+  olurdu): `InternalApiKeyInterceptor` (yalnızca `/internal/` ile başlayan yola `X-Internal-Api-Key`; gelen isteğin başlıkları/token
+  KOPYALANMAZ), `ProblemErrorDecoder` (gövdeden en fazla 16 KB, yalnızca `code` + `bookIds`; gövde loglanmaz, exception mesajı yalnızca
+  durum + kod), `Logger.Level.NONE`, `Retryer.NEVER_RETRY`. Global `RequestInterceptor` bean'i YOK (testli). Accept başlığı
+  `application/json, application/problem+json` (`ClientHeaders.ACCEPT_JSON`; `produces` yalnızca ilk değeri gönderir).
+- DTO'lar: yalnızca okunan alanlar, `@JsonIgnoreProperties(ignoreUnknown = true)`, okunan her alan `@JsonProperty(required = true)` +
+  kompakt kurucuda `requireNonNull` (nullable `cartId` hariç), kutulu `Integer`/`Boolean`; `toString()` maskeli (id/tutar/başlık yok).
+  Sonuç record'larının da `toString()`'i id/tutar içermez.
+- Anahtar: `InternalApiKey` (`ClientConfig` bean'i, `@Value("${app.clients.internal-api-key:}")` ← `ORDER_INTERNAL_API_KEY`); yok/boş/
+  boşluk-kontrol-ASCII dışı → `IllegalStateException` (mesajda değer yok) → uygulama açılmaz. Adresler `app.clients.{cart,catalog,
+  payment}.base-url` ← `ORDER_CART_URL`/`ORDER_CATALOG_URL`/`ORDER_PAYMENT_URL` (varsayılan localhost:8083/8082/8087).
+- Log (gateway çağrısı başına TEK satır, `RemoteCalls`): `Remote call <istemci> <işlem> -> <SonuçTipi> (status=<HTTP|->,
+  durationMs=<n>[, cause=<ExceptionSınıfı|CircuitOpen>])`. INFO başarı/iş sonucu; WARN teknik hata, Unavailable ve Rejected. Exception
+  MESAJI yazılmaz (Feign mesajı URL'yi = sipariş id'sini içerir); id, tutar, kitap, gövde, anahtar, yol yok (testli).
+- Testler: `support/StubServer` (WireMock standalone 3.13.1, sabit port, durdurup aynı portta yeniden açılabilir, bildirimleri sessiz),
+  `ApiTestSupport` üç stub'ı `@DynamicPropertySource` ile bağlar (alt sınıf kendi DynamicPropertySource'unu eklemesin → bağlam
+  bölünür) + `@Primary MutableClock` (`TestClockConfiguration`). `client/ClientTestSupport` her testten önce stub'ları açar/sıfırlar,
+  CB'leri `reset()`, saati sıfırlar. Sözleşme: `ClientContractTest` (OpenAPI'den okunan DTO alanları var + required + tip/format,
+  iç içe kayıtlar; stub'ın ALDIĞI gövdeler mini şema doğrulayıcıyla; durum enum'ları; Problem kodları; lookup public; mutasyon testleri).
 
 ## Aggregate entity'leri (cart-service)
 - Aggregate root (`Cart`) satırları `@OneToMany(mappedBy, cascade = ALL, orphanRemoval = true)` + `@OrderBy` ile `List`'te tutar;
@@ -651,7 +712,7 @@
   Diğer servisler de girmez ve compose'ta onlara `depends_on` konmaz (catalog → user-service JWKS tembel; kapalıyken 503).
 - Servis içi adresler compose servis adıyla (`mysql`, `rabbitmq`, `http://user-service:8081`); profil verilmez (local seed yalnızca
   `spring-boot:run` ile). Her servis: Actuator health (yalnızca health expose) + compose healthcheck `curl` readiness, `mem_limit 768m`.
-- Spring Cloud kullanan servis (cart): Spring Cloud health'e `refreshScope` ve `discoveryComposite` katkılarını ekler → kapatılır
+- Spring Cloud kullanan servis (cart, order): Spring Cloud health'e `refreshScope` ve `discoveryComposite` katkılarını ekler → kapatılır
   (`management.health.refresh.enabled=false`, `spring.cloud.discovery.client.composite-indicator.enabled=false`,
   `...health-indicator.enabled=false`). OpenFeign kendi health indicator'ını EKLEMEZ. Kalan katkılar yalnızca yerel: db, diskSpace,
   livenessState, readinessState, ping, ssl (`ActuatorHealthTest.healthContributorsAreLocalOnly` kilitler). Catalog kapalıyken health UP

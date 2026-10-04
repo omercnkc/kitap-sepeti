@@ -145,10 +145,14 @@
 - Order Adım 2 YAPILDI (commit `51feb91`, push edildi): entity'ler (Order, OrderItem, OrderStatusHistory, AddressSnapshot + açık JSON converter),
   durum makinesi (TransitionResult kalıbı), OrderRepository (FOR UPDATE, sahiplik, pending). KARAR: tamamı ücretsiz sepet →
   `422 ORDER_TOTAL_ZERO` sipariş yazılmadan önce (Adım 4/5). order 315 test; root verify yeşil.
+- Order Adım 3a YAPILDI (commit edilmedi): Cart/Catalog/Payment Feign istemcileri (JDK HttpClient, log NONE, retry yok, istemci
+  başına yalnızca `X-Internal-Api-Key` interceptor'ı), domain'e bakan gateway'ler + sealed sonuçlar (NotPerformed = istek
+  ulaşmadı / Unknown = sonuç bilinmiyor), servis başına Resilience4j circuit breaker (20/10/%50/10 sn/3; yalnızca teknik hatalar),
+  WireMock tabanlı eşleme/CB/başlık/log/sözleşme testleri. order 426 test; root verify yeşil. Sıradaki: 3b Cart→Catalog CB.
 - Cart ertelenenler: CartCheckedOut tüketimi (Order Adım 7); Catalog OpenAPI nullable. (Yol maskeleme + özet politikası common'a
   taşındı → Order Adım 0a.)
-- Order planı (PROJE KARARI, Ekim 2026): 0a common sertleştirme (yapıldı) → 0b outbox → common (yapıldı) → 1 modül/db (yapıldı) → 2 domain (yapıldı) → 3 Feign + CB
-  → 4 checkout mutlu yol + GET {id} → 5 hata yolları/telafi → 6 ödeme sonucu tüketicisi → 7 Cart CartCheckedOut tüketicisi → 8 timeout
+- Order planı (PROJE KARARI, Ekim 2026): 0a common sertleştirme (yapıldı) → 0b outbox → common (yapıldı) → 1 modül/db (yapıldı) → 2 domain (yapıldı) → 3a Order istemcileri + CB (yapıldı)
+  → 3b Cart→Catalog CB → 4 checkout mutlu yol + GET {id} → 5 hata yolları/telafi → 6 ödeme sonucu tüketicisi → 7 Cart CartCheckedOut tüketicisi → 8 timeout
   görevi → 9 liste → 10 OpenAPI/olay belgeleri → 11 Docker. Kararlar activeContext "Sonraki adımlar"da.
 - Gateway fazı: docs/Swagger'ı (dört servis) dışarıya kapatmak.
 - order-service (catalog rezervasyon istemcisi).

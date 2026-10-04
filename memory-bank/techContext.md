@@ -38,8 +38,11 @@
   yalnızca harf/rakam; compose mysql env'inde `${VAR:?}`). Çalıştırma `.\mvnw.cmd -pl order-service spring-boot:run` (önce
   `.\mvnw.cmd -pl common -am install -DskipTests`); DB/RabbitMQ/JWKS ayarlarını `spring.config.import` ile `.env`'den kendisi okur
   (`USER_SERVICE_JWKS_URI` yoksa `http://localhost:8081/.well-known/jwks.json`). Testler `.\mvnw.cmd -pl order-service -am test`
-  (MySQL + RabbitMQ Testcontainers). Bağımlılıklar: payment ile aynı + security-oauth2-resource-server; openfeign/resilience4j YOK
-  (Adım 3'e kadar testle kilitli). Compose'da YOK (Adım 11).
+  (MySQL + RabbitMQ Testcontainers). Bağımlılıklar: payment ile aynı + security-oauth2-resource-server + (Adım 3a)
+  spring-cloud-starter-openfeign, feign-java11 (JDK HttpClient), spring-cloud-starter-circuitbreaker-resilience4j (Spring Cloud
+  2025.1.3 BOM: OpenFeign 5.0.3, feign 13.6.1, resilience4j 2.3.0); test wiremock-standalone 3.13.1 (sürüm servis pom'unda).
+  Env: `ORDER_INTERNAL_API_KEY` (zorunlu; yok/boşsa açılmaz), `ORDER_CART_URL`/`ORDER_CATALOG_URL`/`ORDER_PAYMENT_URL` (varsayılan
+  localhost:8083/8082/8087; `.env.example`'da henüz yok). Testlerde sahte anahtar application-test.yml'de. Compose'da YOK (Adım 11).
 - payment internal anahtarı: `.env` `PAYMENT_INTERNAL_KEY_ORDER_SHA256` (Order'ın ham anahtarı `ORDER_INTERNAL_API_KEY`'in SHA-256 hex
   özeti; `.env.example`'da boş). Yok/boş/bozuk → payment-service açılmaz. Testler JVM'de üretilen anahtarı `InternalTestKeys.register`
   (DynamicPropertySource) ile verir.
