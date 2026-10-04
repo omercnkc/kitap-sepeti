@@ -20,7 +20,7 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
  * yoksa yoldaki değer hata yanıtının {@code instance}'ına ve loglara maskesiz (UUID değilse) düşer.
  * Kapsam: yalnızca uygulama sınıfıyla aynı code source'tan (main çıktısı, {@code target/classes}) yüklenen
  * handler'lar. Test probe controller'ları ({@code target/test-classes}) ve framework uçları (jar) bu yüzden dışarıda.
- * İskelette uç yok (küme boş); ilk id'li uç ({@code /api/orders/{orderId}}) eklendiğinde kalıbı zorunlu olur.
+ * Şu an tek değişkenli uç {@code GET /api/orders/{orderId}}.
  */
 class RequestPathMaskerCoverageTest extends ApiTestSupport {
 

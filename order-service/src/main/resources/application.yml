@@ -49,13 +49,8 @@ spring:
         health-indicator:
           enabled: false
     # Circuit breaker'lar client.DownstreamCircuitBreakers'ta programatik (neyin hata sayılacağı orada); Spring Cloud
-    # CircuitBreakerFactory ve Feign entegrasyonu kapalı.
-    circuitbreaker:
-      resilience4j:
-        enabled: false
+    # CircuitBreaker starter'ı yok, Feign'in circuit breaker entegrasyonu da bu yüzden devre dışı.
     openfeign:
-      circuitbreaker:
-        enabled: false
       # HTTP katmanı JDK HttpClient (feign-java11). HTTP/1.1: servisler h2c konuşmuyor, yükseltme denemesi olmasın.
       http2client:
         enabled: true
@@ -141,9 +136,6 @@ server:
 management:
   health:
     refresh:
-      enabled: false
-    # Circuit breaker durumu health'e girmez: bağımlı servis kapalıyken Order hazır kalır.
-    circuitbreakers:
       enabled: false
   endpoints:
     web:

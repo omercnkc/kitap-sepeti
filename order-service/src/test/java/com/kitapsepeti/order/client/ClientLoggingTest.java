@@ -61,7 +61,8 @@ class ClientLoggingTest extends ClientTestSupport {
 				.isInstanceOf(InternalApiKeyInterceptor.class);
 		}
 		assertThat(this.feignClientProperties.getConfig().get("default").getLoggerLevel()).isEqualTo(Logger.Level.NONE);
-		assertThat(this.environment.getProperty("spring.cloud.openfeign.circuitbreaker.enabled")).isEqualTo("false");
+		assertThat(this.environment.getProperty("spring.cloud.openfeign.circuitbreaker.enabled", Boolean.class, false))
+			.isFalse();
 	}
 
 	@Test

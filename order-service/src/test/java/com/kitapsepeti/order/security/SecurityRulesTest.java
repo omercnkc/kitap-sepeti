@@ -24,8 +24,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 
 /**
- * SecurityConfig kuralları ve JWT doğrulaması (token'lar gerçek HTTP JWKS ucuyla doğrulanır). İskelette controller
- * yok: kimlik doğrulamasını geçen /api isteği MVC'nin 404'ü, geçemeyen 401.
+ * SecurityConfig kuralları ve JWT doğrulaması (token'lar gerçek HTTP JWKS ucuyla doğrulanır). {@code GET /api/orders}
+ * (liste) henüz yok: kimlik doğrulamasını geçen istek MVC'nin 404'ü, geçemeyen 401.
  */
 @ExtendWith(OutputCaptureExtension.class)
 class SecurityRulesTest extends ApiTestSupport {
@@ -52,9 +52,12 @@ class SecurityRulesTest extends ApiTestSupport {
 			.andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
 	}
 
-	/** cart ile aynı: kimlikli istekte olmayan /api yolu MVC'nin 404'ü (USER ve ADMIN aynı). */
+	/**
+	 * cart ile aynı: kimlikli istekte olmayan /api yolu MVC'nin 404'ü (USER ve ADMIN aynı). Tek segmentli
+	 * {@code /api/orders/x} sipariş ucuna düşer (geçersiz id → 400); bu yüzden iki segmentli yol.
+	 */
 	@ParameterizedTest
-	@ValueSource(strings = { ORDERS, "/api/orders/olmayan-yol", "/api/other/ping" })
+	@ValueSource(strings = { ORDERS, "/api/orders/olmayan/yol", "/api/other/ping" })
 	void unknownApiPathWithValidTokenReturns404(String path) throws Exception {
 		for (String token : new String[] { TestJwt.user(SUBJECT), TestJwt.admin(SUBJECT) }) {
 			mockMvc.perform(get(path).with(bearer(token)))

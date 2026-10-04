@@ -20,7 +20,7 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * Yalnızca Resource Server: token'ı user-service üretir, burada JWKS ile doğrulanır ({@link JwtDecoderConfig}).
  * Herkese açık uçlar yalnızca health ve OpenAPI dokümanı/Swagger UI (cart ile aynı). /api/** kimlik ister (USER ve
- * ADMIN, ayrı rol şartı yok); kimlikli istekte olmayan /api yolu MVC'nin 404'ü. Geri kalan her yol denyAll:
+ * ADMIN, ayrı rol şartı yok; sipariş sahipliği serviste); kimlikli istekte olmayan /api yolu MVC'nin 404'ü. Geri kalan her yol denyAll:
  * kimliksiz 401, kimlikli 403. Order internal uç sunmaz; internal API anahtarı zinciri yok.
  */
 @Configuration
@@ -28,10 +28,13 @@ import tools.jackson.databind.json.JsonMapper;
 @Import(ProblemDetailSecurityHandlers.class)
 public class SecurityConfig {
 
-	/** id taşıyan yollar; yeni bir uç yolda id taşırsa buraya eklenmeli (ör. {@code /api/orders/{orderId}}). */
+	/**
+	 * id taşıyan yollar; yeni bir uç yolda id taşırsa buraya eklenmeli. {@code /api/orders/checkout} sabit kalıbı
+	 * değişkensiz olduğu için {@code /api/orders/{orderId}}'den önce eşleşir (checkout yolu {@code :orderId} olmaz).
+	 */
 	@Bean
 	public RequestPathMasker requestPathMasker() {
-		return RequestPathMasker.uuidOnly();
+		return RequestPathMasker.of("/api/orders/checkout", "/api/orders/{orderId}");
 	}
 
 	@Bean

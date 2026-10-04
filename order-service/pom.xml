@@ -68,9 +68,10 @@
 			<groupId>io.github.openfeign</groupId>
 			<artifactId>feign-java11</artifactId>
 		</dependency>
+		<!-- Cart/Catalog/Payment circuit breaker'ları (programatik, common.resilience); Spring Cloud CircuitBreaker starter'ı yok. -->
 		<dependency>
-			<groupId>org.springframework.cloud</groupId>
-			<artifactId>spring-cloud-starter-circuitbreaker-resilience4j</artifactId>
+			<groupId>io.github.resilience4j</groupId>
+			<artifactId>resilience4j-circuitbreaker</artifactId>
 		</dependency>
 
 		<dependency>

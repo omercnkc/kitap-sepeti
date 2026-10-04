@@ -10,6 +10,7 @@ import com.kitapsepeti.common.outbox.OutboxEvent;
 import com.kitapsepeti.common.outbox.OutboxRelay;
 import com.kitapsepeti.common.outbox.OutboxRepository;
 import com.kitapsepeti.common.outbox.OutboxService;
+import com.kitapsepeti.order.controller.OrderController;
 import com.kitapsepeti.order.entity.Order;
 import com.kitapsepeti.order.entity.OrderItem;
 import com.kitapsepeti.order.entity.OrderStatusHistory;
@@ -28,8 +29,8 @@ import org.springframework.stereotype.Controller;
 import org.springframework.util.ClassUtils;
 
 /**
- * Bağlam açılır, Flyway V1 uygulanır, sipariş entity'leriyle ddl validate geçer. Controller henüz yok (sonraki
- * adımlar). Actuator yüzeyi {@code config.ActuatorHealthTest}'te, istemciler {@code client} test paketinde.
+ * Bağlam açılır, Flyway V1 uygulanır, sipariş entity'leriyle ddl validate geçer. Uçlar {@code controller} test
+ * paketinde, actuator yüzeyi {@code config.ActuatorHealthTest}'te, istemciler {@code client} test paketinde.
  */
 class OrderServiceApplicationTests extends ApiTestSupport {
 
@@ -72,10 +73,11 @@ class OrderServiceApplicationTests extends ApiTestSupport {
 	}
 
 	@Test
-	void noApplicationControllersYet() {
-		assertThat(context.getBeansWithAnnotation(Controller.class).values())
-			.map(bean -> ClassUtils.getUserClass(bean).getPackageName())
-			.noneMatch(name -> name.startsWith("com.kitapsepeti.order"));
+	void onlyOrderControllerIsExposed() {
+		assertThat(context.getBeansWithAnnotation(Controller.class).values().stream()
+			.<Class<?>>map(ClassUtils::getUserClass)
+			.filter(type -> type.getPackageName().startsWith("com.kitapsepeti.order"))
+			.toList()).containsExactly(OrderController.class);
 	}
 
 	/** Ortak outbox bağlı: exchange, yazıcı ve order'ın routing key eşlemesine bağlı yayıncı; relay testte kapalı. */
@@ -94,7 +96,7 @@ class OrderServiceApplicationTests extends ApiTestSupport {
 		assertThatThrownBy(() -> EventRoutingKeys.forEventType("OrderPaid")).isInstanceOf(IllegalStateException.class);
 	}
 
-	/** Feign/Resilience4j artık classpath'te; Spring Cloud'un otomatik circuit breaker katmanları kapalı. */
+	/** Resilience4j yalnızca çekirdek kütüphane olarak var; Spring Cloud'un otomatik circuit breaker katmanları yok. */
 	@Test
 	void springCloudCircuitBreakerLayersAreDisabled() {
 		assertThat(context.getBeansOfType(CircuitBreakerFactory.class)).isEmpty();

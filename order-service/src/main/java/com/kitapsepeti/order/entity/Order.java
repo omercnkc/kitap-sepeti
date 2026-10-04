@@ -143,7 +143,8 @@ public class Order {
 	 * @param lines boş olamaz; her kitap bir kez, adet {@value #MIN_QUANTITY}..{@value #MAX_QUANTITY}, birim fiyat
 	 *        negatif değil ve en fazla 2 ondalık (10.001 yuvarlanmaz, reddedilir)
 	 * @throws OrderRuleViolation iş kuralı ihlalinde (kod: {@link Code})
-	 * @throws IllegalArgumentException başlık boş/uzunsa ya da toplam DECIMAL(12,2)'yi aşıyorsa
+	 * @throws OrderTotalTooLargeException toplam DECIMAL(12,2)'yi aşıyorsa
+	 * @throws IllegalArgumentException başlık boş/uzunsa
 	 */
 	public static Order place(UUID userId, UUID cartId, String currency, List<OrderLine> lines,
 			AddressSnapshot address, Clock clock) {
@@ -177,7 +178,7 @@ public class Order {
 			throw new OrderRuleViolation(Code.ORDER_TOTAL_ZERO);
 		}
 		if (subtotal.compareTo(MAX_AMOUNT) > 0) {
-			throw new IllegalArgumentException("Order total must not exceed " + MAX_AMOUNT);
+			throw new OrderTotalTooLargeException();
 		}
 
 		order.userId = userId;

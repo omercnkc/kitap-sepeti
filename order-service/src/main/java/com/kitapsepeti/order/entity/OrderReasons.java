@@ -18,11 +18,17 @@ public final class OrderReasons {
 	/** Catalog rezervasyonu stok yetersizliğiyle reddetti. */
 	public static final String OUT_OF_STOCK = "OUT_OF_STOCK";
 
+	/** Catalog rezervasyonu kitap yok / yayında değil diye reddetti (lookup ile rezervasyon arasında değişti). */
+	public static final String BOOK_NOT_AVAILABLE = "BOOK_NOT_AVAILABLE";
+
 	/** Catalog'a ulaşılamadı / yanıt vermedi (circuit breaker açık dahil). */
 	public static final String CATALOG_UNAVAILABLE = "CATALOG_UNAVAILABLE";
 
 	/** Payment'a ulaşılamadı / yanıt vermedi (circuit breaker açık dahil). */
 	public static final String PAYMENT_UNAVAILABLE = "PAYMENT_UNAVAILABLE";
+
+	/** Payment ödeme başlatma isteğini 4xx ile reddetti (bizim taraftaki bir hata: anahtar, gövde, eşleşme). */
+	public static final String PAYMENT_REJECTED = "PAYMENT_REJECTED";
 
 	/** Sağlayıcı kartı reddetti (payment-service'in failure code'u). */
 	public static final String CARD_DECLINED = "CARD_DECLINED";
