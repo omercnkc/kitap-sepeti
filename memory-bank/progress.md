@@ -142,9 +142,12 @@
   security iskeleti (JWT, denyAll), common outbox bağlantısı (boş routing key), V1 (orders, order_items, order_status_history, outbox).
   order 164 test; root verify: common 60, user 86, catalog 285, cart 313 (2 skipped), payment 367, order 164. Yerel `spring-boot:run`
   → V1 uygulandı, readiness UP.
+- Order Adım 2 YAPILDI (commit `51feb91`, push edildi): entity'ler (Order, OrderItem, OrderStatusHistory, AddressSnapshot + açık JSON converter),
+  durum makinesi (TransitionResult kalıbı), OrderRepository (FOR UPDATE, sahiplik, pending). KARAR: tamamı ücretsiz sepet →
+  `422 ORDER_TOTAL_ZERO` sipariş yazılmadan önce (Adım 4/5). order 315 test; root verify yeşil.
 - Cart ertelenenler: CartCheckedOut tüketimi (Order Adım 7); Catalog OpenAPI nullable. (Yol maskeleme + özet politikası common'a
   taşındı → Order Adım 0a.)
-- Order planı (PROJE KARARI, Ekim 2026): 0a common sertleştirme (yapıldı) → 0b outbox → common (yapıldı) → 1 modül/db (yapıldı) → 2 domain → 3 Feign + CB
+- Order planı (PROJE KARARI, Ekim 2026): 0a common sertleştirme (yapıldı) → 0b outbox → common (yapıldı) → 1 modül/db (yapıldı) → 2 domain (yapıldı) → 3 Feign + CB
   → 4 checkout mutlu yol + GET {id} → 5 hata yolları/telafi → 6 ödeme sonucu tüketicisi → 7 Cart CartCheckedOut tüketicisi → 8 timeout
   görevi → 9 liste → 10 OpenAPI/olay belgeleri → 11 Docker. Kararlar activeContext "Sonraki adımlar"da.
 - Gateway fazı: docs/Swagger'ı (dört servis) dışarıya kapatmak.

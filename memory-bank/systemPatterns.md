@@ -507,7 +507,7 @@
   aksi `succeeded()`. `MockOutcome(failureCode)` record'u (`isSucceeded()`; static `succeeded()` record accessor'ıyla çakıştığı için
   boolean bileşen yok).
 
-## order-service (Order Adım 1 iskeleti; port 8088, `order_db`)
+## order-service (Order Adım 1 iskeleti + Adım 2 domain; port 8088, `order_db`)
 - İskelet = payment Adım 1 kalıbı + cart'ın Resource Server güvenliği (JwtDecoderConfig + `JwtSubjects`: sub katı UUID, değilse
   `BadJwtException` → 401). Zincir TEK: `/api/**` authenticated, health (GET) + `/v3/api-docs/**` + Swagger + `/error` permitAll,
   `anyRequest().denyAll()` (kimliksiz 401 + Bearer challenge, token'lı 403). Internal API zinciri YOK (order internal uç sunmaz;
@@ -532,7 +532,47 @@
   - İndeksler: orders (user_id, created_at, id), (status, created_at), (stock_state, updated_at); cart_id indeksi YOK.
   - Zamanlarda DB default yok (outbox.created_at hariç); status/stock_state/currency/discount_amount'ta default var (payment gibi).
 - BİLİNEN ÇELİŞKİ: Catalog fiyat 0'a izin verir, `orders.subtotal/total_amount > 0` → tamamı ücretsiz sepet siparişi DB'de reddedilir
-  (bilerek; checkout Adım 4'te açık hata kodu vermeli).
+  (bilerek). KARAR (Adım 2): checkout sipariş yazılmadan ÖNCE `422 ORDER_TOTAL_ZERO` döner; domain kuralı `Order.place`'te
+  (`OrderRuleViolation(ORDER_TOTAL_ZERO)`), HTTP eşlemesi Adım 4/5'te.
+
+### Order domain'i (Order Adım 2; `entity/` + `repository/OrderRepository`)
+- Payment kalıbı: `DbEnum` + package-private `StrictDbEnumConverter` (DB'de küçük harf, bilinmeyen değer IAE), `TransitionResult`
+  (APPLIED / ALREADY_IN_STATE / CONFLICTING_FINAL; denenmemesi gereken durum = `IllegalStateException`), setter yok, protected
+  no-arg ctor, `now(clock)` MICROS'a kırpılır, insert-only `OrderItem`/`OrderStatusHistory` `@Immutable`.
+- `Order` aggregate root: `items`/`history` `@OneToMany(mappedBy, cascade = {PERSIST, MERGE})`, orphanRemoval YOK (FK RESTRICT);
+  items `@OrderBy("id")` (UUID v7 = ekleme sırası), history `@OrderBy("createdAt, id")`; getter'lar değiştirilemez liste.
+  `active_pending_user_id` EŞLENMEZ. status/stockState/currency/discount Java'da açıkça yazılır (INSERT'te gönderildiği SQL
+  yakalamayla test edildi; DB default'una güvenilmez).
+- `Order.place(userId, cartId, currency, List<OrderLine>, AddressSnapshot, Clock)` → `OrderRuleViolation(code)` sırası:
+  INVALID_CURRENCY (`^[A-Z]{3}$`) → EMPTY_ORDER → DUPLICATE_BOOK → satır başına INVALID_QUANTITY (1–99) / INVALID_PRICE (negatif,
+  > DECIMAL(12,2), 2'den fazla anlamlı ondalık; 10.000 kabul → 10.00, yuvarlama yok) → ORDER_TOTAL_ZERO. Boş/300'den uzun başlık ve
+  toplam > 9999999999.99 = IAE (programlama hatası; catalog/cart sınırları bunu dışlar). lineTotal = unitPrice × quantity, subtotal =
+  Σ, discount 0.00, total = subtotal; PENDING + REQUESTED; ilk history `null → pending` `ORDER_PLACED`.
+- Geçiş tablosu (Clock parametre; APPLIED → updatedAt = clock; yalnızca markPaid/markFailed history yazar; APPLIED olmayan sonuç
+  hiçbir alanı değiştirmez):
+  - `markStockHeld`: REQUESTED → HELD APPLIED (status'tan bağımsız); HELD → ALREADY; COMMITTED/RELEASED → CONFLICTING.
+  - `attachPayment(id)`: null → APPLIED; aynı id → ALREADY; başka id → CONFLICTING (değer değişmez).
+  - `markPaid(id)`: PENDING+HELD → PAID APPLIED (paymentId null ise yazılır; başka id bağlıysa CONFLICTING); PENDING+REQUESTED →
+    ISE; PAID aynı id → ALREADY, başka id → CONFLICTING; FAILED → CONFLICTING. History `pending → paid` `PAYMENT_SUCCEEDED`.
+  - `markFailed(code)`: kod `^[A-Z][A-Z0-9_]*$` ve ≤ 64 değilse IAE (durumdan bağımsız); PENDING → FAILED APPLIED (history reason =
+    kod, stok durumu korunur); FAILED → ALREADY (ilk kod kalır); PAID → CONFLICTING.
+  - `markStockCommitted`: status ≠ PAID → CONFLICTING; HELD → COMMITTED APPLIED; COMMITTED → ALREADY; RELEASED → CONFLICTING;
+    PAID+REQUESTED (DB CHECK'i dışlar) → ISE.
+  - `markStockReleased`: status ≠ FAILED (PENDING dahil) → CONFLICTING; REQUESTED/HELD → RELEASED APPLIED; RELEASED → ALREADY;
+    COMMITTED → CONFLICTING.
+- `OrderReasons` (yalnızca sabit): ORDER_PLACED, PAYMENT_SUCCEEDED; failure kodları OUT_OF_STOCK, CATALOG_UNAVAILABLE,
+  PAYMENT_UNAVAILABLE, CARD_DECLINED, PAYMENT_FAILED, ORDER_EXPIRED.
+- `AddressSnapshot` record (user `addresses` alanları/uzunlukları: recipientName 120, phone 32, line1 200, line2? 200, district? 80,
+  city 80, postalCode? 16, country `^[A-Z]{2}$`; label/id/userId/isDefault YOK). `toString()` = `AddressSnapshot[redacted]`, hata
+  mesajları yalnızca alan adı. `OrderLine.toString()` = `OrderLine[redacted]`. Entity'lerde Lombok @ToString/@Data YOK (Object.toString).
+- JSON eşlemesi = açık `AddressSnapshotConverter` (`@Convert` + `@JdbcTypeCode(SqlTypes.JSON)` String üzerinde; JSON_TYPE OBJECT
+  doğrulandı, çift kodlama yok). Neden `@JdbcTypeCode` doğrudan değil: Hibernate format mapper'ı classpath'ten örtük seçer — şu an
+  springdoc'un getirdiği Jackson 2 (`JacksonJsonFormatMapper`); Jackson 3'e geçerse bilinmeyen alan varsayılanı sessizce yok sayar;
+  her iki durumda eksik alan sessizce null. Converter: Jackson 3 ağaç API'si, yazarken 8 alanın hepsi (null'lar dahil), okurken TAM
+  8 alan (bilinmeyen/eksik/tekrar/metin olmayan → IAE, mesajda değer yok), değer kuralları record kurucusunda.
+- `OrderRepository`: `findByIdForUpdate` (`@Lock(PESSIMISTIC_WRITE)` + `@Query`, `innodb_lock_wait_timeout=5` → 5 sn sonra
+  `PessimisticLockingFailureException`), `findByIdAndUserId` (`@EntityGraph("items")`, sahiplik kontrolü), `findPendingByUserId`
+  (default metot → `findByUserIdAndStatus(userId, PENDING)`). Kalem/geçmiş için ayrı repository yok (aggregate üzerinden).
 - Testler: `OrderSchemaConstraintsTest` (`@JdbcTest`, birden fazla kısıtı ihlal eden satırda `assertCheckViolation(..., a, b)` →
   MySQL'in bildirdiği ilk kısıt bunlardan biri), `StartupLogHygieneTest` (ayrı MySQL + üretilmiş kimlikler; `SpringApplicationBuilder`
   `.main(App.class)` olmadan "Started ForkedBooter" yazar).

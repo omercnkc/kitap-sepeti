@@ -1111,6 +1111,29 @@
     tamamı ücretsiz sepetin siparişi şemada reddedilir (kısıt BİLEREK değiştirilmedi; Adım 4'te checkout'ta açık hata kodu
     gerekecek, ör. `ORDER_TOTAL_ZERO`, ya da ürün kararı).
 
+- Order Adım 2 — domain: entity'ler + durum makinesi + repository (commit `51feb91`, push edildi). Ayrıntı ve geçiş
+  tablosu: systemPatterns "Order domain'i". V1 değişmedi, ddl validate ek düzeltmesiz geçti; controller/DTO/Feign/consumer YOK.
+  - `entity/`: `DbEnum`, `StrictDbEnumConverter`, `OrderStatus` (+Converter), `StockState` (+Converter), `TransitionResult`,
+    `OrderReasons`, `OrderRuleViolation` (+`Code`), `OrderLine` (record), `AddressSnapshot` (record, toString redacted),
+    `AddressSnapshotConverter`, `Order`, `OrderItem`, `OrderStatusHistory`. `repository/OrderRepository`.
+  - PROJE KARARI: tamamı ücretsiz sepet → checkout sipariş yazılmadan ÖNCE `422 ORDER_TOTAL_ZERO` (domain kuralı `Order.place`'te;
+    HTTP eşlemesi Adım 4/5).
+  - JSON kararı: `@JdbcTypeCode(SqlTypes.JSON)` doğrudan record'a DENENDİ (geçici probe testi, silindi): çalışıyor ama Hibernate
+    springdoc'un getirdiği Jackson 2 mapper'ını örtük seçiyor, eksik alan sessizce null; Jackson 3'e geçerse bilinmeyen alan da
+    sessizce atlanır → açık `AddressSnapshotConverter` (sabit 8 alan, bilinmeyen/eksik/tekrar → hata).
+  - Reason/failure kodları (`OrderReasons`, şimdilik yalnızca sabit): ORDER_PLACED, PAYMENT_SUCCEEDED, OUT_OF_STOCK,
+    CATALOG_UNAVAILABLE, PAYMENT_UNAVAILABLE, CARD_DECLINED, PAYMENT_FAILED, ORDER_EXPIRED.
+  - Testler order 164 → 315 (+151): OrderTransitionsTest 74 (tablo: her metot × 10 ulaşılabilir başlangıç durumu), OrderPlaceTest 32,
+    AddressSnapshotConverterTest 25, OrderRepositoryTest 14 (`@DataJpaTest`; round-trip, küçük harf, JSON OBJECT, INSERT kolonları
+    `SqlCapture` StatementInspector ile, uk_orders_pending_user, paid/failed flush + history sayıları, sahiplik, bilinmeyen/eksik JSON
+    alanı okumada hata), OrderLockingTest 3 (FOR UPDATE bekler, 5 sn sonra `PessimisticLockingFailureException`, düz okuma beklemez),
+    PiiToStringTest 3 (`OrderLine` toString de redacted). Root `clean verify` yeşil: common 60, user 86, catalog 285, cart 313
+    (2 skipped), payment 367, order 315. Beklenen değişiklik: `OrderServiceApplicationTests` "yalnızca OutboxEvent" testi →
+    `orderAndOutboxEntitiesAndRepositoriesAreMapped` (Order, OrderItem, OrderStatusHistory, OutboxEvent; OrderRepository + OutboxRepository).
+  - Sapmalar: fiyat ölçeği değer bazlı (10.000 kabul); boş/uzun başlık ve toplam üst sınırı IAE; markStockReleased PENDING'de
+    CONFLICTING; markStockCommitted PAID+REQUESTED'de ISE; markStockHeld FAILED+REQUESTED'de APPLIED (spec'e uygun, stok sonra
+    bırakılır); ek repository metodu `findByUserIdAndStatus`.
+
 ## Sonraki adımlar
 - PROJE KARARI (Ekim 2026, UI paralel): UI (Angular 13) Order ile PARALEL başlıyor — ayrı agent, ayrı worktree
   (`..\kitapSepeti-ui`, branch `ui`), yalnızca `frontend/` + `memory-bank/frontend.md` + `.cursor/rules/frontend-angular13.mdc`.
@@ -1131,7 +1154,7 @@
   - v1 kuponsuz.
   - Önce kayıt sonra dış çağrı: sipariş satırı kendi TX'inde yazılır, sonra rezervasyon/ödeme çağrıları.
   - Stok commit/release Catalog internal HTTP ile (`/internal/stock/reservations/{orderId}/commit|release`).
-- Order planı: 0a common sertleştirme (YAPILDI) → 0b outbox → common (YAPILDI, push'landı) → 1 modül/db (YAPILDI, push'landı) → 2 domain → 3 Feign + CB → 4 checkout mutlu yol +
+- Order planı: 0a common sertleştirme (YAPILDI) → 0b outbox → common (YAPILDI, push'landı) → 1 modül/db (YAPILDI, push'landı) → 2 domain (YAPILDI) → 3 Feign + CB → 4 checkout mutlu yol +
   GET {id} → 5 hata yolları/telafi → 6 ödeme sonucu tüketicisi → 7 Cart CartCheckedOut tüketicisi → 8 timeout görevi → 9 liste →
   10 OpenAPI/olay belgeleri → 11 Docker.
 - order-service eklenirken: `RequestPathMasker` bean'i (`/api/orders/{orderId}` vb.) ve `InternalAuthConfig` (gerekirse) — common
@@ -1162,6 +1185,7 @@
 - Açık konu (catalog OpenAPI): `/v3/api-docs` her profilde açık (user-service ile aynı) → internal uçların şekli de herkese görünür
   (sır yok); prod'da `SPRINGDOC_ENABLED=false` düşünülmeli.
 - Yeni servisler eklendikçe kök POM kontrol listesini uygula (bkz. systemPatterns.md; [5] common, [6] Dockerfile).
-- Order Adım 2: domain (entity + repository; şema V1'de hazır, ddl validate). Ardından Adım 3 Feign + CB, Adım 4'te
-  `RequestPathMasker` deseni `/api/orders/{orderId}` + sipariş hata kodları/DB kısıtı eşlemesi (`GlobalExceptionHandler`).
-- Açık konu (Order): tamamı ücretsiz sepet (Catalog fiyat 0) ↔ `total_amount > 0`; checkout'ta hangi koda düşeceği Adım 4'te.
+- Order Adım 2 YAPILDI (commit `51feb91`, push edildi). Sıradaki: Adım 3 Feign + CB; Adım 4'te `RequestPathMasker` deseni `/api/orders/{orderId}`
+  + sipariş hata kodları/DB kısıtı eşlemesi (`GlobalExceptionHandler`: `OrderRuleViolation` → 422 kod adıyla, `uk_orders_pending_user`
+  → 409 ORDER_PENDING_EXISTS).
+- KARAR (Order): tamamı ücretsiz sepet → `422 ORDER_TOTAL_ZERO`, sipariş yazılmadan önce (Adım 4/5).
