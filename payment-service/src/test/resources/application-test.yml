@@ -1,6 +1,14 @@
-# Bağlantı bilgisi @ServiceConnection ile Testcontainers'tan gelir; testler .env'deki PAYMENT_DB_* değerlerine
-# bağımlı olmamalı (placeholder'lar burada sabit değerle karşılanır).
+# Bağlantı bilgisi @ServiceConnection ile Testcontainers'tan gelir; testler .env'deki PAYMENT_DB_* ve
+# RABBITMQ_* değerlerine bağımlı olmamalı (placeholder'lar burada sabit değerle karşılanır).
 spring:
   datasource:
     username: test
     password: test
+  rabbitmq:
+    username: test
+    password: test
+
+app:
+  # Worker arka planda outbox satırlarını kilitleyip yayınlamasın; yalnızca relay testleri açar.
+  outbox:
+    enabled: false

@@ -66,7 +66,7 @@ class PaymentRepositoryTest {
 
 		assertThat(ddlAuto).isEqualTo("validate");
 		assertThat(entityManager.getMetamodel().getEntities()).extracting(EntityType::getName)
-			.containsExactlyInAnyOrder("Payment", "ProviderEvent");
+			.containsExactlyInAnyOrder("Payment", "ProviderEvent", "OutboxEvent");
 	}
 
 	@Test

@@ -16,15 +16,24 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.health.actuate.endpoint.HealthEndpointGroup;
+import org.springframework.boot.health.actuate.endpoint.HealthEndpointGroups;
+import org.springframework.boot.health.registry.HealthContributorRegistry;
 import org.springframework.context.ApplicationContext;
 import org.springframework.http.HttpHeaders;
 import org.springframework.util.ClassUtils;
 
-/** Bağlam açılır, Flyway V1 + V2 uygulanır, ddl validate geçer; amqp/feign/springdoc henüz yok. */
+/** Bağlam açılır, Flyway V1 + V2 uygulanır, ddl validate geçer; feign/springdoc yok. */
 class PaymentServiceApplicationTests extends ApiTestSupport {
 
 	@Autowired
 	private ApplicationContext context;
+
+	@Autowired
+	private HealthEndpointGroups groups;
+
+	@Autowired
+	private HealthContributorRegistry registry;
 
 	@Test
 	void contextLoadsAndFlywayAppliedV1AndV2() {
@@ -41,8 +50,7 @@ class PaymentServiceApplicationTests extends ApiTestSupport {
 	}
 
 	@ParameterizedTest
-	@ValueSource(strings = { "org.springframework.amqp.rabbit.core.RabbitTemplate",
-			"org.springframework.cloud.openfeign.FeignClient",
+	@ValueSource(strings = { "org.springframework.cloud.openfeign.FeignClient",
 			"org.springdoc.core.configuration.SpringDocConfiguration" })
 	void laterStepDependenciesAreNotOnClasspath(String className) {
 		assertThat(ClassUtils.isPresent(className, getClass().getClassLoader())).isFalse();
@@ -59,6 +67,23 @@ class PaymentServiceApplicationTests extends ApiTestSupport {
 		mockMvc.perform(get("/actuator/health/readiness"))
 			.andExpect(status().isOk())
 			.andExpect(content().json("{\"status\":\"UP\"}", true));
+	}
+
+	/** Catalog ile aynı: readiness yalnızca DB; RabbitMQ kapalıyken ödeme oluşturma çalışır, olaylar outbox'ta bekler. */
+	@Test
+	void readinessDependsOnDatabaseButNotOnRabbitMq() {
+		assertThat(registry.getContributor("rabbit")).as("rabbit health contributor kayıtlı").isNotNull();
+		assertThat(registry.getContributor("db")).as("db health contributor kayıtlı").isNotNull();
+
+		HealthEndpointGroup readiness = groups.get("readiness");
+		assertThat(readiness.isMember("readinessState")).isTrue();
+		assertThat(readiness.isMember("db")).isTrue();
+		assertThat(readiness.isMember("rabbit")).isFalse();
+
+		HealthEndpointGroup liveness = groups.get("liveness");
+		assertThat(liveness.isMember("livenessState")).isTrue();
+		assertThat(liveness.isMember("db")).isFalse();
+		assertThat(liveness.isMember("rabbit")).isFalse();
 	}
 
 	/** Güvenlik eklenince (Adım 3) diğer actuator yolları varsayılan zincirin denyAll'una takılır: 403, challenge yok. */
