@@ -35,6 +35,10 @@
 - payment internal anahtarı: `.env` `PAYMENT_INTERNAL_KEY_ORDER_SHA256` (Order'ın ham anahtarı `ORDER_INTERNAL_API_KEY`'in SHA-256 hex
   özeti; `.env.example`'da boş). Yok/boş/bozuk → payment-service açılmaz. Testler JVM'de üretilen anahtarı `InternalTestKeys.register`
   (DynamicPropertySource) ile verir.
+- payment mock webhook secret'ı (Adım 5): `.env` `PAYMENT_MOCK_WEBHOOK_SECRET` (rastgele, ≥32 karakter; kullanıcı 43 karakter
+  base64url girdi; `.env.example`'da boş) → `app.payment.mock.webhook-secret`. Yok/boş/<32 → payment-service açılmaz. Yalnızca
+  payment-service kullanır (Adım 6'daki mock dispatcher da aynı secret'la imzalar). Testler `WebhookTestSecrets.register` ile
+  çalıştırma başına rastgele secret verir. `app.payment.webhook.tolerance` (5m) ve `max-body-bytes` (65536) application.yml'de.
 - payment `app.payment.*` (`config/PaymentProperties`, @Validated): `provider` (varsayılan mock; v1'de yalnızca mock açılır),
   `mock.fail-cents` 0–99 (varsayılan 99). DİKKAT: `app.payment.provider=` (boş) hata vermez, Binder boş değeri null yapıp
   `@DefaultValue("mock")`'a düşer (testle sabitlendi). Bağlam testleri `ApplicationContextRunner().withUserConfiguration(PaymentConfig.class)`.

@@ -897,7 +897,7 @@
 
   - Commit `e5b4132` (kod) + `1dad3a0` (memory-bank), push edildi.
 
-- Payment Adım 4 — ödeme sonucu servisi + outbox → RabbitMQ (henüz commit edilmedi; webhook, provider_events yazımı, mock
+- Payment Adım 4 — ödeme sonucu servisi + outbox → RabbitMQ (commit `1f5bce0` + memory-bank `a98ad7a`, push edildi; webhook, provider_events yazımı, mock
   dispatcher, kurtarma görevi YOK; migration, diğer modüller ve common değişmedi):
   - Outbox kodu catalog'dan KOPYA (Order fazında common'a taşıma adayı; user-service ↔ catalog ↔ payment artık üç kopya):
     `entity/OutboxEvent`, `repository/OutboxRepository` (SKIP LOCKED batch), `outbox/` OutboxRelay, OutboxPublisher,
@@ -929,9 +929,34 @@
   - Root `clean verify`: common 25, user 83, catalog 276, cart 312 (2 skipped), payment 247. `spring-boot:run` (Docker RabbitMQ):
     health UP, readiness 200, WARN/ERROR 0; broker'da `kitapsepeti.events topic durable`.
 
+- Payment Adım 5 — sağlayıcı webhook ucu `POST /webhooks/{provider}` (henüz commit edilmedi; mock dispatcher, otomatik gönderim,
+  kurtarma görevi YOK; migration, diğer modüller, common değişmedi; ham gövde DB'ye/loga yazılmaz). Kurallar systemPatterns
+  "payment webhook":
+  - Kod: `provider/mock/` MockWebhookSigner (Adım 6 dispatcher'ı da kullanacak) + MockWebhookVerifier; `config/WebhookSecurityConfig`
+    (@Order 2; SecurityConfig @Order 3'e kaydı, `denyWithoutChallenge` ortak yardımcı); `controller/webhook/WebhookController`;
+    `dto/webhook/WebhookEvent`; `service/WebhookService`; `exception/` WebhookSignatureException (401 + `Signature realm="webhook"`),
+    WebhookRejectedException (ErrorCode alır); `PaymentErrorCode` + WEBHOOK_SIGNATURE_INVALID 401, UNKNOWN_PAYMENT 400, AMOUNT_MISMATCH
+    400, PAYLOAD_TOO_LARGE 413 (API_CODES'ta payment kodlarının sonuna, INTERNAL_ERROR'dan önce); `PaymentProperties` `mock.webhookSecret`
+    + `webhook(tolerance 5m, maxBodyBytes 65536)`; repository'lere `findByProviderReferenceForUpdate`, `existsByProviderTypeAndProviderEventId`;
+    `.env.example` `PAYMENT_MOCK_WEBHOOK_SECRET`.
+  - İmza biçimi (Adım 6 ve ileride iyzico için): `X-Mock-Timestamp: <epoch sn>`, `X-Mock-Signature: sha256=<64 küçük hex>`,
+    HMAC-SHA256(key = secret UTF-8, "<ts>.<ham gövde baytları>"), ±5 dk (sınır dahil), sabit zamanlı karşılaştırma.
+  - Kararlar: GET/PUT/PATCH/DELETE /webhooks/mock → 403 (405 değil; zincir yalnızca POST /webhooks/* açar). 404 sağlayıcı kontrolü
+    Content-Type'tan da önce (`consumes` yerine elle 415). 413 için yeni PAYLOAD_TOO_LARGE kodu (common'da 413 kodu yok). Tutar JSON
+    metni olmalı (katı okuyucu; sayı → 400 MALFORMED_REQUEST). Reddedilen olay (UNKNOWN_PAYMENT, AMOUNT_MISMATCH) provider_events'e
+    yazılmaz; tekrar kontrolü tutar kontrolünden önce. Güvenlik ağı (uk ihlali → 204) controller'da (WebhookService.handle tek TX
+    kalsın diye). UNKNOWN_PAYMENT/AMOUNT_MISMATCH WARN seviyesinde (imzalı ama tutarsız mesaj dikkat ister).
+  - Testler (payment 297 = 247 + 50): MockWebhookSignatureTest 20 (unit, MutableClock), WebhookControllerTest 19, WebhookConcurrencyTest 3
+    (10 paralel aynı olay → 1 kayıt/1 outbox; eşzamanlı succeeded+failed → 1 APPLIED + 1 CONFLICTING_FINAL; uk güvenlik ağı),
+    PaymentPropertiesTest +7 (19; secret yok/boş/31 → açılmaz, değer yok; webhook varsayılanları; toString maskeli), SecurityRulesTest +1
+    (9; zincir sırası). `ApiTestSupport` + `@MockitoSpyBean ProviderEventRepository`, secret kaydı.
+  - Root `clean verify`: common 25, user 83, catalog 276, cart 312 (2 skipped), payment 297. `spring-boot:run` (.env secret'ıyla) →
+    health UP, readiness 200; imzasız ve bozuk imzalı POST /webhooks/mock → 401 + `Signature realm="webhook"`; POST /webhooks/x → 404;
+    GET /webhooks/mock → 403; logda yalnızca beklenen 3 WARN, gönderilen değerler yok. Pozitif uçtan uca Adım 6'da (secret okunmadı).
+
 ## Sonraki adımlar
-- Payment Adım 5+: mock HMAC webhook (`PaymentResults`'ı kendi TX'inden çağırır; ProviderEvent tekrar koruması; `/webhooks/**` için
-  SecurityConfig'e kural), mock dispatcher, kurtarma görevi, OpenAPI, Docker + compose.
+- Payment Adım 6: mock dispatcher (ödeme oluşturulunca `MockOutcomeRule` sonucunu `MockWebhookSigner` ile imzalayıp kendi
+  `/webhooks/mock` ucuna gönderir; pozitif uçtan uca), kurtarma görevi; sonra OpenAPI, Docker + compose.
   Order istemcisi `.env` `ORDER_INTERNAL_API_KEY` ile `X-Internal-Api-Key` gönderir (payment özeti `PAYMENT_INTERNAL_KEY_ORDER_SHA256`).
 - Cart ertelenenler: (1) CartCheckedOut tüketimi Order fazında (checkout + yeni sepet aynı TX'te olursa arada `flush()` — flush tuzağı);
   (2) yol maskelemeyi (`MaskedRequestPaths`) ve boş özet politikasını (internal key özeti boş/bozuksa açılmama) common'a taşıma

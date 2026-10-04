@@ -99,14 +99,17 @@
   matches), `ProviderEvent` (@Immutable), katı küçük harf converter'lar (ortak taban), kilitsiz repository'ler, `PaymentProvider`
   soyutlaması + tek bean (`app.payment.provider`, yalnızca mock açılır), `MockPaymentProvider`, `MockOutcomeRule` (kuruş = fail-cents →
   CARD_DECLINED), `PaymentProperties` (fail-cents 0–99). payment-service 177 test.
-- Payment Adım 4 (henüz commit edilmedi): `PaymentResults` (durum geçişi + outbox aynı TX), outbox → RabbitMQ yayıncısı
+- Payment Adım 5 (henüz commit edilmedi): imzalı mock webhook ucu `POST /webhooks/{provider}` (HMAC-SHA256 `X-Mock-Timestamp` +
+  `X-Mock-Signature`, ±5 dk; ayrı güvenlik zinciri @Order 2), `WebhookService` (ödeme FOR UPDATE → tekrar → tutar → provider_events →
+  PaymentResults, tek TX), `PAYMENT_MOCK_WEBHOOK_SECRET` zorunlu. payment-service 297 test.
+- Payment Adım 4 (commit `1f5bce0` + `a98ad7a`, push edildi): `PaymentResults` (durum geçişi + outbox aynı TX), outbox → RabbitMQ yayıncısı
   (catalog kopyası, `kitapsepeti.events`, `payment.succeeded`/`payment.failed`), olay belgeleri. payment-service 247 test.
 - Payment Adım 3 (commit `e5b4132` + `1dad3a0`, push edildi): V2 (sağlayıcı kimlikleri `utf8mb4_bin`), security (internal API key zinciri `order-service`
   + denyAll varsayılan zincir, anonim 403 challenge'sız), `POST /internal/payments` (idempotent, 201/200/409/503) +
   `GET /internal/payments/{id}`, yol maskeleme (log dahil). payment-service 220 test. Yerelde V2 uygulandı, uçtan uca geçti.
 
 ## Yapılacaklar
-- Payment (Faz 7) sonraki adımlar: mock sağlayıcı imzalı webhook (HMAC) + mock dispatcher + kurtarma görevi, OpenAPI,
+- Payment (Faz 7) sonraki adımlar: mock dispatcher (pozitif webhook uçtan ucu) + kurtarma görevi (Adım 6), OpenAPI,
   Docker + compose.
 - Outbox kodunu common'a taşıma (Order fazı başında): user-service, catalog-service ve payment-service'te üç kopya.
 - Cart ertelenenler: CartCheckedOut tüketimi (Order fazı); yol maskeleme + boş özet politikasını common'a taşıma; Catalog OpenAPI nullable.

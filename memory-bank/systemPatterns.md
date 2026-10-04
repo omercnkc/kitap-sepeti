@@ -330,8 +330,31 @@
   `InternalSecurityConfig` @Order(1) `/internal/**` (cart kalıbı, istemci `order-service`, 401 `ApiKey realm="internal"`) ve
   `SecurityConfig` @Order(2) (GET health(/**) + `/error` permitAll, gerisi denyAll). Varsayılan zincirde anonim istek 403 FORBIDDEN,
   WWW-Authenticate YOK (entry point `ProblemDetailAccessDeniedHandler`'a delege eder; common'daki `ProblemDetailAuthenticationEntryPoint`
-  Bearer challenge yazdığı için kullanılmaz). `/internal` (eki yok) da `/internal/**` eşleşir → 401. Webhook gelince `/webhooks/**`
-  için ayrı kural gerekecek. `PaymentServiceApplicationTests` amqp/openfeign/springdoc'un classpath'te olmadığını kilitler.
+  Bearer challenge yazdığı için kullanılmaz). `/internal` (eki yok) da `/internal/**` eşleşir → 401. Adım 5'ten beri ÜÇ zincir:
+  internal @Order(1), `WebhookSecurityConfig` @Order(2) (`/webhooks/**`; yalnızca `POST /webhooks/*` permitAll, diğer metot/yol
+  denyAll → 403 challenge'sız; CSRF/session/request cache yok; kimlik imzadır, controller'da doğrulanır), `SecurityConfig` @Order(3).
+  `SecurityRulesTest.chainsAreOrderedInternalWebhookDefault` sırayı kilitler. `PaymentServiceApplicationTests` openfeign/springdoc'un
+  classpath'te olmadığını kilitler.
+- payment webhook (Adım 5): `POST /webhooks/{provider}` (`controller/webhook/WebhookController`). Kontrol sırası: etkin sağlayıcı
+  değil → 404 NOT_FOUND (gövde okunmaz, tür bakılmaz) → Content-Type `application/json` (tür+alt tür; charset serbest) değil → 415 →
+  Content-Length > `max-body-bytes` ya da okunan > sınır (en fazla sınır+1 bayt okunur) → 413 PAYLOAD_TOO_LARGE → imza (ham bayt,
+  JSON'dan ÖNCE) → 401 WEBHOOK_SIGNATURE_INVALID + `WWW-Authenticate: Signature realm="webhook"` → JSON (katı: metin alanına
+  sayı/boolean yok, sonda içerik yok, tekrar anahtar yok, bilinmeyen alan yok sayılır; okunamazsa 400 MALFORMED_REQUEST, Jackson
+  exception'ı zincirlenmez) → Bean Validation (400 VALIDATION_FAILED, `ConstraintViolationException` yolu) → `WebhookService` → 204.
+- İmza (`provider/mock/MockWebhookSigner` / `MockWebhookVerifier`): başlıklar `X-Mock-Timestamp` (epoch saniye, `^[0-9]{1,18}$`) ve
+  `X-Mock-Signature` = `sha256=` + küçük harf hex(HMAC-SHA256(key = secret'ın UTF-8 baytları, mesaj = "<ts>.<ham gövde>")). Damga
+  Clock'a göre ±`tolerance` (sınır dahil). İmza baytları `MessageDigest.isEqual`. Her ret aynı `WebhookSignatureException`; log tek
+  WARN `Rejected webhook: invalid signature (provider=mock)` (yol/damga/imza/neden yok). Secret `app.payment.mock.webhook-secret` ←
+  `PAYMENT_MOCK_WEBHOOK_SECRET`; yok/boş/<32 → açılmaz (kontrol signer ctor'unda; Bean Validation değil çünkü o hata reddedilen
+  değeri yazar), `PaymentProperties.Mock.toString` maskeli.
+- `WebhookService.handle` (@Transactional READ_COMMITTED): `findByProviderReferenceForUpdate` (yoksa 400 UNKNOWN_PAYMENT) →
+  `existsByProviderTypeAndProviderEventId` (varsa DUPLICATE) → tutar `compareTo` + para birimi (uymazsa 400 AMOUNT_MISMATCH) →
+  `ProviderEvent.record` + saveAndFlush → `PaymentResults` (aynı TX). Reddedilen olay kaydedilmez. Controller TX dışında
+  `uk_provider_events_provider_event` ihlalini DUPLICATE sayar (204). Log: INFO `Webhook handled (provider=…, type=…, outcome=…)`.
+- Test: `support/WebhookTestSecrets` (çalıştırma başına rastgele secret; ApiTestSupport ve OutboxRelayBrokerOutageIT register eder),
+  `support/MutableClock` (cart kopyası), `controller/webhook/WebhookTestSupport` (referanslı ödeme, `signed(...)`). DİKKAT: MockMvc
+  `.header()` değer EKLER (değiştirmez) — bozuk imza testinde istek sıfırdan kurulmalı. MockMvc print-on-failure dökümü (istek gövdesi)
+  sonraki testin CapturedOutput'una düşebilir: bir log testi kırılırsa önce önceki testin hatasına bak.
 - payment yol maskeleme: `MaskedRequestPaths` (cart kopyası) `/internal/payments/<x>` → `:paymentId`; hata handler'ları VE common
   `InternalApiKeyAuthenticationFilter`'ın INFO/401 logları maskeli — `InternalSecurityConfig.MaskedPathFilter` common filtresine
   maskeli isteği verir, zincirin geri kalanına orijinal istek gider (common değişmeden).
@@ -370,7 +393,8 @@
 - Setter YOK, protected no-arg ctor; değişmeyen kolonlar `updatable = false`. Zamanlar Clock'tan, MICROS (cart kalıbı).
 - `ProviderEvent`: `@Immutable`, `record(provider, providerEventId, paymentId, eventType, clock)`; `paymentId` düz UUID (ilişki yok).
   Tekrar olay → `uk_provider_events_provider_event` → `DataIntegrityViolationException` (`DbConstraints.isViolated` ile ayırt edilir).
-- Repository'ler kilitsiz: `PaymentRepository.findByOrderId`, `findByProviderTypeAndProviderPaymentId`; `ProviderEventRepository` yalnızca CRUD.
+- Repository'ler: `PaymentRepository.findByOrderId`, `findByProviderTypeAndProviderPaymentId` (kilitsiz), `findByIdForUpdate` ve
+  `findByProviderReferenceForUpdate` (PESSIMISTIC_WRITE); `ProviderEventRepository.existsByProviderTypeAndProviderEventId`.
 - Sağlayıcı: `provider/PaymentProvider` (`type()`, `create(ProviderPaymentRequest) → ProviderPayment(providerPaymentId, redirectUrl?)`).
   TEK bean, `config/PaymentConfig` `app.payment.provider`'a göre switch ile kurar; mock dışı değer (iyzico/paytr/stripe) → ISE
   "Payment provider '<v>' is not supported yet; use 'mock'" → uygulama açılmaz; tanınmayan değer bağlamada düşer.
