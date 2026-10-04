@@ -15,8 +15,8 @@ import org.testcontainers.mysql.MySQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * Bağlam açılışında (Hikari, Flyway, Hibernate, AMQP) DB kullanıcı adı ve parolası, JDBC URL'de kullanıcı bilgisi
- * ve RabbitMQ kimlik bilgisi loglanmaz. Kimlik bilgileri test sırasında üretilir; "test" gibi sık geçen bir değerle
+ * Bağlam açılışında (Hikari, Flyway, Hibernate, AMQP, Feign) DB kullanıcı adı ve parolası, JDBC URL'de kullanıcı
+ * bilgisi, RabbitMQ kimlik bilgisi ve internal API anahtarı loglanmaz. Kimlik bilgileri test sırasında üretilir; "test" gibi sık geçen bir değerle
  * yanlış negatif olmasın diye paylaşılan konteyner değil, bu değerlerle açılan ayrı bir MySQL kullanılır.
  * Broker bilerek kapalı bir porta yönlendirilir: açılıştaki exchange declare denemesi de kapsanır.
  */
@@ -29,6 +29,7 @@ class StartupLogHygieneTest {
 		String dbPassword = randomHex(32);
 		String rabbitUser = "rmq" + randomHex(12);
 		String rabbitPassword = randomHex(32);
+		String internalApiKey = "oik" + randomHex(32);
 
 		try (MySQLContainer mysql = new MySQLContainer(DockerImageName.parse("mysql:8.4")).withDatabaseName("order_db")
 			.withUsername(dbUser)
@@ -42,6 +43,7 @@ class StartupLogHygieneTest {
 						"--spring.datasource.password=" + dbPassword, "--spring.rabbitmq.host=127.0.0.1",
 						"--spring.rabbitmq.port=" + JwksServer.freePort(), "--spring.rabbitmq.username=" + rabbitUser,
 						"--spring.rabbitmq.password=" + rabbitPassword, "--app.outbox.enabled=false",
+						"--app.clients.internal-api-key=" + internalApiKey,
 						"--spring.security.oauth2.resourceserver.jwt.jwk-set-uri=" + JwksServer.jwkSetUri(1),
 						"--server.port=0")) {
 				assertThat(context.isRunning()).isTrue();
@@ -54,6 +56,7 @@ class StartupLogHygieneTest {
 				.doesNotContain(dbPassword)
 				.doesNotContain(rabbitUser)
 				.doesNotContain(rabbitPassword)
+				.doesNotContain(internalApiKey)
 				.doesNotContainPattern("jdbc:mysql://[^\\s/]*@")
 				.doesNotContainPattern("(?i)[?&;](user|password)=");
 		}

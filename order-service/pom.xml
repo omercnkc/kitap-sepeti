@@ -57,6 +57,21 @@
 			<groupId>org.springdoc</groupId>
 			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
 		</dependency>
+		<!-- Cart, Catalog ve Payment istemcileri (sürümler kök POM'daki spring-cloud-dependencies BOM'undan). -->
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-openfeign</artifactId>
+		</dependency>
+		<!-- Feign'in HTTP katmanı JDK HttpClient: varsayılan HttpURLConnection gövdeli POST'a gelen 401'de yanıtı değil
+		     HttpRetryException'ı verir (internal anahtar reddi teknik hata gibi görünürdü). -->
+		<dependency>
+			<groupId>io.github.openfeign</groupId>
+			<artifactId>feign-java11</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-circuitbreaker-resilience4j</artifactId>
+		</dependency>
 
 		<dependency>
 			<groupId>com.mysql</groupId>
@@ -106,6 +121,14 @@
 		<dependency>
 			<groupId>org.testcontainers</groupId>
 			<artifactId>testcontainers-rabbitmq</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!-- İstemci testlerinde HTTP stub'ı. Standalone dağıtım Jetty/Jackson/Guava'yı kendi paketine taşır; uygulamanın
+		     Tomcat'i ve Jackson 3'üyle çakışmaz. Spring Boot BOM'unda yok, sürüm burada. -->
+		<dependency>
+			<groupId>org.wiremock</groupId>
+			<artifactId>wiremock-standalone</artifactId>
+			<version>3.13.1</version>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>

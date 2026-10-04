@@ -40,6 +40,50 @@ spring:
         jwt:
           # Açık anahtar ilk doğrulamada çekilir ve önbelleğe alınır; açılışta istek atılmaz.
           jwk-set-uri: ${USER_SERVICE_JWKS_URI:http://localhost:8081/.well-known/jwks.json}
+  cloud:
+    # Spring Cloud Commons'ın discovery/refresh health göstergeleri kullanılmıyor; health yalnızca yerel bileşenler.
+    discovery:
+      client:
+        composite-indicator:
+          enabled: false
+        health-indicator:
+          enabled: false
+    # Circuit breaker'lar client.DownstreamCircuitBreakers'ta programatik (neyin hata sayılacağı orada); Spring Cloud
+    # CircuitBreakerFactory ve Feign entegrasyonu kapalı.
+    circuitbreaker:
+      resilience4j:
+        enabled: false
+    openfeign:
+      circuitbreaker:
+        enabled: false
+      # HTTP katmanı JDK HttpClient (feign-java11). HTTP/1.1: servisler h2c konuşmuyor, yükseltme denemesi olmasın.
+      http2client:
+        enabled: true
+      httpclient:
+        http2:
+          version: HTTP_1_1
+        connection-timeout: 1000
+        follow-redirects: false
+      client:
+        config:
+          # Retryer.NEVER_RETRY, Logger.Level.NONE ve hata çözümleyici: client.InternalClientConfiguration.
+          # BASIC ve üstü URL'deki sipariş id'sini, FULL anahtar başlığını ve gövdeleri loglar.
+          default:
+            connect-timeout: 1000
+            read-timeout: 3000
+            logger-level: none
+          cart:
+            connect-timeout: 1000
+            read-timeout: 3000
+            logger-level: none
+          catalog:
+            connect-timeout: 1000
+            read-timeout: 3000
+            logger-level: none
+          payment:
+            connect-timeout: 1000
+            read-timeout: 3000
+            logger-level: none
 
 springdoc:
   # Yalnızca gerçek uçlar; actuator, /error ve testteki deneme uçları dokümana girmez.
@@ -64,6 +108,22 @@ app:
     poll-interval: 2s
     batch-size: 50
     confirm-timeout: 5s
+  clients:
+    # Cart/Catalog/Payment /internal/** uçlarına giden ham anahtar; yok/boşsa uygulama açılmaz.
+    internal-api-key: ${ORDER_INTERNAL_API_KEY:}
+    cart:
+      base-url: ${ORDER_CART_URL:http://localhost:8083}
+    catalog:
+      base-url: ${ORDER_CATALOG_URL:http://localhost:8082}
+    payment:
+      base-url: ${ORDER_PAYMENT_URL:http://localhost:8087}
+  # Servis başına ayrı instance (cart, catalog, payment). Yalnızca teknik hatalar sayılır; 4xx sayılmaz.
+  circuit-breaker:
+    sliding-window-size: 20
+    minimum-calls: 10
+    failure-rate-threshold: 50
+    open-duration: 10s
+    half-open-calls: 3
 
 logging:
   level:
@@ -79,6 +139,12 @@ server:
     include-message: never
 
 management:
+  health:
+    refresh:
+      enabled: false
+    # Circuit breaker durumu health'e girmez: bağımlı servis kapalıyken Order hazır kalır.
+    circuitbreakers:
+      enabled: false
   endpoints:
     web:
       exposure:

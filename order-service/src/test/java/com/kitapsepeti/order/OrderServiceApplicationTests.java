@@ -16,18 +16,20 @@ import com.kitapsepeti.order.entity.OrderStatusHistory;
 import com.kitapsepeti.order.outbox.EventRoutingKeys;
 import com.kitapsepeti.order.repository.OrderRepository;
 import com.kitapsepeti.order.outbox.OutboxPublisher;
+import feign.RequestInterceptor;
 import jakarta.persistence.EntityManagerFactory;
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.core.TopicExchange;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cloud.client.circuitbreaker.CircuitBreakerFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.data.repository.Repository;
 import org.springframework.stereotype.Controller;
 import org.springframework.util.ClassUtils;
 
 /**
- * Bağlam açılır, Flyway V1 uygulanır, sipariş entity'leriyle ddl validate geçer. Controller, Feign ve resilience4j
- * henüz yok (sonraki adımlar). Actuator yüzeyi {@code config.ActuatorHealthTest}'te.
+ * Bağlam açılır, Flyway V1 uygulanır, sipariş entity'leriyle ddl validate geçer. Controller henüz yok (sonraki
+ * adımlar). Actuator yüzeyi {@code config.ActuatorHealthTest}'te, istemciler {@code client} test paketinde.
  */
 class OrderServiceApplicationTests extends ApiTestSupport {
 
@@ -92,11 +94,11 @@ class OrderServiceApplicationTests extends ApiTestSupport {
 		assertThatThrownBy(() -> EventRoutingKeys.forEventType("OrderPaid")).isInstanceOf(IllegalStateException.class);
 	}
 
+	/** Feign/Resilience4j artık classpath'te; Spring Cloud'un otomatik circuit breaker katmanları kapalı. */
 	@Test
-	void feignAndResilience4jAreNotOnClasspath() {
-		ClassLoader classLoader = getClass().getClassLoader();
-		assertThat(ClassUtils.isPresent("org.springframework.cloud.openfeign.FeignClient", classLoader)).isFalse();
-		assertThat(ClassUtils.isPresent("io.github.resilience4j.circuitbreaker.CircuitBreaker", classLoader)).isFalse();
+	void springCloudCircuitBreakerLayersAreDisabled() {
+		assertThat(context.getBeansOfType(CircuitBreakerFactory.class)).isEmpty();
+		assertThat(context.getBeansOfType(RequestInterceptor.class)).as("global Feign interceptor").isEmpty();
 	}
 
 }
