@@ -99,7 +99,10 @@
   matches), `ProviderEvent` (@Immutable), katı küçük harf converter'lar (ortak taban), kilitsiz repository'ler, `PaymentProvider`
   soyutlaması + tek bean (`app.payment.provider`, yalnızca mock açılır), `MockPaymentProvider`, `MockOutcomeRule` (kuruş = fail-cents →
   CARD_DECLINED), `PaymentProperties` (fail-cents 0–99). payment-service 177 test.
-- Payment Adım 6 (henüz commit edilmedi): TAM AKIŞ ÇALIŞIYOR — referans yazılınca (commit sonrası) mock webhook 500ms sonra
+- Payment Adım 7 (henüz commit edilmedi): OpenAPI — springdoc, `OpenApiConfig` (internalApiKey / mockWebhookSignature yol önekinden),
+  `docs/api/payment-service.openapi.json` + drift testi, doküman/required-nullable testleri, kart verisi yokluğu testi (sınıf alanları +
+  doküman adları), tam akış log hijyeni testi. Swagger UI `http://localhost:8087/swagger-ui.html`. payment-service 357 test.
+- Payment Adım 6 (commit `fbf586c` + `b11d1ac`, push edildi): TAM AKIŞ ÇALIŞIYOR — referans yazılınca (commit sonrası) mock webhook 500ms sonra
   uygulamanın kendi `/webhooks/mock` ucuna imzalı gönderilir (`MockWebhookDispatcher`, sınırlı kendi zamanlayıcısı, tekrar yok),
   `MockRecoveryJob` (30 sn; 10 sn'den eski referanslı initiated mock ödemeleri yeniden gönderir, sabit eventId ile zararsız tekrar).
   Yerelde 149.90 → succeeded, 149.99 → failed CARD_DECLINED, RabbitMQ'da PaymentSucceeded/PaymentFailed. payment-service 339 test.
@@ -113,10 +116,10 @@
   `GET /internal/payments/{id}`, yol maskeleme (log dahil). payment-service 220 test. Yerelde V2 uygulandı, uçtan uca geçti.
 
 ## Yapılacaklar
-- Payment (Faz 7) sonraki adımlar: OpenAPI, Docker + compose.
+- Payment (Faz 7) sonraki adım: Docker + compose (Adım 8).
 - Outbox kodunu common'a taşıma (Order fazı başında): user-service, catalog-service ve payment-service'te üç kopya.
 - Cart ertelenenler: CartCheckedOut tüketimi (Order fazı); yol maskeleme + boş özet politikasını common'a taşıma; Catalog OpenAPI nullable.
-- Gateway fazı: docs/Swagger'ı (üç servis) dışarıya kapatmak.
+- Gateway fazı: docs/Swagger'ı (dört servis) dışarıya kapatmak.
 - order-service (catalog rezervasyon istemcisi).
 - Search için: yayınevi/yazar/kategori yeniden adlandırması yayındaki kitaplar için olay üretmiyor → yeniden indeksleme gerekecek.
 - Backlog: admin PATCH'te bilinmeyen alanlar (stok, status) sessizce yok sayılıyor; ileride 400 düşünülebilir.

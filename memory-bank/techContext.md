@@ -110,7 +110,10 @@
   cart-service: `http://localhost:8083/swagger-ui.html`, sözleşme `docs/api/cart-service.openapi.json` (yeniden üretim:
   `.\mvnw.cmd -pl cart-service test "-Dtest=OpenApiContractTest" "-Dopenapi.contract.update=true"`; common kurulu değilse `-am`
   + `-Dsurefire.failIfNoSpecifiedTests=false`). Sepet: bearerAuth'a herhangi bir kullanıcı token'ı; internal: `ORDER_INTERNAL_API_KEY`.
-  Docs/Swagger üç serviste de permitAll; Gateway fazında dışarıya kapatılacak.
+  payment-service: `http://localhost:8087/swagger-ui.html`, sözleşme `docs/api/payment-service.openapi.json` (yeniden üretim:
+  `.\mvnw.cmd -pl payment-service test "-Dtest=OpenApiContractTest" "-Dopenapi.contract.update=true"`). internalApiKey'e
+  `ORDER_INTERNAL_API_KEY`; webhook imzası Swagger'dan elle üretilmez (mock dispatcher kendisi gönderir).
+  Docs/Swagger dört serviste de permitAll; Gateway fazında dışarıya kapatılacak.
 - PowerShell tuzağı (tekrar yaşandı): `.env`'yi okurken `-match '^\s*([A-Za-z_]...'` tr-TR'de adında `I` geçen satırları ATLAR
   (`CATALOG_INTERNAL_KEY_ORDER_SHA256`, `RABBITMQ_USER`...) → internal istemci kapalı açılır, anahtarla da 401. Her zaman `-cmatch`.
   Ayrıca `Invoke-WebRequest().Content` UTF-8 yanıtı yanlış çözer; karşılaştırma için `WebClient.DownloadData` + UTF8.GetString.

@@ -277,6 +277,19 @@
   CartLineResponse coverUrl/currentUnitPrice/available, CartSnapshotResponse cartId/updatedAt. `OpenApiRequiredFieldsTest` (cart)
   required → var, null → şemada nullable, şemada olmayan alan yok, JSON tipi/enum uyumu ve her nullable alanın en az bir örnekte null
   görülmesini denetler; yeni nullable alan ya da 2xx şeması eklenirse oraya örnek çağrı eklenmeli.
+- payment-service OpenAPI (Adım 7, cart kalıbı): `packages-to-scan` controller.internal + controller.webhook; erişim yol önekinden
+  (`/internal/` → `internalApiKey`, `/webhooks/` → `mockWebhookSignature` apiKey `X-Mock-Signature`; başka önek customizer'da
+  IllegalStateException). Customizer gövdeliye/path değişkenliye 400, internal'a 401 `ApiKey realm="internal"`, webhook'a 401
+  `Signature realm="webhook"` (WEBHOOK_SIGNATURE_INVALID), hepsine 500 ekler; `$ref`'li özelliğin yanındaki `type`'ı siler
+  (`@Schema(ref)` String alanda springdoc tipi de yazar). Webhook metodu `@RequestBody` almadığı için gövde `@Operation(requestBody =
+  WebhookEvent)` ile, `X-Mock-Timestamp` metotta `@Parameter(in = HEADER, required)`, `provider` `allowableValues = "mock"`;
+  `WebhookEvent.isFailureCodeMatchesType` `@Schema(hidden = true)`. `PaymentStatus` component şeması OpenApiConfig'te
+  (`PaymentStatus.dbValue()`'dan), `PaymentResponse.status` `@Schema(ref)`. PaymentResponse cart gibi tüm alanlar REQUIRED, nullable
+  yalnızca failureCode + redirectUrl. Para örneği (`example`) yazılmaz (sayı `149.9` görünür). `@Size(max)` `@Schema(minLength)`'i ezer.
+  Belgelenmeyen (bilinçli): internal uçlarda genel 406/415, webhook'ta pratikte ulaşılamayan 409 CONFLICT.
+- Kart verisi kontrolü (payment `CardDataAbsenceTest`): main sınıfların static olmayan alanları + OpenAPI özellik/parametre/başlık
+  adları kelimelere bölünüp (camelCase/`_`/`-`) card, pan, cvv, cvc, expiry, cardholder, cardnumber ile karşılaştırılır (`company`
+  yakalanmaz; `CARD_DECLINED` static sabit hariç). DB tarafı `PaymentSchemaConstraintsTest.noCardDataColumnsInAnyTable`.
 - Para alanları JSON'da sayı: `BigDecimal`, scale 2 (`setScale(2)`), Jackson varsayılanı; metne çevirme. İstisna: outbox
   olay payload'larında para METİN (`"149.90"`), çünkü payload MySQL `JSON` kolonunda durur ve MySQL kesirli sayıyı DOUBLE'a çevirip
   sondaki sıfırları atar (`149.90` → `149.9`).

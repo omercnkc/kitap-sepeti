@@ -955,7 +955,7 @@
     GET /webhooks/mock → 403; logda yalnızca beklenen 3 WARN, gönderilen değerler yok. Pozitif uçtan uca Adım 6'da (secret okunmadı).
 
 - Payment Adım 6 — mock'un kendi webhook'una otomatik gönderimi + kurtarma görevi; TAM AKIŞ ÇALIŞIYOR (oluştur → commit sonrası
-  gecikmeli imzalı webhook → succeeded/failed → outbox → RabbitMQ). Henüz commit edilmedi. Migration, webhook ucu (Adım 5 sözleşmesi),
+  gecikmeli imzalı webhook → succeeded/failed → outbox → RabbitMQ). Commit `fbf586c` + memory-bank `b11d1ac`, push edildi. Migration, webhook ucu (Adım 5 sözleşmesi),
   diğer modüller, common değişmedi. Kurallar systemPatterns "payment mock webhook gönderimi" / "MockRecoveryJob":
   - Kod: `provider/mock/` MockPaymentReadyEvent, MockWebhookPayload, MockWebhookDispatcher, MockRecoveryJob; `config/MockWebhookConfig`;
     `SchedulingConfig` → `AnyJobEnabled` (outbox | mock recovery); `PaymentProperties.Mock` + `delay`, `webhookUrl`,
@@ -980,14 +980,33 @@
     `Mock recovery resent 1 webhook(s)`); gerçek DB EXPLAIN range/ix_payments_status_created/key_len 74; log: id, tutar, imza, referans
     yok, WARN/ERROR 0.
 
+- Payment Adım 7 — OpenAPI (henüz commit edilmedi; Docker YOK; uç davranışı, DTO alan adları, durum kodları, migration, common ve
+  diğer modüller, .env değişmedi). Kurallar systemPatterns "payment-service OpenAPI" + "Kart verisi kontrolü":
+  - Kod: pom'a springdoc (kök BOM 3.1.1); yml `springdoc` bloğu (cart'la aynı; paths `/internal/**`, `/webhooks/**`) + `app.version`;
+    `SecurityConfig` (@Order 3) docs/Swagger permitAll; `config/OpenApiConfig` (internalApiKey + mockWebhookSignature, PaymentStatus/
+    Problem/FieldError şemaları, tek yol öneki customizer'ı); controller ve DTO anotasyonları; `docs/api/payment-service.openapi.json`.
+  - Doküman: 3 yol / 3 operasyon; şemalar CreatePaymentRequest, PaymentResponse, PaymentStatus, WebhookEvent, Problem, FieldError;
+    nullable yalnızca PaymentResponse.failureCode/redirectUrl. Kodlar: POST /internal/payments 200/201(Location)/400/401/409/500/503;
+    GET /internal/payments/{paymentId} 200/400/401/404/500; POST /webhooks/{provider} 204/400/401/404/413/415/500.
+  - Sapmalar: WebhookEvent.amount pattern gerçek doğrulamanınki (`^(0|[1-9][0-9]{0,9})\.[0-9]{2}$`, istenen `^\d+\.\d{2}$` değil);
+    internal genel 406/415 ve webhook'ta pratikte ulaşılamayan 409 belgelenmedi (cart kuralı); providerPaymentId `minLength: 0`
+    (@Size ezer; @NotBlank açıklamada); para alanlarında `example` yok.
+  - Testler (payment 357 = 339 + 18): OpenApiContractTest 1 (bozma denemesi: failureCode tipi → yol + değerle kırıldı, geri alındı),
+    OpenApiDocsTest 12 (gerçek hata yanıtları: 409/400/503/401 ApiKey, 404/400/401, webhook 404/415/413/401 Signature/400 ×4, 204),
+    OpenApiRequiredFieldsTest 1 (201/200 POST, initiated/succeeded/failed GET), CardDataAbsenceTest 3 (negatif kontrol dahil),
+    PaymentFlowLogHygieneIT 1 (tam akış + 401/409/401; id, tutar, imza, zaman damgası, sır, payload parçası yok), SecurityRulesTest
+    +1 (`/v3/api-docs` artık açık → `/v3/api-docsx`, `/swagger-uix`), PaymentServiceApplicationTests −1 (springdoc parametresi silindi).
+  - Root `clean verify`: common 25, user 83, catalog 276, cart 312 (2 skipped), payment 357. Yerel spring-boot:run: /v3/api-docs 200,
+    3 operasyon, sözleşme dosyasıyla birebir; swagger-ui 200 (`/swagger-ui.html` → 302); WARN/ERROR 0.
+
 ## Sonraki adımlar
-- Payment: OpenAPI, Docker + compose (compose'da `webhook-url` gerekmez: aynı konteynerde localhost:<port>).
+- Payment: Docker + compose (Adım 8; compose'da `webhook-url` gerekmez: aynı konteynerde localhost:<port>).
   Order istemcisi `.env` `ORDER_INTERNAL_API_KEY` ile `X-Internal-Api-Key` gönderir (payment özeti `PAYMENT_INTERNAL_KEY_ORDER_SHA256`).
 - Cart ertelenenler: (1) CartCheckedOut tüketimi Order fazında (checkout + yeni sepet aynı TX'te olursa arada `flush()` — flush tuzağı);
   (2) yol maskelemeyi (`MaskedRequestPaths`) ve boş özet politikasını (internal key özeti boş/bozuksa açılmama) common'a taşıma
   (Order fazının başında ayrı adım); (3) Catalog OpenAPI'de nullable alanları `types = {"x","null"}` ile işaretleme (cart'taki gibi).
   Order'ın sepet istemcisi `docs/api/cart-service.openapi.json`'dan (internal snapshot dahil); compose'da `http://cart-service:8083`.
-- Gateway fazı: `/v3/api-docs` + Swagger UI üç serviste permitAll; Gateway'de dışarıya kapatılacak (ya da `SPRINGDOC_ENABLED=false`).
+- Gateway fazı: `/v3/api-docs` + Swagger UI dört serviste (user, catalog, cart, payment) permitAll; Gateway'de dışarıya kapatılacak (ya da `SPRINGDOC_ENABLED=false`).
 - order-service (rezervasyon istemcisi; fiyat anlık görüntüsü kendisinde; `RESERVATION_RELEASED` → ödeme iadesi telafisi; süre dolumu
   olayı yok, GET ile sorgulanır; istemci `docs/api/catalog-service.openapi.json`'dan). Compose'a eklenirken catalog'a
   `http://catalog-service:8082` ve `.env` `ORDER_INTERNAL_API_KEY` ile bağlanır.
