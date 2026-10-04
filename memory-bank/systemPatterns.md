@@ -15,7 +15,7 @@
 ## common modülü (`common/`, artifactId `kitap-sepeti-common`)
 - Düz kütüphane jar'ı (spring-boot-maven-plugin yok). Versiyonu kök `<dependencyManagement>`'ta `${project.version}`;
   servis POM'unda versiyonsuz. Spring bağımlılıkları `<optional>true</optional>` (webmvc, validation, data-jpa,
-  security-oauth2-resource-server) → servise starter taşımaz; servis zaten kendi starter'larını ekler. Yeni dış bağımlılık YOK.
+  security-oauth2-resource-server, amqp, resilience4j-circuitbreaker) → servise starter taşımaz; servis zaten kendi starter'larını ekler.
 - Auto-configuration YOK, component scan'e girmez (paket `com.kitapsepeti.common`, servislerin scan kökü dışında).
   Bean'ler serviste açıkça: `@Import(ProblemDetailSecurityHandlers.class)` (401 entry point + 403 handler) ve gerekiyorsa `@Bean`.
 - `common.error`:
@@ -75,6 +75,14 @@
 - common'a GİRMEYEN: güvenlik kuralları/yollar (SecurityConfig), user-service'in kendi anahtarlı JwtDecoder'ı (RsaKeyConfig),
   catalog JwtProperties, InternalSecurityConfig, servisin olay sınıfları/routing key eşlemesi/`SchedulingConfig`.
 - `common.outbox` (Order Adım 0b): bkz. "Olaylar (transactional outbox)". spring-boot-starter-amqp de optional.
+- `common.resilience` (Order Adım 3b; `resilience4j-circuitbreaker` optional, sürüm Spring Cloud BOM'dan 2.3.0; auto-config YOK):
+  `CircuitBreakerProperties` (`@Validated @ConfigurationProperties("app.circuit-breaker")`: slidingWindowSize, minimumCalls,
+  failureRateThreshold 1–100, openDuration, halfOpenCalls; servis `@EnableConfigurationProperties` ile kaydeder) ve `CircuitBreakers`
+  (`config(props, clock)`: COUNT_BASED, otomatik OPEN→HALF_OPEN kapalı, stack trace yazılmaz, uygulama `Clock`'u; `create(name, config|props+clock)`
+  → instance + WARN `Circuit breaker <ad> <eski> -> <yeni>` (logger `c.k.common.resilience.CircuitBreakers`)). Neyin hata sayılacağı
+  ÇAĞIRANDA kalır (`tryAcquirePermission` / `onSuccess` / `onError` / `releasePermission`): Order sonuç tabanlı (`RemoteCalls`,
+  NotPerformed/Unknown), Cart istisna tabanlı (`CatalogGateway.guarded`). Health/readiness'a girmez (resilience4j Spring Boot
+  modülü/Spring Cloud CB starter'ı olmayan serviste health göstergesi zaten yok). Testli: `CircuitBreakersTest` 5.
 
 ### Yeni servis common'ı nasıl kullanır (tarif)
 1. Servis POM'una `com.kitapsepeti:kitap-sepeti-common` (versiyonsuz) ekle.
@@ -376,6 +384,15 @@
 - **Zaman aşımı/retry/log yml'de:** `spring.cloud.openfeign.client.config.<name>.{connect-timeout, read-timeout, logger-level: none}`
   (cart→catalog 1000/2000 ms). Retry yok: Spring Cloud varsayılanı `Retryer.NEVER_RETRY` (testte `FeignClientFactory.getInstance`
   ile doğrulanır; Retry-After'lı 503'te de tek istek). `logger-level` BASIC+ URL'yi (id), FULL header/gövdeyi loglar → NONE.
+- **Circuit breaker (cart→catalog, Order Adım 3b):** `config/CatalogCircuitBreakerConfig` tek `catalog` instance'ı (`common.resilience`,
+  `app.circuit-breaker.*` 20/10/%50/10 sn/3; Spring Cloud CB starter'ı YOK, yalnızca `resilience4j-circuitbreaker`).
+  `CatalogGateway.guarded(call)`: izin yoksa Feign çağrılmaz, `CatalogUnavailableException(CallNotPermittedException)` → mevcut
+  "Catalog yok" yolu AYNEN (ekleme 503 CATALOG_UNAVAILABLE sepet değişmez; görünüm 200 `catalogStatus=UNAVAILABLE`, available/
+  currentUnitPrice null, toplamlar snapshot'tan). Hata = `CatalogUnavailableException`'a dönüşen her şey (bağlantı, zaman aşımı, 5xx,
+  bozuk/eksik 2xx); BAŞARI = 2xx, `BookNotAvailableException` (404 / inStock=false), `IllegalStateException` (diğer 4xx); beklenmeyen
+  istisna → `releasePermission`. Tek fark logda: açıkken `cause=CallNotPermittedException`. Başarılı ekleme Catalog'u İKİ kez çağırır
+  (kitap + yanıttaki görünüm için lookup) → ikisi de pencereye girer. Test bağlamı paylaşıldığı için `ApiTestSupport` her test SONUNDA
+  `catalogCircuitBreaker.reset()` (kapatma WARN'ı açan testin çıktısında kalır; başta yapılırsa sonraki testin WARN sayımını bozar).
 - **Token/header taşınmaz:** RequestInterceptor YOK (OpenFeign oauth2 desteği varsayılan kapalı). Karşı uç public değilse servisler arası
   anahtar (`X-Internal-Api-Key`) ayrı bir interceptor'la eklenir; kullanıcı token'ı ASLA. Testte stub gelen istekte Authorization/Cookie
   olmadığını, kimlikli gerçek istek içinden çağrılırken doğrular.
@@ -609,8 +626,9 @@
   NotSent) → Feign çağrısı (`ResponseEntity<T>`) → boş gövde/`validator` ihlali `InvalidResponseException` → `CallOutcome`
   (Success | Problem(status, code, bookIds) | NotSent | Failed) → gateway'in `mapper`'ı. CB kaydı: 2xx geçerli ve 4xx = BAŞARI (karşı
   taraf ayakta; iş hatası devreyi açmaz), bağlantı/zaman aşımı/5xx/3xx/geçersiz 2xx = HATA.
-- Circuit breaker: `DownstreamCircuitBreakers` — Resilience4j API'si DOĞRUDAN, instance başına (cart, catalog, payment), ayarlar
-  `app.circuit-breaker.*` (`CircuitBreakerProperties`, validated): COUNT_BASED pencere 20, en az 10 çağrı, %50 hata, 10 sn açık, yarı
+- Circuit breaker: `DownstreamCircuitBreakers` — Resilience4j API'si DOĞRUDAN, instance başına (cart, catalog, payment), kurulum
+  Adım 3b'den beri `common.resilience.CircuitBreakers` ile, ayarlar `app.circuit-breaker.*` (`common.resilience.CircuitBreakerProperties`,
+  validated): COUNT_BASED pencere 20, en az 10 çağrı, %50 hata, 10 sn açık, yarı
   açıkta 3 çağrı, otomatik OPEN→HALF_OPEN kapalı, uygulama `Clock`'u (`CircuitBreakerConfig.Builder.clock`; test `MutableClock` ile ileri
   sarar). Durum değişimi WARN `Circuit breaker <ad> <eski> -> <yeni>`. Spring Cloud CB kapalı: `spring.cloud.circuitbreaker.resilience4j.
   enabled=false` (CircuitBreakerFactory bean'i yok), `spring.cloud.openfeign.circuitbreaker.enabled=false`; health/readiness'a girmez

@@ -62,13 +62,15 @@
   erişilir; container'lar arası servis adıyla erişim etkilenmez.
 - Spring Cloud: release train `2025.1.3` (Oakwood; Boot 4.0.x/4.1.x, 4.1 desteği 2025.1.2'den itibaren), kök POM BOM import.
   Boot yükseltilirken spring.io/projects/spring-cloud uyumluluk tablosu yeniden kontrol edilir; milestone/RC ve milestone repo kullanılmaz.
-  Şu an yalnızca cart-service kullanıyor (`spring-cloud-starter-openfeign` 5.0.3).
+  Kullananlar: cart-service (`spring-cloud-starter-openfeign` 5.0.3 + Adım 3b'den `resilience4j-circuitbreaker` 2.3.0, Spring Cloud CB
+  starter'ı YOK), order-service (aşağıda), common (`resilience4j-circuitbreaker` optional; sürüm BOM'dan).
 - cart-service: port 8083, şema `cart_db`, kullanıcı `.env` `CART_DB_USER/PASSWORD` (`infra/mysql/init/20-cart-db.sh`). Çalıştırma
   `.\mvnw.cmd -pl cart-service spring-boot:run` (common `~/.m2`'de değilse önce `.\mvnw.cmd -pl common -am install -DskipTests`),
   testler `.\mvnw.cmd -pl cart-service -am test`. Container: `docker compose build cart-service` + `docker compose up -d`
   (imaj `kitapsepeti/cart-service:local`, 618 MB disk / 189 MB içerik; uid 10001 `app`; yerel `spring-boot:run` ile aynı anda
   çalışamaz — ikisi de 8083). Compose env: `CART_DB_USER/PASSWORD`, `CART_INTERNAL_KEY_ORDER_SHA256` zorunlu (`${VAR:?}`), Catalog adresi
-  `CATALOG_BASE_URL` (varsayılan `http://localhost:8082`; compose'da `http://catalog-service:8082`). Gerçek Catalog'a karşı test:
+  `CATALOG_BASE_URL` (varsayılan `http://localhost:8082`; compose'da `http://catalog-service:8082`). Catalog circuit breaker ayarı
+  `app.circuit-breaker.*` (application.yml; env yok). Gerçek Catalog'a karşı test:
   `.\mvnw.cmd -pl cart-service test "-Dtest=CatalogLiveTest" "-Dcatalog.live=true"` (catalog seed'li olmalı). Hikari `connection-init-sql` ile
   `innodb_lock_wait_timeout = 5` (oturum; GLOBAL 50). Uçlar: `GET /api/cart`, `POST /api/cart/items` (USER token).
   Uçtan uca denemede seed 402 yayında ama stokta değil (409 BOOK_NOT_AVAILABLE); stokta yayındaki kitaplar 401, 404–411.

@@ -145,19 +145,25 @@
 - Order Adım 2 YAPILDI (commit `51feb91`, push edildi): entity'ler (Order, OrderItem, OrderStatusHistory, AddressSnapshot + açık JSON converter),
   durum makinesi (TransitionResult kalıbı), OrderRepository (FOR UPDATE, sahiplik, pending). KARAR: tamamı ücretsiz sepet →
   `422 ORDER_TOTAL_ZERO` sipariş yazılmadan önce (Adım 4/5). order 315 test; root verify yeşil.
-- Order Adım 3a YAPILDI (commit edilmedi): Cart/Catalog/Payment Feign istemcileri (JDK HttpClient, log NONE, retry yok, istemci
+- Order Adım 3a YAPILDI (commit `41d202c` + `cb759ea`, push edildi): Cart/Catalog/Payment Feign istemcileri (JDK HttpClient, log NONE, retry yok, istemci
   başına yalnızca `X-Internal-Api-Key` interceptor'ı), domain'e bakan gateway'ler + sealed sonuçlar (NotPerformed = istek
   ulaşmadı / Unknown = sonuç bilinmiyor), servis başına Resilience4j circuit breaker (20/10/%50/10 sn/3; yalnızca teknik hatalar),
-  WireMock tabanlı eşleme/CB/başlık/log/sözleşme testleri. order 426 test; root verify yeşil. Sıradaki: 3b Cart→Catalog CB.
+  WireMock tabanlı eşleme/CB/başlık/log/sözleşme testleri. order 427 test; root verify yeşil.
+- Order Adım 3b YAPILDI (commit edilmedi): CB kurulumu `common.resilience`'a (CircuitBreakerProperties + CircuitBreakers; resilience4j
+  optional, auto-config yok); Order aynı davranışla onu kullanıyor. Cart→Catalog tek `catalog` CB (20/10/%50/10 sn/3; teknik hata =
+  hata, 4xx/stokta yok = başarı); açıkken istek gitmez, mevcut "Catalog yok" yanıtları aynen (ekleme 503, görünüm 200 UNAVAILABLE).
+  Readiness etkilenmez. Testler: common 65, cart 321 (2 skipped); diğerleri aynı (user 86, catalog 285, payment 367, order 427).
+  Docker: Catalog kapalıyken görünüm ~1030 ms → devre açıldıktan sonra ~24 ms; Catalog dönünce HALF_OPEN → CLOSED. Sıradaki: Adım 4.
 - Cart ertelenenler: CartCheckedOut tüketimi (Order Adım 7); Catalog OpenAPI nullable. (Yol maskeleme + özet politikası common'a
   taşındı → Order Adım 0a.)
 - Order planı (PROJE KARARI, Ekim 2026): 0a common sertleştirme (yapıldı) → 0b outbox → common (yapıldı) → 1 modül/db (yapıldı) → 2 domain (yapıldı) → 3a Order istemcileri + CB (yapıldı)
-  → 3b Cart→Catalog CB → 4 checkout mutlu yol + GET {id} → 5 hata yolları/telafi → 6 ödeme sonucu tüketicisi → 7 Cart CartCheckedOut tüketicisi → 8 timeout
+  → 3b Cart→Catalog CB (yapıldı) → 4 checkout mutlu yol + GET {id} → 5 hata yolları/telafi → 6 ödeme sonucu tüketicisi → 7 Cart CartCheckedOut tüketicisi → 8 timeout
   görevi → 9 liste → 10 OpenAPI/olay belgeleri → 11 Docker. Kararlar activeContext "Sonraki adımlar"da.
 - Gateway fazı: docs/Swagger'ı (dört servis) dışarıya kapatmak.
 - order-service (catalog rezervasyon istemcisi).
 - Search için: yayınevi/yazar/kategori yeniden adlandırması yayındaki kitaplar için olay üretmiyor → yeniden indeksleme gerekecek.
 - Backlog: admin PATCH'te bilinmeyen alanlar (stok, status) sessizce yok sayılıyor; ileride 400 düşünülebilir.
+- Backlog (catalog OpenAPI): lookup/rezervasyon `status` "mixed" kodda üretilebiliyor, OpenAPI'de yok.
 - Logout, e-posta/parola değiştirme, CORS.
 - Diğer servisler (katalog, sepet, sipariş vb. — henüz kararlaştırılmadı) ve olay consumer'ları.
 - CI pipeline (testler + image build).
@@ -165,6 +171,8 @@
   user-service/JWKS kapalıysa son bilinen anahtarla doğrulamaya devam (şu an önbellek süresi içinde 200, sonrasında 503).
 
 ## Bilinen sorunlar
+- AÇIK RİSK (Order): commit'te `AlreadyReleased` (rezervasyon süresi 15m doldu) → paid + released DB'de temsil edilemez; Adım 6'da
+  karar, Adım 8'de pending zaman aşımı < rezervasyon süresi.
 - Kök `/actuator/health` (catalog ve payment) RabbitMQ kapalıyken 503 DOWN ve her çağrıda stack trace'li WARN
   (RabbitHealthIndicator); readiness etkilenmez. Healthcheck'ler readiness kullanmalı.
 - payment: aynı siparişe eşzamanlı ilk isteklerde sağlayıcı birden fazla çağrılabilir (yalnızca ilk referans yazılır, diğerleri WARN ile

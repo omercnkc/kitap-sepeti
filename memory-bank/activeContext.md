@@ -1134,7 +1134,7 @@
     CONFLICTING; markStockCommitted PAID+REQUESTED'de ISE; markStockHeld FAILED+REQUESTED'de APPLIED (spec'e uygun, stok sonra
     bırakılır); ek repository metodu `findByUserIdAndStatus`.
 
-- Order Adım 3a — Cart/Catalog/Payment istemcileri + gateway'ler + circuit breaker (henüz commit EDİLMEDİ; checkout servisi,
+- Order Adım 3a — Cart/Catalog/Payment istemcileri + gateway'ler + circuit breaker (commit `41d202c` + `cb759ea`, push edildi; checkout servisi,
   controller, consumer, scheduler YOK; diğer servisler ve V1 değişmedi). Ayrıntı: systemPatterns "Order istemcileri".
   - Bağımlılıklar (BOM'dan sürümsüz): `spring-cloud-starter-openfeign`, `feign-java11`, `spring-cloud-starter-circuitbreaker-resilience4j`;
     test `org.wiremock:wiremock-standalone:3.13.1` (jar incelendi: Jetty/Jackson/Guava/jakarta `wiremock.` altına taşınmış; Spring
@@ -1160,10 +1160,41 @@
     GatewayTypesTest 3, ClientLoggingTest 2, ClientHeadersTest 1 (token'lı RequestContext + SecurityContext; Authorization/Cookie hiçbir
     istekte yok). Beklenen değişiklik: `feignAndResilience4jAreNotOnClasspath` → `springCloudCircuitBreakerLayersAreDisabled`;
     StartupLogHygieneTest çalışma anında üretilen anahtarı verir ve logda arar. Root `clean verify` yeşil: common 60, user 86,
-    catalog 285, cart 313 (2 skipped), payment 367, order 426.
+    catalog 285, cart 313 (2 skipped), payment 367, order 427 (raporda 426 yazılmıştı; kök verify logu 427, 3b'de doğrulandı).
   - Sapmalar: JDK HttpClient (feign-java11); anahtar yalnızca `/internal/` yollarına (lookup public); ek sonuç tipleri NotHeld,
     AlreadyReleased, AlreadyCommitted, Rejected, Initiated'da PaymentState; 4xx CB'de "yok sayılmadı", BAŞARI sayıldı (karşı taraf
     ayakta); Spring Cloud CircuitBreakerFactory yerine Resilience4j doğrudan; commit 404 → Rejected (Released değil); Payment GET yok.
+
+- Order Adım 3b — Cart→Catalog circuit breaker + CB kurulumu common'a (COMMIT EDİLMEDİ; Catalog/Payment/User kodu, migration,
+  Cart API/hata kodları/OpenAPI değişmedi). Ayrıntı: systemPatterns "common.resilience" ve "Servisler arası HTTP istemcisi".
+  - Ortak kod KARARI: taşındı, ama yalnızca genel kısım — `common.resilience.CircuitBreakerProperties` (Order'daki record aynen) +
+    `CircuitBreakers` (config + WARN durum logu). Sınıflandırma servislerde: Order sonuç tabanlı (NotPerformed/Unknown ayrımı,
+    `RemoteCalls`), Cart istisna tabanlı (`CatalogGateway.guarded`); ortak bir "çağrı sarmalayıcı" Order'ı karmaşıklaştırırdı. Order:
+    `client/CircuitBreakerProperties` silindi, `DownstreamCircuitBreakers` common'ı kullanıyor, log satırı aynı (logger adı common);
+    Order pom'u ve testleri DEĞİŞMEDİ (hâlâ spring-cloud-starter-circuitbreaker-resilience4j + kapatma ayarları; sadeleştirme opsiyonel).
+  - Cart: pom'a `resilience4j-circuitbreaker` (BOM'dan), `config/CatalogCircuitBreakerConfig`, `app.circuit-breaker.*` (Order ile aynı
+    değerler), `CatalogGateway` sarıldı; Feign istemcisi aynı, retry YOK (`Retryer.NEVER_RETRY`, mevcut test). Test altyapısı:
+    `ApiTestSupport` `@AfterEach catalogCircuitBreaker.reset()` (beklenti değişmedi).
+  - Testler: common 60 → 65 (CircuitBreakersTest 5), cart 313 → 321 (CatalogCircuitBreakerTest 7: 10 teknik hata [503/500/bozuk 2xx]
+    → açık + istek gitmiyor, açıkken ekleme/görünüm yanıtı kapalıdaki "Catalog yok" ile byte-byte aynı, 404 açmıyor, inStock=false ve
+    400 başarı, half-open 3 deneme → kapalı, half-open hatası → yeniden açık, açık + Catalog 503 → readiness UP; CatalogDownCircuitBreakerTest 1:
+    kapalı port → 10 bağlantı hatası açar, sonraki çağrı <100 ms CallNotPermitted, readiness UP). Root `clean verify` yeşil: common 65,
+    user 86, catalog 285, cart 321 (2 skipped), payment 367, order 427 (değişmedi, sınıf bazında aynı).
+  - Docker (cart rebuild, catalog stop): 12 × `GET /api/cart` → 1–5: 200 UNAVAILABLE ~1030 ms (connect-timeout 1 sn; durdurulmuş
+    container'ın IP'si yok), devre 5. istekte açıldı (pencerede kurulumdan 5 başarı vardı: 5/10 = %50), 6–12: 200 UNAVAILABLE ~24 ms.
+    Log: `Circuit breaker catalog CLOSED -> OPEN` (WARN, id yok); açıkken `cause=CallNotPermittedException`. Catalog start (13 sn'de
+    healthy) → ilk istekte OPEN -> HALF_OPEN, 3 deneme sonrası HALF_OPEN -> CLOSED; 200 VERIFIED 38–188 ms.
+  - Keşif (Adım 5/6/8 için zamanlamalar, kod okumayla):
+    - Catalog rezervasyon süresi `app.stock.reservation-ttl` 15m (`StockProperties`; `expiresAt = now + ttl`, MICROS). Süre dolumu
+      `ReservationExpiryJob` (`app.stock.expiry.enabled` true, `interval` 30s fixedDelay, `batch-size` 100): `held` + `expires_at < now`
+      siparişleri kendi TX'inde `released` yapar (iptal ucuyla aynı kod; SKIP LOCKED, kısmi kilitte atlar). Fiilî serbest bırakma
+      TTL + en çok ~30 sn (+ batch kuyruğu). Görev çalışmadan önce süresi geçmiş ama `held` rezervasyon commit EDİLEBİLİR.
+    - Payment kurtarma `MockRecoveryJob` (`app.payment.mock.recovery.enabled` true, `interval` 30s fixedDelay + initialDelay 30s,
+      `min-age` 10s, `batch-size` 50): `initiated` + mock + sağlayıcı referanslı ve `created_at < now - 10s` ödemelerin webhook'unu
+      yeniden üretir. Referanssız `initiated` (sağlayıcı çağrısı başarısız) dokunulmaz → Order'ın aynı isteği tamamlar. Normal yol
+      mock `delay` 500ms. Kurtarılan ödeme en geç ~10 sn + 30 sn içinde sonuçlanır.
+  - Sapmalar: devre açıkken Cart logundaki neden adı `CallNotPermittedException` (yanıt aynı); Docker'da devre 12 isteğin 10.'unda değil
+    5.'inde açıldı (pencere kurulum çağrılarını da sayar; kural aynı); Order baz sayısı 426 değil 427.
 
 ## Sonraki adımlar
 - PROJE KARARI (Ekim 2026, UI paralel): UI (Angular 13) Order ile PARALEL başlıyor — ayrı agent, ayrı worktree
@@ -1181,11 +1212,12 @@
   - Kullanıcı başına tek `pending` sipariş: generated kolon + UNIQUE; ikincisi `409 ORDER_PENDING_EXISTS`.
   - Teslimat adresi checkout gövdesinden alınır ve siparişe snapshot olarak yazılır (user-service'e çağrı yok).
   - Sepet `CartCheckedOut` olayıyla kapanır (Cart tüketicisi Adım 7).
-  - Circuit breaker Order Adım 3'te tüm Feign istemcilerine (cart, catalog, payment) — 3a'da Order tarafı yapıldı; Cart→Catalog 3b.
+  - Circuit breaker Order Adım 3'te tüm Feign istemcilerine (cart, catalog, payment) — 3a'da Order tarafı, 3b'de Cart→Catalog yapıldı
+    (kurulum `common.resilience`).
   - v1 kuponsuz.
   - Önce kayıt sonra dış çağrı: sipariş satırı kendi TX'inde yazılır, sonra rezervasyon/ödeme çağrıları.
   - Stok commit/release Catalog internal HTTP ile (`/internal/stock/reservations/{orderId}/commit|release`).
-- Order planı: 0a common sertleştirme (YAPILDI) → 0b outbox → common (YAPILDI, push'landı) → 1 modül/db (YAPILDI, push'landı) → 2 domain (YAPILDI) → 3a Order istemcileri + CB (YAPILDI) → 3b Cart→Catalog CB → 4 checkout mutlu yol +
+- Order planı: 0a common sertleştirme (YAPILDI) → 0b outbox → common (YAPILDI, push'landı) → 1 modül/db (YAPILDI, push'landı) → 2 domain (YAPILDI) → 3a Order istemcileri + CB (YAPILDI) → 3b Cart→Catalog CB (YAPILDI) → 4 checkout mutlu yol +
   GET {id} → 5 hata yolları/telafi → 6 ödeme sonucu tüketicisi → 7 Cart CartCheckedOut tüketicisi → 8 timeout görevi → 9 liste →
   10 OpenAPI/olay belgeleri → 11 Docker.
 - order-service eklenirken: `RequestPathMasker` bean'i (`/api/orders/{orderId}` vb.) ve `InternalAuthConfig` (gerekirse) — common
@@ -1216,8 +1248,14 @@
 - Açık konu (catalog OpenAPI): `/v3/api-docs` her profilde açık (user-service ile aynı) → internal uçların şekli de herkese görünür
   (sır yok); prod'da `SPRINGDOC_ENABLED=false` düşünülmeli.
 - Yeni servisler eklendikçe kök POM kontrol listesini uygula (bkz. systemPatterns.md; [5] common, [6] Dockerfile).
-- Order Adım 3a YAPILDI (commit edilmedi). Sıradaki: Adım 3b — Cart→Catalog circuit breaker (yalnızca cart-service). Adım 5 telafisi
-  systemPatterns "Order istemcileri" NotPerformed/Unknown kuralına dayanır (Unknown → idempotent tekrar ya da GET ile netleştirme).
+- Order Adım 3a YAPILDI (commit `41d202c`, push edildi). Order Adım 3b YAPILDI (commit edilmedi). Sıradaki: Adım 4 checkout mutlu yol
+  + GET {id}. Adım 5 telafisi systemPatterns "Order istemcileri" NotPerformed/Unknown kuralına dayanır (Unknown → idempotent tekrar ya
+  da GET ile netleştirme).
+- AÇIK RİSK (Order Adım 6/8): commit'te `AlreadyReleased` (rezervasyon süresi doldu, 15m + görev ≤30 sn) → ödenmiş + stok bırakılmış
+  sipariş (paid + released) DB'de temsil edilemez; Adım 6'da karar (iade telafisi / ayrı durum), Adım 8'de pending zaman aşımı
+  rezervasyon süresinden KISA olmalı (ödeme kurtarma ~40 sn'yi de kapsayacak şekilde).
+- Backlog (catalog OpenAPI): lookup/rezervasyon yanıtındaki `status` kodda "mixed" üretebilir (satır durumları farklıysa,
+  `StockReservationTransactions`), OpenAPI enum'unda YOK (Order → Unknown).
 - Order Adım 2 YAPILDI (commit `51feb91`, push edildi). Adım 4'te `RequestPathMasker` deseni `/api/orders/{orderId}`
   + sipariş hata kodları/DB kısıtı eşlemesi (`GlobalExceptionHandler`: `OrderRuleViolation` → 422 kod adıyla, `uk_orders_pending_user`
   → 409 ORDER_PENDING_EXISTS).

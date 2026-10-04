@@ -12,4 +12,4 @@ KitapSepeti: Spring Boot tabanlı, çok servisli (mikroservis) bir kitap satış
   içi bildirim (OrderPaid/OrderFailed; e-posta, tercih, şablon yok). Order fazında `order-paid.md` ve `order-failed.md` olay
   sözleşmeleri yine yazılacak.
 - Devam eden: `order-service` (8088; Adım 1 iskelet + `order_db` V1, Adım 2 domain, Adım 3a Cart/Catalog/Payment istemcileri + circuit
-  breaker yapıldı; sıradaki Adım 3b Cart→Catalog circuit breaker).
+  breaker, Adım 3b Cart→Catalog circuit breaker yapıldı; sıradaki Adım 4 checkout).
