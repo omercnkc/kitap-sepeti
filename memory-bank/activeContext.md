@@ -761,7 +761,7 @@
     ÇÖZÜLDÜ (Adım 9 ön adımı): kullanıcı özeti yeniden üretti; yeni süreçte açılan cart'a gerçek anahtar + rastgele userId → 200
     `{"cartId":null,"updatedAt":null,"items":[]}`, logda anahtar yok.
 
-- Cart Adım 9 — OpenAPI (henüz commit edilmedi; Docker YOK; common/catalog/user, migration, .env değişmedi; uç davranışı, DTO alan
+- Cart Adım 9 — OpenAPI (commit `6fcd291` + memory-bank `bb2e0cf`, push edildi; Docker YOK; common/catalog/user, migration, .env değişmedi; uç davranışı, DTO alan
   adları, durum kodları değişmedi — yalnızca anotasyon):
   - `pom.xml` springdoc-openapi-starter-webmvc-ui (sürüm kök BOM'dan, 3.1.1). application.yml `springdoc` (catalog ile aynı:
     packages-to-scan `com.kitapsepeti.cart.controller`, paths `/api/**, /internal/**`, order-by-keys, `SPRINGDOC_ENABLED`) +
@@ -786,10 +786,71 @@
   - Belgelenmeyen gerçek yollar (catalog ile aynı tercih): 406/415, ilk-sepet yarışında ikinci kısıt ihlali → 409 CONFLICT (pratikte
     olmaz), kilit zaman aşımı → 500 kapsamında.
 
+- Cart Adım 10 — Docker + compose (henüz commit edilmedi; catalog/user Dockerfile + compose kayıtları, common, migration, .env
+  değişmedi). CART SERVİSİ TAMAMLANDI (Adım 0–10).
+  - `cart-service/Dockerfile`: catalog'unkinin birebir kopyası (servis adı + `EXPOSE 8083`); 21-jdk build → 21-jre runtime, uid/gid
+    10001 `app`, layered extract, Dockerfile HEALTHCHECK yok (compose'ta), ARG/ENV'de sır yok. İmaj 618 MB disk / 189 MB içerik.
+  - Compose `cart-service`: `127.0.0.1:8083:8083`, `depends_on` yalnızca mysql (`service_healthy`; user/catalog'a bağımlılık YOK),
+    env tek tek (env_file yok): CART_DB_HOST, CART_DB_PORT, CART_DB_USER `${:?}`, CART_DB_PASSWORD `${:?}`, USER_SERVICE_JWKS_URI
+    (`http://user-service:8081/.well-known/jwks.json`), CATALOG_BASE_URL (`http://catalog-service:8082`),
+    CART_INTERNAL_KEY_ORDER_SHA256 `${:?}`. restart `unless-stopped`, healthcheck curl readiness (10s/5s/5/40s), `mem_limit 768m`.
+    Issuer env DEĞİL (catalog gibi yml'de sabit `kitapsepeti-user-service`) — spesifikasyondan sapma olarak raporlandı.
+  - Health: application.yml'de Spring Cloud'un `refreshScope` + `discoveryComposite` katkıları kapatıldı; Feign health indicator
+    eklemiyor. Katkılar tam olarak db, diskSpace, livenessState, readinessState, ping, ssl. Ayrıntı yok, yalnızca health expose.
+  - Testler (cart 312 = 301 + 11): `ActuatorHealthTest` 20 (probe'lar katı `{"status":"UP"}`, kök health groups, diğer actuator yolları
+    anonim 401 / ADMIN token'la 404, Catalog 503 dönerken üç health yolu UP ve Catalog'a istek yok, katkı listesi yalnızca yerel),
+    `CatalogConnectionRefusedTest` +1 (Catalog adresinde kimse dinlemezken health + readiness UP).
+  - Root `clean verify`: common 25, user 83, catalog 276, cart 312 (2 skipped = CatalogLiveTest). BUILD SUCCESS.
+  - Docker uçtan uca (gerçek token, yazdırılmadı): GET boş → 2 kitap POST → PATCH → satır DELETE → GET 1 satır / 3 adet / 435.00 TRY
+    VERIFIED. Internal snapshot gerçek anahtarla 200 (1 satır), anahtarsız 401. Catalog `stop`: cart healthy kaldı (failingStreak 0), GET
+    200 UNAVAILABLE (snapshot fiyatları), POST 503 CATALOG_UNAVAILABLE 66 ms (sonrakiler 6–9 ms; durmuş container'ın adı çözülmüyor →
+    UnknownHostException, connect timeout'a hiç gelinmiyor); `start` sonrası VERIFIED. `restart cart-service` → sepet aynen (2 satır /
+    4 adet / 534.00). Restart öncesi alınan token restart sonrası 200 (JWKS yeniden çekildi, sonra önbellekten).
+  - İmaj güvenliği: `docker history` sır deseni 0; Env adları PATH, JAVA_HOME, LANG, LANGUAGE, LC_ALL, JAVA_VERSION, JAVA_TOOL_OPTIONS;
+    `/app` yalnızca BOOT-INF, META-INF, org. İmaj içinde `find` ile .env/*.pem araması auto-review'a takıldı (onay kartı açılamadı) →
+    statik kanıt: runtime yalnızca extract katmanlarını kopyalar, build yalnızca mvnw/.mvn/pom'lar/common+cart src; `.dockerignore`
+    .env, .env.*, secrets/, **/*.pem dışlar.
+  - Log: token/Bearer/anahtar başlığı/64-hex/userId/kitap id'si/e-posta 0; WARN'lar yalnızca beklenenler (internal 401, Catalog
+    UnknownHost ile GET UNAVAILABLE + POST 503). Loglardaki iki UUID Spring Cloud `GenericScope BeanFactory id` (rastgele, kullanıcı verisi değil).
+  - Yerel veri: user_db'de 2 yeni e2e kullanıcısı (`e2e-cart10-…@example.test`; toplam e2e 24 / 46 kullanıcı); cart_db 4 sepet, 6 satır.
+    Temizlik SQL'i önerildi, ÇALIŞTIRILMADI.
+  - Not (araç): ajan Shell çağrıları arasında yalnızca ortam değişkenleri kalıcı; PowerShell değişken/fonksiyonları kaybolur.
+
+- PAYMENT BAŞLADI (Faz 7, payment-service, port 8087). Planlama kararları:
+  - v1 sağlayıcısı mock; ödeme oluşturulunca mock kendi webhook ucuna imzalı (HMAC) sonuç gönderir (sonraki adımlar).
+  - Sipariş başına TEK ödeme (`uk_payments_order`).
+  - Sonuç outbox + RabbitMQ ile Order'a gider.
+  - Kullanıcıya açık uç yok: JWT / Resource Server YOK. Yalnızca internal (API key) ve webhook (HMAC imza). OpenFeign hiç gerekmiyor.
+- Payment Adım 1 — iskelet + DB + V1 (henüz commit edilmedi; Cart Adım 10 da commit'siz duruyor; diğer servisler, common, migration'ları
+  değişmedi; uç/entity/güvenlik/amqp yok):
+  - Kök pom `<module>payment-service</module>`; artifactId `payment-service` (spesifikasyondaki `kitap-sepeti-payment-service` yerine:
+    diğer servisler `<ad>-service`, yalnızca common `kitap-sepeti-` önekli; Dockerfile kalıbı `<svc>/target/<svc>-*.jar`). Test
+    bağımlılıklarından `spring-boot-starter-security-test` çıkarıldı (security'yi test classpath'ine getirirdi).
+  - `infra/mysql/init/30-payment-db.sh` (20-cart-db.sh birebir; LF, subshell `set -eu`, idempotent). Compose mysql env
+    `PAYMENT_DB_USER/PASSWORD` `${VAR:?}` (CART_DB_* mysql'de `:?`'siz; istenen gibi). `.env.example` iki ad + "yalnızca harf/rakam".
+  - Yerel: `.env` kaydedilmemişken compose tüm komutlarda durdu (`:?`); kullanıcı kaydetti → `docker compose up -d mysql` (yeniden
+    oluşturuldu, volume korundu) + script elle bir kez (ikinci çalıştırma da sorunsuz). SHOW GRANTS: `USAGE ON *.*` + `ALL ON payment_db.*`;
+    `cart_db` SELECT reddedildi (1142). user/catalog/cart mysql yeniden oluşunca readiness 200, healthy.
+  - application.yml cart üslubu (8087, PAYMENT_DB_*, Hikari 5000 + lock wait 5, validate, OSIV kapalı, UTC, Flyway, yalnızca health,
+    readiness = readinessState + db). Security/cloud/springdoc/app blokları yok.
+  - V1: payments (uk_payments_order, uk_payments_provider_ref, ck_payments_provider/amount/currency/status/failure,
+    ix_payments_status_created), provider_events (uk_provider_events_provider_event, fk_provider_events_payment RESTRICT,
+    ck_provider_events_provider/event_type, ix_provider_events_payment = FK indeksi), outbox (catalog'la birebir; yalnızca yorum
+    örnekleri 'Payment'/'PaymentSucceeded').
+  - Testler (payment 60): `PaymentServiceApplicationTests` 11 (bağlam + Flyway V1, security/amqp/feign/springdoc classpath'te yok,
+    health/liveness/readiness katı UP, diğer actuator 404), `schema/PaymentSchemaConstraintsTest` 49 (tablolar/engine/collation,
+    kolonlar, binary collation, isimli kısıt/CHECK metinleri/FK RESTRICT/indeksler, kart kolonu yok, payments a–g, provider_events a–d,
+    outbox DDL = catalog, outbox kolonları/default/geçersiz JSON).
+  - Root `clean verify`: common 25, user 83, catalog 276, cart 312 (2 skipped), payment 60. `spring-boot:run` → health UP, V1 uygulandı,
+    log'da WARN yok.
+
 ## Sonraki adımlar
-- Cart sonraki adımlar: checkout zinciri (CartCheckedOut tüketimi Order fazında; checkout + yeni sepet aynı TX'te olursa arada `flush()`
-  — flush tuzağı), yol maskelemeyi common'a taşıma (Order fazının başında ayrı adım), Docker + compose (Adım 10;
-  `CART_INTERNAL_KEY_ORDER_SHA256` env). Order'ın sepet istemcisi `docs/api/cart-service.openapi.json`'dan (internal snapshot dahil).
+- Payment Adım 2+: entity/repository (UUIDv7, Clock), DbConstraints eşlemesi, internal ödeme oluşturma ucu (API key; Order),
+  mock sağlayıcı + HMAC webhook, outbox + RabbitMQ (PaymentSucceeded/PaymentFailed → Order), OpenAPI, Docker + compose (Adım 8).
+- Cart ertelenenler: (1) CartCheckedOut tüketimi Order fazında (checkout + yeni sepet aynı TX'te olursa arada `flush()` — flush tuzağı);
+  (2) yol maskelemeyi (`MaskedRequestPaths`) ve boş özet politikasını (internal key özeti boş/bozuksa açılmama) common'a taşıma
+  (Order fazının başında ayrı adım); (3) Catalog OpenAPI'de nullable alanları `types = {"x","null"}` ile işaretleme (cart'taki gibi).
+  Order'ın sepet istemcisi `docs/api/cart-service.openapi.json`'dan (internal snapshot dahil); compose'da `http://cart-service:8083`.
 - Gateway fazı: `/v3/api-docs` + Swagger UI üç serviste permitAll; Gateway'de dışarıya kapatılacak (ya da `SPRINGDOC_ENABLED=false`).
 - order-service (rezervasyon istemcisi; fiyat anlık görüntüsü kendisinde; `RESERVATION_RELEASED` → ödeme iadesi telafisi; süre dolumu
   olayı yok, GET ile sorgulanır; istemci `docs/api/catalog-service.openapi.json`'dan). Compose'a eklenirken catalog'a

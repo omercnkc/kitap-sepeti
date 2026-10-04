@@ -321,6 +321,16 @@
   Tablo varsayılanı `utf8mb4_0900_ai_ci` olduğundan aksi halde `CHECK (status IN (...))` ve `status = 'active'` içeren generated
   ifadeler büyük/küçük harf duyarsız olur ('ACTIVE' geçer ve aktif sayılır). Şema testi kolonun collation'ını ve 'ACTIVE'/'Active'
   INSERT'inin 3819 verdiğini doğrular (cart `CartSchemaConstraintsTest`). Metin kolonları (başlık vb.) `_ai_ci` kalır.
+- payment-service Adım 1 (security'siz iskelet): kullanıcıya açık uç olmadığı için geçici SecurityFilterChain YOK, security bağımlılığı
+  da yok; health açık, diğer actuator yolları 404. `PaymentServiceApplicationTests` sonraki adım bağımlılıklarının (security, amqp,
+  openfeign, springdoc) classpath'te olmadığını kilitler — security/amqp eklenince o satırlar kaldırılır.
+- payment şeması (V1): enum benzeri her kolon `utf8mb4_bin` (provider, status, currency, event_type). Para birimi
+  `CHECK (REGEXP_LIKE(currency, '^[A-Z]{3}$', 'c'))`; CHAR(3)'e sığmayan değer (ör. 'TRYY') CHECK'e gelmeden 1406 "Data too long" →
+  `DataIntegrityViolationException`. "failed ⇔ failure_code dolu" tek CHECK: `(status = 'failed') = (failure_code IS NOT NULL)`.
+  payments/provider_events zaman kolonlarında DB default'u YOK (uygulama Clock ile yazar; cart Adım 6 kararı); outbox catalog'unkiyle
+  birebir (`created_at` DEFAULT dahil; `PaymentSchemaConstraintsTest.outboxDdlIsIdenticalToCatalogs` catalog V1 dosyasıyla
+  yorumsuz/boşluk-normalize metin karşılaştırır → catalog outbox'ı değişirse payment testi kırılır). Kart verisi kolonu yok
+  (information_schema testi: card/pan/cvv/cvc/expiry geçen kolon yok).
 
 ## Aggregate entity'leri (cart-service)
 - Aggregate root (`Cart`) satırları `@OneToMany(mappedBy, cascade = ALL, orphanRemoval = true)` + `@OrderBy` ile `List`'te tutar;
@@ -396,6 +406,11 @@
   Diğer servisler de girmez ve compose'ta onlara `depends_on` konmaz (catalog → user-service JWKS tembel; kapalıyken 503).
 - Servis içi adresler compose servis adıyla (`mysql`, `rabbitmq`, `http://user-service:8081`); profil verilmez (local seed yalnızca
   `spring-boot:run` ile). Her servis: Actuator health (yalnızca health expose) + compose healthcheck `curl` readiness, `mem_limit 768m`.
+- Spring Cloud kullanan servis (cart): Spring Cloud health'e `refreshScope` ve `discoveryComposite` katkılarını ekler → kapatılır
+  (`management.health.refresh.enabled=false`, `spring.cloud.discovery.client.composite-indicator.enabled=false`,
+  `...health-indicator.enabled=false`). OpenFeign kendi health indicator'ını EKLEMEZ. Kalan katkılar yalnızca yerel: db, diskSpace,
+  livenessState, readinessState, ping, ssl (`ActuatorHealthTest.healthContributorsAreLocalOnly` kilitler). Catalog kapalıyken health UP
+  ve Catalog'a istek atmaz (testli).
 
 ## Yeni servis eklerken (KULLANICI KURALI)
 Kullanıcı, her yeni serviste kök `pom.xml`'in kontrol edilip gerekiyorsa

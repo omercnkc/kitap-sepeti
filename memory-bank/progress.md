@@ -83,12 +83,23 @@
 - Cart Adım 8 (commit `2135ac6` + `dd01c0c`, push edildi): `POST /internal/cart/snapshot` (X-Internal-Api-Key, catalog ile aynı
   @Order(1) zinciri; salt okunur tek SQL, aktif sepet yoksa cartId null). `CART_INTERNAL_KEY_ORDER_SHA256` yoksa/bozuksa cart açılmaz.
   cart-service 287 test (2 skipped). Gerçek anahtarla uçtan uca 200, Adım 9 ön adımında doğrulandı.
-- Cart Adım 9 (henüz commit edilmedi): OpenAPI — springdoc, `OpenApiConfig` (yol önekine göre bearerAuth/internalApiKey, standart
+- Cart Adım 9 (commit `6fcd291` + `bb2e0cf`, push edildi): OpenAPI — springdoc, `OpenApiConfig` (yol önekine göre bearerAuth/internalApiKey, standart
   hatalar, `CartLimitProblem`), sözleşme `docs/api/cart-service.openapi.json` (4 path, 6 operasyon, internal dahil), drift +
   docs + required/nullable testleri. cart-service 301 test (2 skipped).
+- Cart Adım 10 (henüz commit edilmedi): `cart-service/Dockerfile` (catalog kopyası, non-root 10001) + compose kaydı (yalnızca mysql'e
+  bağımlı, sırlar `${VAR:?}`), health yalnızca yerel bileşenler (Spring Cloud refreshScope/discoveryComposite kapalı), `docs/docker.md`
+  cart bölümü. cart-service 312 test (2 skipped). Docker uçtan uca (sepet akışı, internal snapshot, Catalog kapalıyken UNAVAILABLE/503,
+  restart kalıcılığı, JWKS) geçti. **Cart servisi tamamlandı.**
+
+- Payment Adım 1 (henüz commit edilmedi): `payment-service` modülü (8087; webmvc, data-jpa, flyway, validation, actuator, common;
+  security/amqp/springdoc/openfeign yok), `infra/mysql/init/30-payment-db.sh` + compose mysql env (`PAYMENT_DB_*`, `${VAR:?}`),
+  V1 (payments, provider_events, outbox — outbox catalog'la birebir). payment-service 60 test (49 şema/kısıt + 11 bağlam/health).
+  Yerel `payment_db` + `payment_svc` (yetki yalnızca `payment_db.*`), V1 `spring-boot:run` ile uygulandı.
 
 ## Yapılacaklar
-- Cart servisi (Adım 10: Docker + compose; yol maskelemeyi common'a taşıma; checkout tüketimi Order fazında).
+- Payment (Faz 7) sonraki adımlar: entity/repository, internal ödeme oluşturma ucu (API key, Order), mock sağlayıcı + imzalı webhook
+  (HMAC), outbox + RabbitMQ ile sonucun Order'a gitmesi, OpenAPI, Docker + compose (Adım 8).
+- Cart ertelenenler: CartCheckedOut tüketimi (Order fazı); yol maskeleme + boş özet politikasını common'a taşıma; Catalog OpenAPI nullable.
 - Gateway fazı: docs/Swagger'ı (üç servis) dışarıya kapatmak.
 - Outbox kodunu common'a taşıma (ayrı adım; şu an servis başına kopya).
 - order-service (catalog rezervasyon istemcisi).

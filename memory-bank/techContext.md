@@ -24,15 +24,23 @@
 - Docker Desktop 29.x, Compose v5, buildx 0.37. Base image'lar `eclipse-temurin:21-jdk` / `21-jre` (Ubuntu 26.04).
   Dockerfile'lar `COPY --parents` kullanır (frontend 1.20+ GA; `# syntax=docker/dockerfile:1` yeterli). maven-dependency-plugin
   3.10.0 `go-offline` reaktör modülünü (common) uzaktan çözmeye çalışmaz.
-- Compose host portları YALNIZCA `127.0.0.1` (8081, 8082, 3306, 5672, 15672, adminer 8090): LAN'dan erişilmez, localhost'tan
+- payment-service: port 8087, şema `payment_db`, kullanıcı `.env` `PAYMENT_DB_USER/PASSWORD` (yerelde `payment_svc`;
+  `infra/mysql/init/30-payment-db.sh`; compose mysql env'inde `${VAR:?}` → .env'de yoksa HİÇBİR compose komutu çalışmaz). Çalıştırma
+  `.\mvnw.cmd -pl payment-service spring-boot:run` (önce `.\mvnw.cmd -pl common -am install -DskipTests`), testler
+  `.\mvnw.cmd -pl payment-service -am test`. Bağımlılıklar yalnızca webmvc, data-jpa, flyway(-mysql), validation, actuator, mysql, common;
+  security/amqp/springdoc/openfeign YOK (testle kilitli; security/amqp sonraki adımlarda eklenecek, openfeign hiç). Compose servis
+  kaydı/Dockerfile yok (Adım 8).
+- Compose host portları YALNIZCA `127.0.0.1` (8081, 8082, 8083, 3306, 5672, 15672, adminer 8090): LAN'dan erişilmez, localhost'tan
   erişilir; container'lar arası servis adıyla erişim etkilenmez.
 - Spring Cloud: release train `2025.1.3` (Oakwood; Boot 4.0.x/4.1.x, 4.1 desteği 2025.1.2'den itibaren), kök POM BOM import.
   Boot yükseltilirken spring.io/projects/spring-cloud uyumluluk tablosu yeniden kontrol edilir; milestone/RC ve milestone repo kullanılmaz.
   Şu an yalnızca cart-service kullanıyor (`spring-cloud-starter-openfeign` 5.0.3).
 - cart-service: port 8083, şema `cart_db`, kullanıcı `.env` `CART_DB_USER/PASSWORD` (`infra/mysql/init/20-cart-db.sh`). Çalıştırma
   `.\mvnw.cmd -pl cart-service spring-boot:run` (common `~/.m2`'de değilse önce `.\mvnw.cmd -pl common -am install -DskipTests`),
-  testler `.\mvnw.cmd -pl cart-service -am test`. Compose'da henüz servis kaydı yok. Catalog adresi `CATALOG_BASE_URL`
-  (varsayılan `http://localhost:8082`; compose'da `http://catalog-service:8082` olacak). Gerçek Catalog'a karşı test:
+  testler `.\mvnw.cmd -pl cart-service -am test`. Container: `docker compose build cart-service` + `docker compose up -d`
+  (imaj `kitapsepeti/cart-service:local`, 618 MB disk / 189 MB içerik; uid 10001 `app`; yerel `spring-boot:run` ile aynı anda
+  çalışamaz — ikisi de 8083). Compose env: `CART_DB_USER/PASSWORD`, `CART_INTERNAL_KEY_ORDER_SHA256` zorunlu (`${VAR:?}`), Catalog adresi
+  `CATALOG_BASE_URL` (varsayılan `http://localhost:8082`; compose'da `http://catalog-service:8082`). Gerçek Catalog'a karşı test:
   `.\mvnw.cmd -pl cart-service test "-Dtest=CatalogLiveTest" "-Dcatalog.live=true"` (catalog seed'li olmalı). Hikari `connection-init-sql` ile
   `innodb_lock_wait_timeout = 5` (oturum; GLOBAL 50). Uçlar: `GET /api/cart`, `POST /api/cart/items` (USER token).
   Uçtan uca denemede seed 402 yayında ama stokta değil (409 BOOK_NOT_AVAILABLE); stokta yayındaki kitaplar 401, 404–411.
