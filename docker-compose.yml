@@ -19,6 +19,9 @@ services:
       # infra/mysql/init/30-payment-db.sh okur (payment_db şeması + kullanıcısı).
       PAYMENT_DB_USER: ${PAYMENT_DB_USER:?PAYMENT_DB_USER .env içinde tanımlı olmalı}
       PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD:?PAYMENT_DB_PASSWORD .env içinde tanımlı olmalı}
+      # infra/mysql/init/40-order-db.sh okur (order_db şeması + kullanıcısı).
+      ORDER_DB_USER: ${ORDER_DB_USER:?ORDER_DB_USER .env içinde tanımlı olmalı}
+      ORDER_DB_PASSWORD: ${ORDER_DB_PASSWORD:?ORDER_DB_PASSWORD .env içinde tanımlı olmalı}
     volumes:
       - mysql_data:/var/lib/mysql
       # Yalnızca boş volume'da otomatik çalışır; mevcut volume'da script elle çalıştırılır.

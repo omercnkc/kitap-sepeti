@@ -81,6 +81,7 @@
 		<module>catalog-service</module>
 		<module>cart-service</module>
 		<module>payment-service</module>
+		<module>order-service</module>
 	</modules>
 
 	<!--

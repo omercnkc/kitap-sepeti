@@ -1,0 +1,14 @@
+# Bağlantı bilgisi @ServiceConnection ile Testcontainers'tan gelir; testler .env'deki ORDER_DB_* ve
+# RABBITMQ_* değerlerine bağımlı olmamalı (placeholder'lar burada sabit değerle karşılanır).
+spring:
+  datasource:
+    username: test
+    password: test
+  rabbitmq:
+    username: test
+    password: test
+
+app:
+  # Worker arka planda outbox satırlarını kilitleyip yayınlamasın.
+  outbox:
+    enabled: false

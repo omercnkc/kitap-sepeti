@@ -1,0 +1,100 @@
+spring:
+  application:
+    name: order-service
+  config:
+    import: optional:file:../.env[.properties],optional:file:.env[.properties]
+  datasource:
+    url: jdbc:mysql://${ORDER_DB_HOST:localhost}:${ORDER_DB_PORT:3306}/order_db
+    username: ${ORDER_DB_USER}
+    password: ${ORDER_DB_PASSWORD}
+    hikari:
+      # DB kesintisinde istekler varsayılan 30 sn yerine ~5 sn'de hata döner.
+      # Milisaniye: HikariDataSource alanı long olduğu için "5s" gibi Duration yazımı bağlanmaz.
+      connection-timeout: 5000
+      # Satır kilidi beklemesi MySQL varsayılanı 50 sn yerine 5 sn; aşılırsa PessimisticLockingFailureException.
+      # Hibernate MySQL'de sorgu başına kilit süresi uygulayamıyor.
+      connection-init-sql: SET SESSION innodb_lock_wait_timeout = 5
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER}
+    password: ${RABBITMQ_PASSWORD}
+    # Broker kapalıyken outbox turu amqp-client'ın 60 sn'lik varsayılanında asılı kalmasın.
+    connection-timeout: 5s
+    # Her mesaj için broker onayı (ack/nack) CorrelationData future'ı ile beklenir.
+    publisher-confirm-type: correlated
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Açık anahtar ilk doğrulamada çekilir ve önbelleğe alınır; açılışta istek atılmaz.
+          jwk-set-uri: ${USER_SERVICE_JWKS_URI:http://localhost:8081/.well-known/jwks.json}
+
+springdoc:
+  # Yalnızca gerçek uçlar; actuator, /error ve testteki deneme uçları dokümana girmez.
+  packages-to-scan: com.kitapsepeti.order.controller
+  paths-to-match: /api/**
+  default-produces-media-type: application/json
+  writer-with-order-by-keys: true
+  api-docs:
+    enabled: ${SPRINGDOC_ENABLED:true}
+  swagger-ui:
+    enabled: ${SPRINGDOC_ENABLED:true}
+    tags-sorter: alpha
+    operations-sorter: method
+
+app:
+  jwt:
+    issuer: kitapsepeti-user-service
+  # Exchange tüm servislerle ortaktır; ad değişirse tüm servislerde birlikte değişmeli.
+  outbox:
+    enabled: true
+    exchange: kitapsepeti.events
+    poll-interval: 2s
+    batch-size: 50
+    confirm-timeout: 5s
+
+logging:
+  level:
+    # SQL hata mesajı kullanıcı verisi içerebilir; WARN satırları kapatılır.
+    org.hibernate.orm.jdbc.error: ERROR
+    # INFO "Created new connection ... amqp://<kullanıcı>@host" RabbitMQ kullanıcı adını yazar.
+    org.springframework.amqp.rabbit.connection.CachingConnectionFactory: WARN
+
+server:
+  port: 8088
+  error:
+    include-stacktrace: never
+    include-message: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+      # /actuator link listesi de kapalı; dışarıya yalnızca health açılır.
+      discovery:
+        enabled: false
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        # RabbitMQ ve diğer servisler bilinçli olarak yok: broker kapalıyken olaylar outbox'ta bekler; cart/catalog/
+        # payment kesintisi isteğin kendi hatası olarak görünür.
+        readiness:
+          include: readinessState, db
