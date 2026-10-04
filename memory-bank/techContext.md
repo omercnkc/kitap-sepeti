@@ -39,8 +39,12 @@
   `.\mvnw.cmd -pl common -am install -DskipTests`); DB/RabbitMQ/JWKS ayarlarını `spring.config.import` ile `.env`'den kendisi okur
   (`USER_SERVICE_JWKS_URI` yoksa `http://localhost:8081/.well-known/jwks.json`). Testler `.\mvnw.cmd -pl order-service -am test`
   (MySQL + RabbitMQ Testcontainers). Bağımlılıklar: payment ile aynı + security-oauth2-resource-server + (Adım 3a)
-  spring-cloud-starter-openfeign, feign-java11 (JDK HttpClient), spring-cloud-starter-circuitbreaker-resilience4j (Spring Cloud
-  2025.1.3 BOM: OpenFeign 5.0.3, feign 13.6.1, resilience4j 2.3.0); test wiremock-standalone 3.13.1 (sürüm servis pom'unda).
+  spring-cloud-starter-openfeign, feign-java11 (JDK HttpClient), resilience4j-circuitbreaker (Adım 4'ten beri; Spring Cloud CB
+  starter'ı kaldırıldı, cart ile aynı) (Spring Cloud 2025.1.3 BOM: OpenFeign 5.0.3, feign 13.6.1, resilience4j 2.3.0); test
+  wiremock-standalone 3.13.1 (sürüm servis pom'unda). Uçlar (Adım 4): `POST /api/orders/checkout`, `GET /api/orders/{orderId}`.
+  Yerel uçtan uca: Docker'da user/catalog/cart/payment + `spring-boot:run` order (compose host portlarına localhost'tan bağlanır);
+  kontrol script'i `.env`'yi Ordinal okur, değer yazdırmaz; DB sorgusu `$env:MYSQL_PWD` + `docker compose exec -T -e MYSQL_PWD mysql
+  mysql -u<kullanıcı> <db> -N` (SQL stdin'den).
   Env: `ORDER_INTERNAL_API_KEY` (zorunlu; yok/boşsa açılmaz), `ORDER_CART_URL`/`ORDER_CATALOG_URL`/`ORDER_PAYMENT_URL` (varsayılan
   localhost:8083/8082/8087; `.env.example`'da henüz yok). Testlerde sahte anahtar application-test.yml'de. Compose'da YOK (Adım 11).
 - payment internal anahtarı: `.env` `PAYMENT_INTERNAL_KEY_ORDER_SHA256` (Order'ın ham anahtarı `ORDER_INTERNAL_API_KEY`'in SHA-256 hex
@@ -63,7 +67,8 @@
 - Spring Cloud: release train `2025.1.3` (Oakwood; Boot 4.0.x/4.1.x, 4.1 desteği 2025.1.2'den itibaren), kök POM BOM import.
   Boot yükseltilirken spring.io/projects/spring-cloud uyumluluk tablosu yeniden kontrol edilir; milestone/RC ve milestone repo kullanılmaz.
   Kullananlar: cart-service (`spring-cloud-starter-openfeign` 5.0.3 + Adım 3b'den `resilience4j-circuitbreaker` 2.3.0, Spring Cloud CB
-  starter'ı YOK), order-service (aşağıda), common (`resilience4j-circuitbreaker` optional; sürüm BOM'dan).
+  starter'ı YOK), order-service (OpenFeign + `resilience4j-circuitbreaker`; Spring Cloud CB starter'ı Adım 4'te kaldırıldı), common
+  (`resilience4j-circuitbreaker` optional; sürüm BOM'dan).
 - cart-service: port 8083, şema `cart_db`, kullanıcı `.env` `CART_DB_USER/PASSWORD` (`infra/mysql/init/20-cart-db.sh`). Çalıştırma
   `.\mvnw.cmd -pl cart-service spring-boot:run` (common `~/.m2`'de değilse önce `.\mvnw.cmd -pl common -am install -DskipTests`),
   testler `.\mvnw.cmd -pl cart-service -am test`. Container: `docker compose build cart-service` + `docker compose up -d`

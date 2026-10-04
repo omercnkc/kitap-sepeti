@@ -149,7 +149,15 @@
   başına yalnızca `X-Internal-Api-Key` interceptor'ı), domain'e bakan gateway'ler + sealed sonuçlar (NotPerformed = istek
   ulaşmadı / Unknown = sonuç bilinmiyor), servis başına Resilience4j circuit breaker (20/10/%50/10 sn/3; yalnızca teknik hatalar),
   WireMock tabanlı eşleme/CB/başlık/log/sözleşme testleri. order 427 test; root verify yeşil.
-- Order Adım 3b YAPILDI (commit edilmedi): CB kurulumu `common.resilience`'a (CircuitBreakerProperties + CircuitBreakers; resilience4j
+- Order Adım 4 YAPILDI (COMMIT EDİLMEDİ): `POST /api/orders/checkout` (201 + Location, sipariş pending; adres gövdeden, user
+  kuralları + country zorunlu) ve `GET /api/orders/{orderId}` (yalnızca sahibi; diğerleri 404 ORDER_NOT_FOUND). `CheckoutService`
+  TX'siz, DB işleri `OrderTransactions` (READ_COMMITTED): pending kontrolü → Cart snapshot → Catalog lookup → `Order.place` → TX1
+  insert → reserve → TX2 held → Payment initiate → TX3 attachPayment. Hata tablosu activeContext "Order Adım 4"te. Pom temizliği:
+  Spring Cloud CB starter'ı + kapatma ayarları kaldırıldı (yalnızca resilience4j-circuitbreaker). Testler: order 427 → 489 (62 yeni
+  checkout/okuma testi); root verify: common 65, user 86, catalog 285, cart 321 (2 skipped), payment 367, order 489. Yerel uçtan uca
+  geçti (201 pending → 1 sn sonra hâlâ pending, rezervasyon held, Payment kaydı succeeded; ikinci checkout 409). Not: e2e kullanıcısının
+  siparişi pending kaldı ve o kullanıcıyı engelliyor (Adım 6 tüketicisi / Adım 8 timeout gelene kadar).
+- Order Adım 3b YAPILDI (commit `f651c07` + `8e3b037`): CB kurulumu `common.resilience`'a (CircuitBreakerProperties + CircuitBreakers; resilience4j
   optional, auto-config yok); Order aynı davranışla onu kullanıyor. Cart→Catalog tek `catalog` CB (20/10/%50/10 sn/3; teknik hata =
   hata, 4xx/stokta yok = başarı); açıkken istek gitmez, mevcut "Catalog yok" yanıtları aynen (ekleme 503, görünüm 200 UNAVAILABLE).
   Readiness etkilenmez. Testler: common 65, cart 321 (2 skipped); diğerleri aynı (user 86, catalog 285, payment 367, order 427).
@@ -157,7 +165,7 @@
 - Cart ertelenenler: CartCheckedOut tüketimi (Order Adım 7); Catalog OpenAPI nullable. (Yol maskeleme + özet politikası common'a
   taşındı → Order Adım 0a.)
 - Order planı (PROJE KARARI, Ekim 2026): 0a common sertleştirme (yapıldı) → 0b outbox → common (yapıldı) → 1 modül/db (yapıldı) → 2 domain (yapıldı) → 3a Order istemcileri + CB (yapıldı)
-  → 3b Cart→Catalog CB (yapıldı) → 4 checkout mutlu yol + GET {id} → 5 hata yolları/telafi → 6 ödeme sonucu tüketicisi → 7 Cart CartCheckedOut tüketicisi → 8 timeout
+  → 3b Cart→Catalog CB (yapıldı) → 4 checkout mutlu yol + GET {id} (yapıldı) → 5 hata yolları/telafi → 6 ödeme sonucu tüketicisi → 7 Cart CartCheckedOut tüketicisi → 8 timeout
   görevi → 9 liste → 10 OpenAPI/olay belgeleri → 11 Docker. Kararlar activeContext "Sonraki adımlar"da.
 - Gateway fazı: docs/Swagger'ı (dört servis) dışarıya kapatmak.
 - order-service (catalog rezervasyon istemcisi).
@@ -171,8 +179,11 @@
   user-service/JWKS kapalıysa son bilinen anahtarla doğrulamaya devam (şu an önbellek süresi içinde 200, sonrasında 503).
 
 ## Bilinen sorunlar
-- AÇIK RİSK (Order): commit'te `AlreadyReleased` (rezervasyon süresi 15m doldu) → paid + released DB'de temsil edilemez; Adım 6'da
-  karar, Adım 8'de pending zaman aşımı < rezervasyon süresi.
+- AÇIK RİSK (Order): commit'te `AlreadyReleased` (rezervasyon süresi 15m doldu) → paid + released DB'de temsil edilemez. ÖNERİ
+  (Adım 6 kararı): V2 ile `stock_state 'lost'`. Pending zaman aşımı KARARI 10 dk (Adım 8; < 15 dk rezervasyon süresi).
+- Order (Adım 4 sonrası, Adım 5'e kadar): kayıt sonrası başarısız siparişlerde stok bırakılmıyor (`requested`/`held` kalır; Catalog
+  rezervasyon TTL'i ~15 dk sonra bırakır). Payment Unknown → sipariş pending + held, paymentId null (Adım 8 aynı istekle yeniden dener).
+  Ödeme sonucu tüketicisi yok → başarılı ödemede de sipariş pending kalır ve kullanıcının yeni checkout'unu engeller (Adım 6).
 - Kök `/actuator/health` (catalog ve payment) RabbitMQ kapalıyken 503 DOWN ve her çağrıda stack trace'li WARN
   (RabbitHealthIndicator); readiness etkilenmez. Healthcheck'ler readiness kullanmalı.
 - payment: aynı siparişe eşzamanlı ilk isteklerde sağlayıcı birden fazla çağrılabilir (yalnızca ilk referans yazılır, diğerleri WARN ile

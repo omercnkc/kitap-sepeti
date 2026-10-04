@@ -1195,6 +1195,61 @@
       mock `delay` 500ms. Kurtarılan ödeme en geç ~10 sn + 30 sn içinde sonuçlanır.
   - Sapmalar: devre açıkken Cart logundaki neden adı `CallNotPermittedException` (yanıt aynı); Docker'da devre 12 isteğin 10.'unda değil
     5.'inde açıldı (pencere kurulum çağrılarını da sayar; kural aynı); Order baz sayısı 426 değil 427.
+  - (3b commit edildi: `f651c07` + `8e3b037`.)
+
+- Order Adım 4 — checkout mutlu yol + `GET /api/orders/{orderId}` (COMMIT EDİLMEDİ; V1, diğer servisler değişmedi). Ayrıntılı akış:
+  systemPatterns "Checkout + sipariş okuma".
+  - 0. Temizlik: order pom'undan `spring-cloud-starter-circuitbreaker-resilience4j` → `resilience4j-circuitbreaker` (ağaçta yalnızca
+    circuitbreaker + core); application.yml'den `spring.cloud.circuitbreaker.resilience4j.enabled`, `spring.cloud.openfeign.circuitbreaker.enabled`,
+    `management.health.circuitbreakers.enabled` silindi. CB testleri değişmedi; `ClientLoggingTest` openfeign CB ayarını varsayılan false
+    ile okuyor.
+  - Hata tablosu (durum × HTTP × code × sipariş yazıldı mı):
+    | Durum | HTTP | code | Sipariş |
+    |---|---|---|---|
+    | Bekleyen sipariş var (kontrol ya da `uk_orders_pending_user` yarışı) | 409 | ORDER_PENDING_EXISTS (+orderId) | Hayır |
+    | Sepet yok/boş | 422 | CART_EMPTY | Hayır |
+    | Cart erişilemez | 503 | CART_UNAVAILABLE | Hayır |
+    | Lookup erişilemez (CB açık dahil) | 503 | CATALOG_UNAVAILABLE | Hayır |
+    | Kitap bulunamadı / stokta değil (lookup) | 409 | BOOK_NOT_AVAILABLE | Hayır |
+    | Farklı para birimleri | 422 | MIXED_CURRENCY | Hayır |
+    | Toplam 0 | 422 | ORDER_TOTAL_ZERO | Hayır |
+    | Toplam > 9999999999.99 | 422 | ORDER_TOTAL_TOO_LARGE | Hayır |
+    | Diğer Order.place ihlalleri | 422 | INVALID_PRICE / INVALID_CURRENCY / INVALID_QUANTITY / DUPLICATE_BOOK / EMPTY_ORDER | Hayır |
+    | Doğrulama / bozuk JSON / token yok | 400 / 400 / 401 | VALIDATION_FAILED / MALFORMED_REQUEST / UNAUTHORIZED | Hayır |
+    | Reserve Insufficient | 409 | INSUFFICIENT_STOCK (+orderId) | Evet, failed OUT_OF_STOCK, stok requested |
+    | Reserve NotSellable | 409 | BOOK_NOT_AVAILABLE (+orderId) | Evet, failed BOOK_NOT_AVAILABLE |
+    | Reserve NotHeld / Rejected (ERROR) / NotPerformed / Unknown | 503 | CATALOG_UNAVAILABLE (+orderId) | Evet, failed CATALOG_UNAVAILABLE |
+    | Payment NotPerformed | 503 | PAYMENT_UNAVAILABLE (+orderId) | Evet, failed PAYMENT_UNAVAILABLE, stok held |
+    | Payment Rejected (ERROR) | 503 | PAYMENT_UNAVAILABLE (+orderId) | Evet, failed PAYMENT_REJECTED, stok held |
+    | Payment Unknown (WARN) | 201 | — | Evet, pending + held, paymentId null |
+    | Mutlu yol | 201 | — | Evet, pending + held + paymentId |
+    | GET başkasının / olmayan | 404 | ORDER_NOT_FOUND | — |
+  - Adres kuralları user-service `AddressRequest`'ten (`dto/request/AddressRequest`): recipientName/phone/line1/city @NotBlank (120/32/
+    200/80), line2 200, district 80, postalCode 16, country `^[A-Z]{2}$` + @NotNull (user'da null → TR; burada zorunlu). Telefon biçim
+    kuralı yok (user'da da yok). Doğrulama hatası değer yansıtmaz (`errors[].field` + mesaj).
+  - Yeni: `OrderTotalTooLargeException` (IAE alt tipi), `OrderReasons.BOOK_NOT_AVAILABLE` / `PAYMENT_REJECTED`, `OrderErrorCode`,
+    `OrderProblemException(code, orderId?)`, `@CurrentUserId` + resolver + `WebConfig` (cart kopyası), `OrderTransactions`,
+    `OrderQueryService`, `CheckoutService`, `OrderController`, DTO'lar. `SecurityConfig` masker `/api/orders/checkout` + `/api/orders/{orderId}`.
+  - Değişen mevcut testler: `OrderServiceApplicationTests.noApplicationControllersYet` → `onlyOrderControllerIsExposed`;
+    `SecurityRulesTest` 404 örneği `/api/orders/olmayan-yol` → `/api/orders/olmayan/yol` (tek segment artık `{orderId}` → 400).
+  - Testler (order 427 → 489, +62): CheckoutHappyPathTest 5 (DB/history/kalemler, reserve/payment gövdeleri, amount JSON sayı 2 ondalık,
+    hiçbir alt isteğe Authorization yok, Initiated+succeeded yok sayılır, opsiyonel adres boş → null, bilinmeyen alan yok sayılır),
+    CheckoutBeforeOrderFailuresTest 33 (tüm kayıt öncesi kodlar + doğrulama; reserve/payment çağrılmadı, satır yok), CheckoutAfterOrderFailuresTest 12
+    (tüm reserve/payment varyantları, history pending→failed, orderId yanıtta), CheckoutPendingOrderTest 4 (eşzamanlı 2 checkout → 1×201 +
+    1×409 kazananın id'siyle, tek satır, tek reserve; pending → 409 → failed sonrası 201), OrderQueryTest 6, CheckoutLoggingTest 2.
+    Root verify: common 65, user 86, catalog 285, cart 321 (2 skipped), payment 367, order 489.
+  - Yerel uçtan uca (Docker user/catalog/cart/payment + `spring-boot:run` order; değer/id/token yazdırılmadı): kayıt 201 → sepete stokta
+    kitap 200 → checkout 201 pending (Location = id, stockState/paymentId yok, ~750 ms) → 1 sn sonra GET 200 pending; Catalog rezervasyonu
+    held; order satırı pending + held + paymentId dolu, 1 history; Payment kaydı succeeded (mock webhook) → ikinci checkout 409
+    ORDER_PENDING_EXISTS (orderId = ilki); başka kullanıcı GET 404 (`instance` `/api/orders/:orderId`); token'sız 401. Order logunda
+    yalnızca `Remote call ...` + `Checkout -> ORDER_PLACED/ORDER_PENDING_EXISTS` satırları, WARN/ERROR yok. e2e kullanıcısının siparişi
+    PENDING KALDI ve o kullanıcıyı engelliyor (tüketici Adım 6, timeout Adım 8).
+  - KARARLAR: (1) pending zaman aşımı 10 dk (Adım 8; rezervasyon TTL'i 15 dk'dan kısa, ödeme kurtarma ~40 sn'yi kapsar);
+    (2) Payment Unknown → sipariş pending kalır, Adım 8 aynı idempotent istekle yeniden başlatır; (3) commit'te `AlreadyReleased` için
+    ÖNERİ: V2 ile `stock_state 'lost'` (Adım 6 kararı).
+  - Sapmalar: bilinmeyen alan 400 değil YOK SAYILIR (mevcut servislerin politikası; testli); country zorunlu (user'da TR varsayılanı);
+    diğer OrderRuleViolation'lar 422 kendi koduyla; yeni failure kodları BOOK_NOT_AVAILABLE ve PAYMENT_REJECTED; Payment başka siparişin
+    paymentId'sini dönerse `uk_orders_payment` → 409 CONFLICT (sözleşme ihlali kenarı, systemPatterns'te).
 
 ## Sonraki adımlar
 - PROJE KARARI (Ekim 2026, UI paralel): UI (Angular 13) Order ile PARALEL başlıyor — ayrı agent, ayrı worktree
@@ -1218,7 +1273,7 @@
   - Önce kayıt sonra dış çağrı: sipariş satırı kendi TX'inde yazılır, sonra rezervasyon/ödeme çağrıları.
   - Stok commit/release Catalog internal HTTP ile (`/internal/stock/reservations/{orderId}/commit|release`).
 - Order planı: 0a common sertleştirme (YAPILDI) → 0b outbox → common (YAPILDI, push'landı) → 1 modül/db (YAPILDI, push'landı) → 2 domain (YAPILDI) → 3a Order istemcileri + CB (YAPILDI) → 3b Cart→Catalog CB (YAPILDI) → 4 checkout mutlu yol +
-  GET {id} → 5 hata yolları/telafi → 6 ödeme sonucu tüketicisi → 7 Cart CartCheckedOut tüketicisi → 8 timeout görevi → 9 liste →
+  GET {id} (YAPILDI) → 5 hata yolları/telafi → 6 ödeme sonucu tüketicisi → 7 Cart CartCheckedOut tüketicisi → 8 timeout görevi → 9 liste →
   10 OpenAPI/olay belgeleri → 11 Docker.
 - order-service eklenirken: `RequestPathMasker` bean'i (`/api/orders/{orderId}` vb.) ve `InternalAuthConfig` (gerekirse) — common
   politika aynen geçerli.
@@ -1248,12 +1303,13 @@
 - Açık konu (catalog OpenAPI): `/v3/api-docs` her profilde açık (user-service ile aynı) → internal uçların şekli de herkese görünür
   (sır yok); prod'da `SPRINGDOC_ENABLED=false` düşünülmeli.
 - Yeni servisler eklendikçe kök POM kontrol listesini uygula (bkz. systemPatterns.md; [5] common, [6] Dockerfile).
-- Order Adım 3a YAPILDI (commit `41d202c`, push edildi). Order Adım 3b YAPILDI (commit edilmedi). Sıradaki: Adım 4 checkout mutlu yol
-  + GET {id}. Adım 5 telafisi systemPatterns "Order istemcileri" NotPerformed/Unknown kuralına dayanır (Unknown → idempotent tekrar ya
+- Order Adım 3a YAPILDI (commit `41d202c`, push edildi). Order Adım 3b YAPILDI (commit `f651c07` + `8e3b037`). Order Adım 4 YAPILDI
+  (commit edilmedi; sözleşme — CheckoutRequest, OrderResponse, hata kodları — UI-7 için DONDURULDU, tablo yukarıda). Sıradaki: Adım 5
+  hata yolları/telafi (başarısız siparişte stok bırakma; Unknown reserve/payment netleştirme). Adım 5 telafisi systemPatterns "Order istemcileri" NotPerformed/Unknown kuralına dayanır (Unknown → idempotent tekrar ya
   da GET ile netleştirme).
 - AÇIK RİSK (Order Adım 6/8): commit'te `AlreadyReleased` (rezervasyon süresi doldu, 15m + görev ≤30 sn) → ödenmiş + stok bırakılmış
-  sipariş (paid + released) DB'de temsil edilemez; Adım 6'da karar (iade telafisi / ayrı durum), Adım 8'de pending zaman aşımı
-  rezervasyon süresinden KISA olmalı (ödeme kurtarma ~40 sn'yi de kapsayacak şekilde).
+  sipariş (paid + released) DB'de temsil edilemez; Adım 6'da karar (iade telafisi / ayrı durum; Adım 4 ÖNERİSİ: V2 `stock_state
+  'lost'`), Adım 8'de pending zaman aşımı rezervasyon süresinden KISA olmalı → KARAR 10 dk (ödeme kurtarma ~40 sn'yi de kapsar).
 - Backlog (catalog OpenAPI): lookup/rezervasyon yanıtındaki `status` kodda "mixed" üretebilir (satır durumları farklıysa,
   `StockReservationTransactions`), OpenAPI enum'unda YOK (Order → Unknown).
 - Order Adım 2 YAPILDI (commit `51feb91`, push edildi). Adım 4'te `RequestPathMasker` deseni `/api/orders/{orderId}`

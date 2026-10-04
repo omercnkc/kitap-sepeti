@@ -524,7 +524,7 @@
   aksi `succeeded()`. `MockOutcome(failureCode)` record'u (`isSucceeded()`; static `succeeded()` record accessor'ıyla çakıştığı için
   boolean bileşen yok).
 
-## order-service (Order Adım 1 iskeleti + Adım 2 domain + Adım 3a istemciler; port 8088, `order_db`)
+## order-service (Order Adım 1 iskeleti + Adım 2 domain + Adım 3a istemciler + Adım 4 checkout; port 8088, `order_db`)
 - İskelet = payment Adım 1 kalıbı + cart'ın Resource Server güvenliği (JwtDecoderConfig + `JwtSubjects`: sub katı UUID, değilse
   `BadJwtException` → 401). Zincir TEK: `/api/**` authenticated, health (GET) + `/v3/api-docs/**` + Swagger + `/error` permitAll,
   `anyRequest().denyAll()` (kimliksiz 401 + Bearer challenge, token'lı 403). Internal API zinciri YOK (order internal uç sunmaz;
@@ -562,8 +562,9 @@
   yakalamayla test edildi; DB default'una güvenilmez).
 - `Order.place(userId, cartId, currency, List<OrderLine>, AddressSnapshot, Clock)` → `OrderRuleViolation(code)` sırası:
   INVALID_CURRENCY (`^[A-Z]{3}$`) → EMPTY_ORDER → DUPLICATE_BOOK → satır başına INVALID_QUANTITY (1–99) / INVALID_PRICE (negatif,
-  > DECIMAL(12,2), 2'den fazla anlamlı ondalık; 10.000 kabul → 10.00, yuvarlama yok) → ORDER_TOTAL_ZERO. Boş/300'den uzun başlık ve
-  toplam > 9999999999.99 = IAE (programlama hatası; catalog/cart sınırları bunu dışlar). lineTotal = unitPrice × quantity, subtotal =
+  > DECIMAL(12,2), 2'den fazla anlamlı ondalık; 10.000 kabul → 10.00, yuvarlama yok) → ORDER_TOTAL_ZERO. Boş/300'den uzun başlık =
+  IAE (programlama hatası); toplam > 9999999999.99 = `OrderTotalTooLargeException` (IAE alt tipi, Adım 4; checkout 422
+  ORDER_TOTAL_TOO_LARGE). lineTotal = unitPrice × quantity, subtotal =
   Σ, discount 0.00, total = subtotal; PENDING + REQUESTED; ilk history `null → pending` `ORDER_PLACED`.
 - Geçiş tablosu (Clock parametre; APPLIED → updatedAt = clock; yalnızca markPaid/markFailed history yazar; APPLIED olmayan sonuç
   hiçbir alanı değiştirmez):
@@ -577,8 +578,8 @@
     PAID+REQUESTED (DB CHECK'i dışlar) → ISE.
   - `markStockReleased`: status ≠ FAILED (PENDING dahil) → CONFLICTING; REQUESTED/HELD → RELEASED APPLIED; RELEASED → ALREADY;
     COMMITTED → CONFLICTING.
-- `OrderReasons` (yalnızca sabit): ORDER_PLACED, PAYMENT_SUCCEEDED; failure kodları OUT_OF_STOCK, CATALOG_UNAVAILABLE,
-  PAYMENT_UNAVAILABLE, CARD_DECLINED, PAYMENT_FAILED, ORDER_EXPIRED.
+- `OrderReasons` (yalnızca sabit): ORDER_PLACED, PAYMENT_SUCCEEDED; failure kodları OUT_OF_STOCK, BOOK_NOT_AVAILABLE (Adım 4),
+  CATALOG_UNAVAILABLE, PAYMENT_UNAVAILABLE, PAYMENT_REJECTED (Adım 4), CARD_DECLINED, PAYMENT_FAILED, ORDER_EXPIRED.
 - `AddressSnapshot` record (user `addresses` alanları/uzunlukları: recipientName 120, phone 32, line1 200, line2? 200, district? 80,
   city 80, postalCode? 16, country `^[A-Z]{2}$`; label/id/userId/isDefault YOK). `toString()` = `AddressSnapshot[redacted]`, hata
   mesajları yalnızca alan adı. `OrderLine.toString()` = `OrderLine[redacted]`. Entity'lerde Lombok @ToString/@Data YOK (Object.toString).
@@ -630,9 +631,9 @@
   Adım 3b'den beri `common.resilience.CircuitBreakers` ile, ayarlar `app.circuit-breaker.*` (`common.resilience.CircuitBreakerProperties`,
   validated): COUNT_BASED pencere 20, en az 10 çağrı, %50 hata, 10 sn açık, yarı
   açıkta 3 çağrı, otomatik OPEN→HALF_OPEN kapalı, uygulama `Clock`'u (`CircuitBreakerConfig.Builder.clock`; test `MutableClock` ile ileri
-  sarar). Durum değişimi WARN `Circuit breaker <ad> <eski> -> <yeni>`. Spring Cloud CB kapalı: `spring.cloud.circuitbreaker.resilience4j.
-  enabled=false` (CircuitBreakerFactory bean'i yok), `spring.cloud.openfeign.circuitbreaker.enabled=false`; health/readiness'a girmez
-  (`management.health.circuitbreakers.enabled=false`; stub'lar kapalı + devreler açıkken readiness UP testli).
+  sarar). Durum değişimi WARN `Circuit breaker <ad> <eski> -> <yeni>`. Adım 4'ten beri pom'da yalnızca `resilience4j-circuitbreaker`
+  (+ core; cart ile aynı): Spring Cloud CB starter'ı ve onu kapatan üç ayar kaldırıldı; CircuitBreakerFactory bean'i yok, Feign CB
+  entegrasyonu kapalı (varsayılan), health/readiness'a girmez (stub'lar kapalı + devreler açıkken readiness UP testli).
 - Feign: JDK HttpClient (`feign-java11`; `spring.cloud.openfeign.http2client.enabled=true`, `httpclient.http2.version=HTTP_1_1`,
   `connection-timeout 1000`, `follow-redirects false`). NEDEN: varsayılan HttpURLConnection gövdeli POST'a gelen 401'de yanıt yerine
   `HttpRetryException` verir (anahtar reddi teknik hata gibi görünürdü). `client.config.{default,cart,catalog,payment}`: connect 1000,
@@ -655,6 +656,49 @@
   bölünür) + `@Primary MutableClock` (`TestClockConfiguration`). `client/ClientTestSupport` her testten önce stub'ları açar/sıfırlar,
   CB'leri `reset()`, saati sıfırlar. Sözleşme: `ClientContractTest` (OpenAPI'den okunan DTO alanları var + required + tip/format,
   iç içe kayıtlar; stub'ın ALDIĞI gövdeler mini şema doğrulayıcıyla; durum enum'ları; Problem kodları; lookup public; mutasyon testleri).
+
+### Checkout + sipariş okuma (Order Adım 4; `controller/OrderController`, `service/`)
+- Uçlar (Bearer, USER sub = userId; `@CurrentUserId` cart kopyası): `POST /api/orders/checkout` → 201 + `Location: /api/orders/{id}` +
+  `OrderResponse`; `GET /api/orders/{orderId}` → 200 yalnızca sahibine; başkasının/olmayan → 404 ORDER_NOT_FOUND (403 değil, varlık
+  sızmaz); geçersiz UUID → 400 MALFORMED_REQUEST (common). Masker: `RequestPathMasker.of("/api/orders/checkout", "/api/orders/{orderId}")`
+  (literal desen değişkenliyi yener; checkout `:orderId` olmaz).
+- `CheckoutRequest(@NotNull @Valid AddressRequest address)`; `AddressRequest` = user-service `AddressRequest` kuralları (recipientName
+  @NotBlank 120, phone @NotBlank 32 — biçim kuralı YOK, line1 @NotBlank 200, line2 200, district 80, city @NotBlank 80, postalCode 16,
+  country `^[A-Z]{2}$`) + country `@NotNull` (user'da null → TR varsayılanı; burada zorunlu). Boş opsiyonel alan → null. Bilinmeyen
+  alan YOK SAYILIR (tüm servislerin Jackson politikası; testli). `toString` maskeli.
+- `OrderResponse`: id, status (küçük harf dbValue), failureCode?, currency, subtotal, discountAmount, totalAmount (BigDecimal, scale 2 →
+  JSON sayı `149.90`, Cart ile aynı), items[bookId, title, quantity, unitPrice, lineTotal], address (8 alan), createdAt, updatedAt.
+  stockState, paymentId, userId, cartId YOK. `OrderResponse.of(Order)` TX içinde (kalemler lazy).
+- `CheckoutService` TX AÇMAZ; DB işleri `OrderTransactions`'ta (`@Transactional(isolation = READ_COMMITTED)`: insert = saveAndFlush,
+  markStockHeld / markFailed / attachPayment = `findByIdForUpdate` + geçiş + flush → `Transition(result, OrderResponse)`; salt okunur
+  `findPendingOrderId`, `findOwned`). Dış çağrılar hiçbir TX içinde değil. Sıra:
+  1. pending var → 409 ORDER_PENDING_EXISTS + `orderId` (Cart çağrılmaz).
+  2. Cart snapshot: Empty → 422 CART_EMPTY; Unavailable → 503 CART_UNAVAILABLE.
+  3. Catalog lookup: Unavailable → 503 CATALOG_UNAVAILABLE; bulunamadı/inStock=false → 409 BOOK_NOT_AVAILABLE (kitap id'si yanıtta
+     yok); birden fazla para birimi → 422 MIXED_CURRENCY.
+  4. `Order.place` (fiyat + başlık Catalog'dan, adet Cart'tan): OrderRuleViolation → 422 kod adıyla (ORDER_TOTAL_ZERO, INVALID_PRICE,
+     INVALID_CURRENCY, INVALID_QUANTITY, DUPLICATE_BOOK, EMPTY_ORDER); `OrderTotalTooLargeException` → 422 ORDER_TOTAL_TOO_LARGE.
+  5. TX1 insert (pending + requested). `uk_orders_pending_user` yarışı → kazananın id'si okunur → 409 + orderId.
+  6. Catalog reserve: Reserved → TX2 markStockHeld; Insufficient → failed(OUT_OF_STOCK) 409 INSUFFICIENT_STOCK; NotSellable →
+     failed(BOOK_NOT_AVAILABLE) 409 BOOK_NOT_AVAILABLE; NotHeld/Rejected (ERROR log) ve NotPerformed/Unknown → failed(CATALOG_UNAVAILABLE)
+     503 CATALOG_UNAVAILABLE. Payment çağrılmaz; stok bırakma Adım 5 (şimdilik Catalog TTL'i bırakır).
+  7. Payment initiate(orderId, userId, total, currency): Initiated → TX3 attachPayment (dönen ödeme durumu yok sayılır, sonuç olaydan
+     gelir); Unknown → pending + held, paymentId null, 201 + WARN; NotPerformed → failed(PAYMENT_UNAVAILABLE) 503; Rejected →
+     failed(PAYMENT_REJECTED) 503 PAYMENT_UNAVAILABLE + ERROR. Stok held kalır (Adım 5 bırakır).
+  Kayıt sonrası hatalar `OrderProblemException(code, orderId)` → ProblemDetail'de `orderId`. Kayıt sonrası geçiş APPLIED değilse
+  exception yok: WARN `Checkout <adım> was not applied (result=…, status=…)` + güncel sipariş döner.
+- Hata kodları `exception/OrderErrorCode` (ErrorCode): 404 ORDER_NOT_FOUND; 409 ORDER_PENDING_EXISTS, BOOK_NOT_AVAILABLE,
+  INSUFFICIENT_STOCK; 422 CART_EMPTY, MIXED_CURRENCY, ORDER_TOTAL_ZERO, ORDER_TOTAL_TOO_LARGE, EMPTY_ORDER, DUPLICATE_BOOK,
+  INVALID_QUANTITY, INVALID_PRICE, INVALID_CURRENCY; 503 CART_UNAVAILABLE, CATALOG_UNAVAILABLE, PAYMENT_UNAVAILABLE (WARN). Diğerleri INFO.
+  `GlobalExceptionHandler.addProperties` → `orderId`; `classify`: `uk_orders_pending_user` → ORDER_PENDING_EXISTS (başka kısıt → common 409 CONFLICT).
+- Log: checkout başına TEK INFO `Checkout -> <SONUÇ> (durationMs=n)` (SONUÇ = ORDER_PLACED | hata kodu | INTERNAL_ERROR; doğrulama
+  hatası servise ulaşmaz → özet yok). id, tutar, adres, kitap listesi hiçbir satırda yok (testli: happy + hata yolları).
+- Bilinen kenar: Payment başka siparişin paymentId'sini dönerse (sözleşme ihlali) attachPayment `uk_orders_payment` → 409 CONFLICT
+  (orderId'siz), sipariş pending + held + paymentId null kalır (Adım 8 kapsar). Testte her sipariş için ayrı paymentId stub'lanmalı.
+- Test tabanı `controller/CheckoutTestSupport` (ApiTestSupport alt sınıfı): test başına rastgele kullanıcı (pending kuralı testler
+  arası çakışmaz), stub'lar sıfır + CB reset; WireMock response templating (`{{jsonPath request.body '$.orderId'}}` +
+  `withTransformers("response-template")`, yerel transformer varsayılan açık) ile yanıt istekteki siparişe ait. Reserve NotPerformed:
+  gecikmeli lookup sırasında catalog CB `transitionToForcedOpenState()`. Yarış: gecikmeli lookup (iki istek de pending kontrolünü geçer).
 
 ## Aggregate entity'leri (cart-service)
 - Aggregate root (`Cart`) satırları `@OneToMany(mappedBy, cascade = ALL, orphanRemoval = true)` + `@OrderBy` ile `List`'te tutar;
