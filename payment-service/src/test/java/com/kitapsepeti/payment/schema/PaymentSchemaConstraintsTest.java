@@ -34,7 +34,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * V1 şemasının yapısını ve kısıtlarının DB seviyesinde uygulandığını doğrular (entity yok, düz SQL).
+ * V1 şemasının (V2 collation değişikliğiyle) yapısını ve kısıtlarının DB seviyesinde uygulandığını doğrular
+ * (entity yok, düz SQL).
  * Her test kendi transaction'ında koşar ve geri alınır.
  */
 @JdbcTest
@@ -54,15 +55,15 @@ class PaymentSchemaConstraintsTest {
 	private JdbcTemplate jdbc;
 
 	@Test
-	void flywayAppliesV1AndCreatesOnlyPaymentTables() {
-		Integer applied = jdbc.queryForObject(
-				"SELECT COUNT(*) FROM flyway_schema_history WHERE version = '1' AND success = 1", Integer.class);
+	void flywayAppliesV1AndV2AndCreatesOnlyPaymentTables() {
+		List<String> applied = jdbc.queryForList(
+				"SELECT version FROM flyway_schema_history WHERE success = 1 ORDER BY installed_rank", String.class);
 		List<Map<String, Object>> tables = jdbc.queryForList("""
 				SELECT table_name AS name, engine AS eng, table_collation AS collation FROM information_schema.tables
 				WHERE table_schema = DATABASE() AND table_name <> 'flyway_schema_history'
 				""");
 
-		assertThat(applied).isEqualTo(1);
+		assertThat(applied).containsExactly("1", "2");
 		// Takma adlar küçük harf: satır map'i anahtarı JVM locale'iyle küçültür (tr-TR'de "ENGINE" → "engıne").
 		assertThat(tables).extracting(t -> t.get("name"), t -> t.get("eng"), t -> t.get("collation"))
 			.containsExactlyInAnyOrder(tuple("payments", "InnoDB", "utf8mb4_0900_ai_ci"),
@@ -97,8 +98,9 @@ class PaymentSchemaConstraintsTest {
 				tuple("processed_at", "datetime(6)", "NO", null, ""));
 	}
 
+	/** Enum benzeri kolonlar V1'den, sağlayıcı kimlikleri V2'den beri {@code utf8mb4_bin}. */
 	@Test
-	void enumLikeColumnsUseBinaryCollation() {
+	void enumLikeAndProviderIdColumnsUseBinaryCollation() {
 		List<Map<String, Object>> collations = jdbc.queryForList("""
 				SELECT table_name AS t, column_name AS c, collation_name AS coll FROM information_schema.columns
 				WHERE table_schema = DATABASE() AND table_name IN ('payments', 'provider_events', 'outbox')
@@ -108,12 +110,12 @@ class PaymentSchemaConstraintsTest {
 		assertThat(collations).extracting(c -> c.get("t"), c -> c.get("c"), c -> c.get("coll"))
 			.containsExactlyInAnyOrder(
 					tuple("payments", "provider", "utf8mb4_bin"),
-					tuple("payments", "provider_payment_id", "utf8mb4_0900_ai_ci"),
+					tuple("payments", "provider_payment_id", "utf8mb4_bin"),
 					tuple("payments", "currency", "utf8mb4_bin"),
 					tuple("payments", "status", "utf8mb4_bin"),
 					tuple("payments", "failure_code", "utf8mb4_0900_ai_ci"),
 					tuple("provider_events", "provider", "utf8mb4_bin"),
-					tuple("provider_events", "provider_event_id", "utf8mb4_0900_ai_ci"),
+					tuple("provider_events", "provider_event_id", "utf8mb4_bin"),
 					tuple("provider_events", "event_type", "utf8mb4_bin"),
 					tuple("outbox", "aggregate_type", "utf8mb4_0900_ai_ci"),
 					tuple("outbox", "event_type", "utf8mb4_0900_ai_ci"));
@@ -314,6 +316,18 @@ class PaymentSchemaConstraintsTest {
 				"uk_payments_provider_ref");
 	}
 
+	/** V2: harf büyüklüğü farklı iki sağlayıcı referansı farklı ödemelerdir. */
+	@Test
+	void providerReferencesDifferingOnlyInCaseDoNotCollide() {
+		insertPayment(newId(), "stripe", "pi_3Abc", "10.00", "TRY", "initiated", null);
+		insertPayment(newId(), "stripe", "pi_3abc", "10.00", "TRY", "initiated", null);
+
+		assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM payments WHERE provider_payment_id = 'pi_3abc'",
+				Integer.class)).isEqualTo(1);
+		assertDuplicate(() -> insertPayment(newId(), "stripe", "pi_3Abc", "10.00", "TRY", "initiated", null),
+				"uk_payments_provider_ref");
+	}
+
 	@Test
 	void sameReferenceUnderAnotherProviderIsAccepted() {
 		insertPayment(newId(), "mock", "ref_1", "10.00", "TRY", "initiated", null);
@@ -340,6 +354,17 @@ class PaymentSchemaConstraintsTest {
 		assertDuplicate(() -> insertEvent("mock", "evt_1", paymentId, "payment.succeeded"),
 				"uk_provider_events_provider_event");
 		insertEvent("stripe", "evt_1", paymentId, "payment.succeeded");
+	}
+
+	/** V2: olay kimlikleri de harf büyüklüğüne duyarlı. */
+	@Test
+	void providerEventIdsDifferingOnlyInCaseDoNotCollide() {
+		byte[] paymentId = insertPayment(newId(), "mock", null, "10.00", "TRY", "initiated", null);
+		insertEvent("mock", "evt_Case", paymentId, "payment.succeeded");
+		insertEvent("mock", "evt_case", paymentId, "payment.succeeded");
+
+		assertDuplicate(() -> insertEvent("mock", "evt_Case", paymentId, "payment.failed"),
+				"uk_provider_events_provider_event");
 	}
 
 	@Test

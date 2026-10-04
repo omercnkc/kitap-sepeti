@@ -3,6 +3,8 @@ package com.kitapsepeti.payment;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Clock;
@@ -14,48 +16,32 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.ApplicationContext;
-import org.springframework.context.annotation.Import;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.http.HttpHeaders;
 import org.springframework.util.ClassUtils;
 
-/** Bağlam açılır, Flyway V1 uygulanır, ddl validate geçer; güvenlik/amqp/feign henüz yok. */
-@SpringBootTest
-@AutoConfigureMockMvc
-@ActiveProfiles("test")
-@Import(TestcontainersConfiguration.class)
-class PaymentServiceApplicationTests {
-
-	@Autowired
-	private MockMvc mockMvc;
-
-	@Autowired
-	private JdbcTemplate jdbc;
+/** Bağlam açılır, Flyway V1 + V2 uygulanır, ddl validate geçer; amqp/feign/springdoc henüz yok. */
+class PaymentServiceApplicationTests extends ApiTestSupport {
 
 	@Autowired
 	private ApplicationContext context;
 
 	@Test
-	void contextLoadsAndFlywayAppliedV1() {
-		assertThat(jdbc.queryForObject(
-				"SELECT COUNT(*) FROM flyway_schema_history WHERE version = '1' AND success = 1", Integer.class))
-			.isEqualTo(1);
+	void contextLoadsAndFlywayAppliedV1AndV2() {
+		assertThat(jdbc.queryForList(
+				"SELECT version FROM flyway_schema_history WHERE success = 1 ORDER BY installed_rank", String.class))
+			.containsExactly("1", "2");
 	}
 
 	@Test
 	void singleMockProviderAndUtcClock() {
 		assertThat(context.getBeansOfType(PaymentProvider.class)).hasSize(1);
-		assertThat(context.getBean(PaymentProvider.class).type()).isEqualTo(PaymentProviderType.MOCK);
+		assertThat(provider.type()).isEqualTo(PaymentProviderType.MOCK);
 		assertThat(context.getBean(Clock.class).getZone()).isEqualTo(ZoneOffset.UTC);
 	}
 
 	@ParameterizedTest
-	@ValueSource(strings = { "org.springframework.security.web.SecurityFilterChain",
-			"org.springframework.amqp.rabbit.core.RabbitTemplate",
+	@ValueSource(strings = { "org.springframework.amqp.rabbit.core.RabbitTemplate",
 			"org.springframework.cloud.openfeign.FeignClient",
 			"org.springdoc.core.configuration.SpringDocConfiguration" })
 	void laterStepDependenciesAreNotOnClasspath(String className) {
@@ -75,10 +61,14 @@ class PaymentServiceApplicationTests {
 			.andExpect(content().json("{\"status\":\"UP\"}", true));
 	}
 
+	/** Güvenlik eklenince (Adım 3) diğer actuator yolları varsayılan zincirin denyAll'una takılır: 403, challenge yok. */
 	@ParameterizedTest
 	@ValueSource(strings = { "/actuator", "/actuator/env", "/actuator/beans", "/actuator/info", "/actuator/metrics" })
-	void otherActuatorEndpointsAreNotExposed(String path) throws Exception {
-		mockMvc.perform(get(path)).andExpect(status().isNotFound());
+	void otherActuatorEndpointsAreDenied(String path) throws Exception {
+		mockMvc.perform(get(path))
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.code").value("FORBIDDEN"))
+			.andExpect(header().doesNotExist(HttpHeaders.WWW_AUTHENTICATE));
 	}
 
 }

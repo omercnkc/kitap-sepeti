@@ -129,7 +129,23 @@ class PaymentRepositoryTest {
 			.extracting(Payment::getId).isEqualTo(payment.getId());
 		assertThat(payments.findByProviderTypeAndProviderPaymentId(PaymentProviderType.STRIPE, "mock_find")).isEmpty();
 		assertThat(payments.findByProviderTypeAndProviderPaymentId(PaymentProviderType.MOCK, "MOCK_FIND"))
-			.as("referans büyük/küçük harf duyarlı değil: kolon _ai_ci").isPresent();
+			.as("referans büyük/küçük harfe duyarlı: kolon utf8mb4_bin (V2)").isEmpty();
+	}
+
+	@Test
+	void referencesDifferingOnlyInCaseAreDistinctPayments() {
+		Payment lower = initiate(BigDecimal.TEN);
+		lower.attachProviderReference("mock_case", T1);
+		payments.saveAndFlush(lower);
+		Payment upper = Payment.initiate(UUID.randomUUID(), userId, BigDecimal.TEN, "TRY", PaymentProviderType.MOCK, T1);
+		upper.attachProviderReference("MOCK_CASE", T1);
+		payments.saveAndFlush(upper);
+		entityManager.clear();
+
+		assertThat(payments.findByProviderTypeAndProviderPaymentId(PaymentProviderType.MOCK, "mock_case")).get()
+			.extracting(Payment::getId).isEqualTo(lower.getId());
+		assertThat(payments.findByProviderTypeAndProviderPaymentId(PaymentProviderType.MOCK, "MOCK_CASE")).get()
+			.extracting(Payment::getId).isEqualTo(upper.getId());
 	}
 
 	@Test

@@ -27,6 +27,12 @@ spring:
     locations: classpath:db/migration
 
 app:
+  # /internal/** istemcileri. Ham anahtar burada değil; yalnızca SHA-256 özeti (64 hex). Özet yok/boş/bozuksa
+  # uygulama açılmaz (InternalAuthConfig).
+  internal-auth:
+    clients:
+      - name: order-service
+        key-sha256: ${PAYMENT_INTERNAL_KEY_ORDER_SHA256:}
   payment:
     # v1'de yalnızca mock; başka değerle uygulama açılmaz (PaymentConfig).
     provider: mock
