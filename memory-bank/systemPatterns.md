@@ -670,26 +670,73 @@
   JSON sayı `149.90`, Cart ile aynı), items[bookId, title, quantity, unitPrice, lineTotal], address (8 alan), createdAt, updatedAt.
   stockState, paymentId, userId, cartId YOK. `OrderResponse.of(Order)` TX içinde (kalemler lazy).
 - `CheckoutService` TX AÇMAZ; DB işleri `OrderTransactions`'ta (`@Transactional(isolation = READ_COMMITTED)`: insert = saveAndFlush,
-  markStockHeld / markFailed / attachPayment = `findByIdForUpdate` + geçiş + flush → `Transition(result, OrderResponse)`; salt okunur
-  `findPendingOrderId`, `findOwned`). Dış çağrılar hiçbir TX içinde değil. Sıra:
+  markStockHeld / markFailed / markStockReleased / attachPayment = `findByIdForUpdate` + geçiş + flush → `Transition(result, OrderResponse)`;
+  salt okunur `findPendingOrderId`, `findOwned`). Dış çağrılar hiçbir TX içinde değil. Sıra:
   1. pending var → 409 ORDER_PENDING_EXISTS + `orderId` (Cart çağrılmaz).
   2. Cart snapshot: Empty → 422 CART_EMPTY; Unavailable → 503 CART_UNAVAILABLE.
   3. Catalog lookup: Unavailable → 503 CATALOG_UNAVAILABLE; bulunamadı/inStock=false → 409 BOOK_NOT_AVAILABLE (kitap id'si yanıtta
      yok); birden fazla para birimi → 422 MIXED_CURRENCY.
   4. `Order.place` (fiyat + başlık Catalog'dan, adet Cart'tan): OrderRuleViolation → 422 kod adıyla (ORDER_TOTAL_ZERO, INVALID_PRICE,
      INVALID_CURRENCY, INVALID_QUANTITY, DUPLICATE_BOOK, EMPTY_ORDER); `OrderTotalTooLargeException` → 422 ORDER_TOTAL_TOO_LARGE.
-  5. TX1 insert (pending + requested). `uk_orders_pending_user` yarışı → kazananın id'si okunur → 409 + orderId.
+  5. TX1 insert (pending + requested). `uk_orders_pending_user` yarışı → kazananın id'si okunur → 409 + orderId. DB hatası (non-uk) →
+     503 ORDER_UNAVAILABLE (Adım 5, 2.e).
   6. Catalog reserve: Reserved → TX2 markStockHeld; Insufficient → failed(OUT_OF_STOCK) 409 INSUFFICIENT_STOCK; NotSellable →
      failed(BOOK_NOT_AVAILABLE) 409 BOOK_NOT_AVAILABLE; NotHeld/Rejected (ERROR log) ve NotPerformed/Unknown → failed(CATALOG_UNAVAILABLE)
-     503 CATALOG_UNAVAILABLE. Payment çağrılmaz; stok bırakma Adım 5 (şimdilik Catalog TTL'i bırakır).
+     503 CATALOG_UNAVAILABLE. Her durumda satır içi stok release çağrılır (Adım 5).
   7. Payment initiate(orderId, userId, total, currency): Initiated → TX3 attachPayment (dönen ödeme durumu yok sayılır, sonuç olaydan
      gelir); Unknown → pending + held, paymentId null, 201 + WARN; NotPerformed → failed(PAYMENT_UNAVAILABLE) 503; Rejected →
-     failed(PAYMENT_REJECTED) 503 PAYMENT_UNAVAILABLE + ERROR. Stok held kalır (Adım 5 bırakır).
+     failed(PAYMENT_REJECTED) 503 PAYMENT_UNAVAILABLE + ERROR. NotPerformed/Rejected durumunda satır içi stok release çağrılır (Adım 5).
   Kayıt sonrası hatalar `OrderProblemException(code, orderId)` → ProblemDetail'de `orderId`. Kayıt sonrası geçiş APPLIED değilse
   exception yok: WARN `Checkout <adım> was not applied (result=…, status=…)` + güncel sipariş döner.
+
+### Telafi ve Yarıda Kesilme (Order Adım 5; `CheckoutService`, `OrderTransactions`)
+- **Temel Kural:** Para işin içindeyse sipariş failed YAPILMAZ; stok işin içindeyse hemen release denenir.
+- **Satır İçi Stok Release:**
+  - Ne zaman: Kayıt sonrası siparişin `failed` yapıldığı her durumda (reserve: Insufficient, NotSellable, NotHeld, Rejected,
+    NotPerformed, Unknown; payment: NotPerformed, Rejected).
+  - Çağrı TX DIŞINDA: Catalog `release(orderId)` (tek tip çağrı; Insufficient'ta Catalog 404 RESOURCE_NOT_FOUND → Released döner).
+  - Sonuca göre:
+    - `Released` → TX (FOR UPDATE): `markStockReleased(orderId)` (stock_state = `released`). APPLIED değilse WARN, exception yok.
+    - `AlreadyCommitted` → ERROR logu (olmaması gereken durum), stok durumu değişmez.
+    - `NotPerformed` / `Unknown` / `Rejected` → stok requested/held kalır, WARN (Adım 6 StockSyncJob / Adım 8 toplar).
+  - HTTP yanıtı release sonucundan ETKİLENMEZ (Adım 4'teki kodlar aynen döner).
+- **Yarıda Kesilme Senaryoları (OrderTransactions beklenmeyen DB hatası / lock timeout vb.):**
+  - **a. Rezervasyon başarılı ama `markStockHeld` TX'i başarısız:**
+    - best-effort `markFailed(CHECKOUT_INTERRUPTED)` (o da başarısız olabilir).
+    - best-effort Catalog `release(orderId)`; `markStockReleased` yalnızca markFailed başarılıysa çağrılır.
+    - 503 `CHECKOUT_INTERRUPTED` + `orderId`.
+    - DB'de kalan: markFailed başarılıysa `failed + released`; markFailed da çökerse `pending + requested` (Adım 8 toplar).
+  - **b. Payment Initiated ama `attachPayment` TX'i başarısız (`uk_orders_payment` ihlali dahil):**
+    - Sipariş failed YAPILMAZ (para işin içinde).
+    - ERROR logu (`uk_orders_payment` ihlali) / WARN (diğer DB hataları), id'siz/tutarsız.
+    - 201 Created + siparişin bilinen durumu (`pending`).
+    - Sipariş DB'den okunamıyorsa (DB tamamen göçtüyse): 503 `CHECKOUT_INTERRUPTED` + `orderId` (raporla).
+  - **c. Reserve başarısızlığından sonra `markFailed` TX'i başarısız:**
+    - Catalog release yine denenir (stok durumu DB'ye yazılamaz).
+    - Yanıt Adım 4'teki koddur (409/503 + `orderId`).
+    - DB'de sipariş `pending + requested` kalır (Adım 8 toplar).
+  - **d. Payment NotPerformed/Rejected sonrası `markFailed` başarısız:**
+    - Release DENENMEZ (sipariş pending göründüğü için Adım 8 uzlaştırması Payment'a sorar).
+    - Yanıt Adım 4'teki kod (503 PAYMENT_UNAVAILABLE + `orderId`).
+    - DB'de sipariş `pending + held` kalır (Adım 8 toplar).
+  - **e. TX1 (insert) uk dışı bir DB hatası:**
+    - Hiçbir dış çağrı yapılmadan 503 `ORDER_UNAVAILABLE` (sipariş yok, orderId yok).
+- **Log Hijyeni:** Tüm telafi yollarında tek satır log: `Stock compensation -> <ResultName> (durationMs=n)`. id, tutar, kitap id'si, adres ASLA yer almaz.
+- **Hata Kodları ve Neden Sabitleri:**
+  - `OrderReasons.CHECKOUT_INTERRUPTED = "CHECKOUT_INTERRUPTED"` (failure_code).
+  - `OrderErrorCode.ORDER_UNAVAILABLE` (503 SERVICE_UNAVAILABLE, WARN).
+  - `OrderErrorCode.CHECKOUT_INTERRUPTED` (503 SERVICE_UNAVAILABLE, WARN).
+
+### Adım 8 Pending Uzlaştırma Planı (Plan Değişikliği)
+Eskimiş `pending` siparişlerde:
+1. `held` ise: Payment'a aynı initiate isteğini atar (dönen succeeded/failed → olayla aynı geçiş; kaybolan RabbitMQ olaylarını da kapatır).
+2. `requested` ise: `CHECKOUT_INTERRUPTED` + Catalog release yapar.
+3. 10 dk sonunda: `ORDER_EXPIRED` + Catalog release yapar.
+(Adım 5'te scheduler/job YOKTUR; yalnızca Adım 5'in bıraktığı kalıntılar Adım 8 tarafından tutarlı biçimde toplanacak durumdadır).
+
 - Hata kodları `exception/OrderErrorCode` (ErrorCode): 404 ORDER_NOT_FOUND; 409 ORDER_PENDING_EXISTS, BOOK_NOT_AVAILABLE,
   INSUFFICIENT_STOCK; 422 CART_EMPTY, MIXED_CURRENCY, ORDER_TOTAL_ZERO, ORDER_TOTAL_TOO_LARGE, EMPTY_ORDER, DUPLICATE_BOOK,
-  INVALID_QUANTITY, INVALID_PRICE, INVALID_CURRENCY; 503 CART_UNAVAILABLE, CATALOG_UNAVAILABLE, PAYMENT_UNAVAILABLE (WARN). Diğerleri INFO.
+  INVALID_QUANTITY, INVALID_PRICE, INVALID_CURRENCY; 503 CART_UNAVAILABLE, CATALOG_UNAVAILABLE, PAYMENT_UNAVAILABLE, ORDER_UNAVAILABLE, CHECKOUT_INTERRUPTED (WARN). Diğerleri INFO.
   `GlobalExceptionHandler.addProperties` → `orderId`; `classify`: `uk_orders_pending_user` → ORDER_PENDING_EXISTS (başka kısıt → common 409 CONFLICT).
 - Log: checkout başına TEK INFO `Checkout -> <SONUÇ> (durationMs=n)` (SONUÇ = ORDER_PLACED | hata kodu | INTERNAL_ERROR; doğrulama
   hatası servise ulaşmaz → özet yok). id, tutar, adres, kitap listesi hiçbir satırda yok (testli: happy + hata yolları).

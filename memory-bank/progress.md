@@ -165,7 +165,7 @@
 - Cart ertelenenler: CartCheckedOut tüketimi (Order Adım 7); Catalog OpenAPI nullable. (Yol maskeleme + özet politikası common'a
   taşındı → Order Adım 0a.)
 - Order planı (PROJE KARARI, Ekim 2026): 0a common sertleştirme (yapıldı) → 0b outbox → common (yapıldı) → 1 modül/db (yapıldı) → 2 domain (yapıldı) → 3a Order istemcileri + CB (yapıldı)
-  → 3b Cart→Catalog CB (yapıldı) → 4 checkout mutlu yol + GET {id} (yapıldı) → 5 hata yolları/telafi → 6 ödeme sonucu tüketicisi → 7 Cart CartCheckedOut tüketicisi → 8 timeout
+  → 3b Cart→Catalog CB (yapıldı) → 4 checkout mutlu yol + GET {id} (yapıldı) → 5 hata yolları/telafi (YAPILDI: satır içi stok release, yarıda kesilme senaryoları a-e, 541 test) → 6 ödeme sonucu tüketicisi → 7 Cart CartCheckedOut tüketicisi → 8 timeout
   görevi → 9 liste → 10 OpenAPI/olay belgeleri → 11 Docker. Kararlar activeContext "Sonraki adımlar"da.
 - Gateway fazı: docs/Swagger'ı (dört servis) dışarıya kapatmak.
 - order-service (catalog rezervasyon istemcisi).
@@ -181,9 +181,9 @@
 ## Bilinen sorunlar
 - AÇIK RİSK (Order): commit'te `AlreadyReleased` (rezervasyon süresi 15m doldu) → paid + released DB'de temsil edilemez. ÖNERİ
   (Adım 6 kararı): V2 ile `stock_state 'lost'`. Pending zaman aşımı KARARI 10 dk (Adım 8; < 15 dk rezervasyon süresi).
-- Order (Adım 4 sonrası, Adım 5'e kadar): kayıt sonrası başarısız siparişlerde stok bırakılmıyor (`requested`/`held` kalır; Catalog
-  rezervasyon TTL'i ~15 dk sonra bırakır). Payment Unknown → sipariş pending + held, paymentId null (Adım 8 aynı istekle yeniden dener).
-  Ödeme sonucu tüketicisi yok → başarılı ödemede de sipariş pending kalır ve kullanıcının yeni checkout'unu engeller (Adım 6).
+- Order (Adım 5 sonrası): Kayıt sonrası başarısız siparişlerde stok satır içi telafi (`releaseStock`) ile serbest bırakılır.
+  Yarıda kesilme durumlarında (a-e) sipariş ve stok tutarlı bırakılır; `pending + requested/held` kalıntıları Adım 8 uzlaştırma
+  görevi tarafından toplanacaktır. Ödeme sonucu tüketicisi henüz yok → başarılı ödemede de sipariş pending kalır ve kullanıcının yeni checkout'unu engeller (Adım 6).
 - Kök `/actuator/health` (catalog ve payment) RabbitMQ kapalıyken 503 DOWN ve her çağrıda stack trace'li WARN
   (RabbitHealthIndicator); readiness etkilenmez. Healthcheck'ler readiness kullanmalı.
 - payment: aynı siparişe eşzamanlı ilk isteklerde sağlayıcı birden fazla çağrılabilir (yalnızca ilk referans yazılır, diğerleri WARN ile

@@ -42,6 +42,9 @@
   spring-cloud-starter-openfeign, feign-java11 (JDK HttpClient), resilience4j-circuitbreaker (Adım 4'ten beri; Spring Cloud CB
   starter'ı kaldırıldı, cart ile aynı) (Spring Cloud 2025.1.3 BOM: OpenFeign 5.0.3, feign 13.6.1, resilience4j 2.3.0); test
   wiremock-standalone 3.13.1 (sürüm servis pom'unda). Uçlar (Adım 4): `POST /api/orders/checkout`, `GET /api/orders/{orderId}`.
+  Adım 5 ile gelenler: satır içi stok release (`releaseStock`), yarıda kesilme (interrupted checkout a-e) yönetimi,
+  `OrderReasons.CHECKOUT_INTERRUPTED` ("CHECKOUT_INTERRUPTED"), `OrderErrorCode.ORDER_UNAVAILABLE` (503),
+  `OrderErrorCode.CHECKOUT_INTERRUPTED` (503).
   Yerel uçtan uca: Docker'da user/catalog/cart/payment + `spring-boot:run` order (compose host portlarına localhost'tan bağlanır);
   kontrol script'i `.env`'yi Ordinal okur, değer yazdırmaz; DB sorgusu `$env:MYSQL_PWD` + `docker compose exec -T -e MYSQL_PWD mysql
   mysql -u<kullanıcı> <db> -N` (SQL stdin'den).

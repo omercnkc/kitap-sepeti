@@ -1197,33 +1197,63 @@
     5.'inde açıldı (pencere kurulum çağrılarını da sayar; kural aynı); Order baz sayısı 426 değil 427.
   - (3b commit edildi: `f651c07` + `8e3b037`.)
 
-- Order Adım 4 — checkout mutlu yol + `GET /api/orders/{orderId}` (COMMIT EDİLMEDİ; V1, diğer servisler değişmedi). Ayrıntılı akış:
-  systemPatterns "Checkout + sipariş okuma".
-  - 0. Temizlik: order pom'undan `spring-cloud-starter-circuitbreaker-resilience4j` → `resilience4j-circuitbreaker` (ağaçta yalnızca
-    circuitbreaker + core); application.yml'den `spring.cloud.circuitbreaker.resilience4j.enabled`, `spring.cloud.openfeign.circuitbreaker.enabled`,
-    `management.health.circuitbreakers.enabled` silindi. CB testleri değişmedi; `ClientLoggingTest` openfeign CB ayarını varsayılan false
-    ile okuyor.
-  - Hata tablosu (durum × HTTP × code × sipariş yazıldı mı):
-    | Durum | HTTP | code | Sipariş |
-    |---|---|---|---|
-    | Bekleyen sipariş var (kontrol ya da `uk_orders_pending_user` yarışı) | 409 | ORDER_PENDING_EXISTS (+orderId) | Hayır |
-    | Sepet yok/boş | 422 | CART_EMPTY | Hayır |
-    | Cart erişilemez | 503 | CART_UNAVAILABLE | Hayır |
-    | Lookup erişilemez (CB açık dahil) | 503 | CATALOG_UNAVAILABLE | Hayır |
-    | Kitap bulunamadı / stokta değil (lookup) | 409 | BOOK_NOT_AVAILABLE | Hayır |
-    | Farklı para birimleri | 422 | MIXED_CURRENCY | Hayır |
-    | Toplam 0 | 422 | ORDER_TOTAL_ZERO | Hayır |
-    | Toplam > 9999999999.99 | 422 | ORDER_TOTAL_TOO_LARGE | Hayır |
-    | Diğer Order.place ihlalleri | 422 | INVALID_PRICE / INVALID_CURRENCY / INVALID_QUANTITY / DUPLICATE_BOOK / EMPTY_ORDER | Hayır |
-    | Doğrulama / bozuk JSON / token yok | 400 / 400 / 401 | VALIDATION_FAILED / MALFORMED_REQUEST / UNAUTHORIZED | Hayır |
-    | Reserve Insufficient | 409 | INSUFFICIENT_STOCK (+orderId) | Evet, failed OUT_OF_STOCK, stok requested |
-    | Reserve NotSellable | 409 | BOOK_NOT_AVAILABLE (+orderId) | Evet, failed BOOK_NOT_AVAILABLE |
-    | Reserve NotHeld / Rejected (ERROR) / NotPerformed / Unknown | 503 | CATALOG_UNAVAILABLE (+orderId) | Evet, failed CATALOG_UNAVAILABLE |
-    | Payment NotPerformed | 503 | PAYMENT_UNAVAILABLE (+orderId) | Evet, failed PAYMENT_UNAVAILABLE, stok held |
-    | Payment Rejected (ERROR) | 503 | PAYMENT_UNAVAILABLE (+orderId) | Evet, failed PAYMENT_REJECTED, stok held |
-    | Payment Unknown (WARN) | 201 | — | Evet, pending + held, paymentId null |
-    | Mutlu yol | 201 | — | Evet, pending + held + paymentId |
-    | GET başkasının / olmayan | 404 | ORDER_NOT_FOUND | — |
+- Order Adım 4 — checkout mutlu yol + `GET /api/orders/{orderId}` (COMMIT EDİLDİ: `867ce0f` kod, `c8314f0` memory-bank).
+
+- Order Adım 5 — Telafi (Compensation & Interrupted Checkout Handling):
+  - Kural: Para işin içindeyse sipariş failed YAPILMAZ; stok işin içindeyse hemen release denenir.
+  - Satır içi release (`CheckoutService.releaseStock`):
+    - Tetiklenme: Kayıt sonrası sipariş failed yapılan tüm durumlar (reserve: Insufficient, NotSellable, NotHeld, Rejected, NotPerformed, Unknown; payment: NotPerformed, Rejected).
+    - Çağrı TX DIŞINDA: Catalog `release(orderId)` tek tip çağrı (Insufficient'ta Catalog 404 RESOURCE_NOT_FOUND → Released döner).
+    - Sonuca göre:
+      - `Released` → TX (FOR UPDATE): `markStockReleased(orderId)` (stock_state = `released`). APPLIED değilse WARN, exception yok.
+      - `AlreadyCommitted` → ERROR logu (olmaması gereken durum), stok durumu değişmez.
+      - `NotPerformed` / `Unknown` / `Rejected` → stok requested/held kalır, WARN (Adım 6 StockSyncJob ve Adım 8 toplar).
+    - HTTP yanıtı release sonucundan ETKİLENMEZ (Adım 4 hata kodları aynen korunur).
+  - Yarıda kesilme senaryoları (OrderTransactions beklenmeyen exception / DB hatası):
+    | Senaryo | Durum / Hata | Yanıt | DB'de Kalan Durum | Adım 8 Kalıntı Toplama |
+    |---|---|---|---|---|
+    | **2.a** | Rezervasyon Reserved ama `markStockHeld` başarısız | 503 CHECKOUT_INTERRUPTED + orderId | markFailed başarılıysa failed + released; markFailed başarısızsa pending + requested | pending + requested → CHECKOUT_INTERRUPTED + release |
+    | **2.b** | Payment Initiated ama `attachPayment` başarısız (`uk_orders_payment` ihlali veya genel DB) | 201 Created + pending (sipariş okunamıyorsa 503 CHECKOUT_INTERRUPTED + orderId) | pending + held, paymentId null (sipariş failed YAPILMAZ) | pending + held → Payment initiate tekrarı |
+    | **2.c** | Reserve başarısızlığı sonrası `markFailed` başarısız | 409 / 503 (Adım 4 kodu) + orderId | pending + requested (release denenir, stok durumu yazılamaz) | pending + requested → CHECKOUT_INTERRUPTED + release |
+    | **2.d** | Payment NotPerformed/Rejected sonrası `markFailed` başarısız | 503 PAYMENT_UNAVAILABLE + orderId | pending + held (release DENENMEZ; sipariş pending görünüyor) | pending + held → Payment initiate tekrarı |
+    | **2.e** | TX1 (insert) uk dışı bir DB hatası | 503 ORDER_UNAVAILABLE (orderId yok) | Satır yok (hiçbir dış çağrı yapılmaz) | Kalıntı yok |
+  - Log hijyeni: Tüm telafi yollarında tek satır log `Stock compensation -> <ResultName> (durationMs=n)`. id, tutar, kitap id'si, adres bilgisi bulunmaz.
+  - Güncellenen Hata Tablosu (durum × HTTP × code × sipariş yazıldı mı × stock_state):
+    | Durum | HTTP | code | Sipariş | stock_state |
+    |---|---|---|---|---|
+    | Bekleyen sipariş var (`uk_orders_pending_user`) | 409 | ORDER_PENDING_EXISTS (+orderId) | Hayır | — |
+    | Sepet yok/boş | 422 | CART_EMPTY | Hayır | — |
+    | Cart erişilemez | 503 | CART_UNAVAILABLE | Hayır | — |
+    | Lookup erişilemez (CB açık dahil) | 503 | CATALOG_UNAVAILABLE | Hayır | — |
+    | Kitap bulunamadı / stokta değil (lookup) | 409 | BOOK_NOT_AVAILABLE | Hayır | — |
+    | Farklı para birimleri | 422 | MIXED_CURRENCY | Hayır | — |
+    | Toplam 0 | 422 | ORDER_TOTAL_ZERO | Hayır | — |
+    | Toplam > 9999999999.99 | 422 | ORDER_TOTAL_TOO_LARGE | Hayır | — |
+    | Diğer Order.place ihlalleri | 422 | INVALID_PRICE / INVALID_CURRENCY / INVALID_QUANTITY / DUPLICATE_BOOK / EMPTY_ORDER | Hayır | — |
+    | TX1 (insert) DB hatası (2.e) | 503 | ORDER_UNAVAILABLE | Hayır | — |
+    | Doğrulama / bozuk JSON / token yok | 400 / 400 / 401 | VALIDATION_FAILED / MALFORMED_REQUEST / UNAUTHORIZED | Hayır | — |
+    | Reserve Insufficient | 409 | INSUFFICIENT_STOCK (+orderId) | Evet, failed OUT_OF_STOCK | released (Catalog 404 → Released) |
+    | Reserve NotSellable | 409 | BOOK_NOT_AVAILABLE (+orderId) | Evet, failed BOOK_NOT_AVAILABLE | released (release başarılıysa) / requested (başarısızsa) |
+    | Reserve NotHeld / Rejected / NotPerformed / Unknown | 503 | CATALOG_UNAVAILABLE (+orderId) | Evet, failed CATALOG_UNAVAILABLE | released (release başarılıysa) / requested (başarısızsa) |
+    | markStockHeld başarısız (2.a) | 503 | CHECKOUT_INTERRUPTED (+orderId) | Evet, failed CHECKOUT_INTERRUPTED | released (release başarılıysa) / requested (markFailed çökerse pending+requested) |
+    | Payment NotPerformed | 503 | PAYMENT_UNAVAILABLE (+orderId) | Evet, failed PAYMENT_UNAVAILABLE | released (release başarılıysa) / held (başarısızsa) |
+    | Payment Rejected | 503 | PAYMENT_UNAVAILABLE (+orderId) | Evet, failed PAYMENT_REJECTED | released (release başarılıysa) / held (başarısızsa) |
+    | Payment attachPayment DB hatası (2.b) | 201 (veya 503 CHECKOUT_INTERRUPTED) | — (veya CHECKOUT_INTERRUPTED) | Evet, pending + held | held (failed YAPILMAZ; release çağrılmaz) |
+    | Payment Unknown (WARN) | 201 | — | Evet, pending + held, paymentId null | held (release çağrılmaz) |
+    | Mutlu yol | 201 | — | Evet, pending + held + paymentId | held |
+    | GET başkasının / olmayan | 404 | ORDER_NOT_FOUND | — | — |
+  - PLAN DEĞİŞİKLİĞİ: Adım 8 Pending Uzlaştırma Planı:
+    - `held` ise: Payment'a aynı initiate isteğini atar (dönen succeeded/failed → olayla aynı geçiş; kaybolan RabbitMQ olaylarını da kapatır).
+    - `requested` ise: `CHECKOUT_INTERRUPTED` + Catalog release yapar.
+    - 10 dk sonunda: `ORDER_EXPIRED` + Catalog release yapar.
+    (Bu adımda scheduler/job YOK; yalnızca bu adımın bıraktığı durumlar Adım 8 tarafından tutarlı biçimde toplanır).
+  - Kalıntı Durumları Listesi:
+    - `pending + requested`: (1) Reserve öncesi veya sırasında kesinti (2.a'da markFailed çökerse, 2.c'de markFailed çökerse). Adım 8 CHECKOUT_INTERRUPTED + release ile kapatır.
+    - `pending + held`: (1) Payment Unknown, (2) attachPayment DB hatası (2.b), (3) Payment NotPerformed/Rejected sonrası markFailed çökmesi (2.d). Adım 8 Payment'a sorarak (initiate tekrarı) kapatır.
+    - `failed + requested/held`: Catalog release çağrısının NotPerformed/Unknown/Rejected döndüğü durumlar. Adım 6 StockSyncJob (veya periyodik stok eşleme) tarafından Catalog release tekrarı ile kapatılır.
+  - Testler (order 489 → 541, +52):
+    - `CheckoutReleaseCompensationTest` (42 test): 8 kayıt sonrası hata türü × 5 release sonucu matrisi (40 parametreli test) + 404 RESOURCE_NOT_FOUND eşlemesi (1 test) + hassas bilgi içermeyen log hijyeni (1 test).
+    - `CheckoutInterruptedTest` (10 test): 2.a markStockHeld çökmesi (markFailed başarılı ve başarısız), 2.b attachPayment çökmesi (uk_orders_payment ve genel DB, sipariş okunabilir/okunamaz), 2.c reserve sonrası markFailed çökmesi, 2.d payment sonrası markFailed çökmesi (NotPerformed ve Rejected), 2.e insert genel DB ve kısıt hataları.
   - Adres kuralları user-service `AddressRequest`'ten (`dto/request/AddressRequest`): recipientName/phone/line1/city @NotBlank (120/32/
     200/80), line2 200, district 80, postalCode 16, country `^[A-Z]{2}$` + @NotNull (user'da null → TR; burada zorunlu). Telefon biçim
     kuralı yok (user'da da yok). Doğrulama hatası değer yansıtmaz (`errors[].field` + mesaj).
