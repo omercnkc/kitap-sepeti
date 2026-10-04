@@ -5,19 +5,25 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Clock;
+import java.time.ZoneOffset;
+
+import com.kitapsepeti.payment.entity.PaymentProviderType;
+import com.kitapsepeti.payment.provider.PaymentProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.util.ClassUtils;
 
-/** Adım 1 iskeleti: bağlam açılır, Flyway V1 uygulanır, ddl validate geçer; güvenlik/amqp/feign henüz yok. */
+/** Bağlam açılır, Flyway V1 uygulanır, ddl validate geçer; güvenlik/amqp/feign henüz yok. */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -30,11 +36,21 @@ class PaymentServiceApplicationTests {
 	@Autowired
 	private JdbcTemplate jdbc;
 
+	@Autowired
+	private ApplicationContext context;
+
 	@Test
 	void contextLoadsAndFlywayAppliedV1() {
 		assertThat(jdbc.queryForObject(
 				"SELECT COUNT(*) FROM flyway_schema_history WHERE version = '1' AND success = 1", Integer.class))
 			.isEqualTo(1);
+	}
+
+	@Test
+	void singleMockProviderAndUtcClock() {
+		assertThat(context.getBeansOfType(PaymentProvider.class)).hasSize(1);
+		assertThat(context.getBean(PaymentProvider.class).type()).isEqualTo(PaymentProviderType.MOCK);
+		assertThat(context.getBean(Clock.class).getZone()).isEqualTo(ZoneOffset.UTC);
 	}
 
 	@ParameterizedTest

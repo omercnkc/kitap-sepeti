@@ -26,6 +26,14 @@ spring:
     enabled: true
     locations: classpath:db/migration
 
+app:
+  payment:
+    # v1'de yalnızca mock; başka değerle uygulama açılmaz (PaymentConfig).
+    provider: mock
+    mock:
+      # Kuruşu bu değer olan tutarlar CARD_DECLINED ile failed (0–99).
+      fail-cents: 99
+
 logging:
   level:
     # SQL hata mesajı kullanıcı verisi içerebilir; WARN satırları kapatılır.
