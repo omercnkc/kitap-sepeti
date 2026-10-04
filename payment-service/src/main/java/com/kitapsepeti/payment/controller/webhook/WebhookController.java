@@ -6,6 +6,7 @@ import java.util.Set;
 
 import com.kitapsepeti.common.error.CommonErrorCode;
 import com.kitapsepeti.common.error.DbConstraints;
+import com.kitapsepeti.payment.config.OpenApiConfig;
 import com.kitapsepeti.payment.config.PaymentProperties;
 import com.kitapsepeti.payment.dto.webhook.WebhookEvent;
 import com.kitapsepeti.payment.entity.PaymentProviderType;
@@ -14,6 +15,13 @@ import com.kitapsepeti.payment.exception.WebhookRejectedException;
 import com.kitapsepeti.payment.provider.mock.MockWebhookSigner;
 import com.kitapsepeti.payment.provider.mock.MockWebhookVerifier;
 import com.kitapsepeti.payment.service.WebhookService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
@@ -45,6 +53,7 @@ import tools.jackson.databind.type.LogicalType;
  * İşlenen ve tekrar olay 204 alır (gövde yok). Loglarda gövde, imza, zaman damgası, olay/ödeme kimliği ve tutar yok.
  */
 @RestController
+@Tag(name = OpenApiConfig.TAG_WEBHOOKS, description = "Ödeme sağlayıcısından gelen imzalı sonuç bildirimleri.")
 public class WebhookController {
 
 	private static final Logger log = LoggerFactory.getLogger(WebhookController.class);
@@ -81,7 +90,41 @@ public class WebhookController {
 	}
 
 	@PostMapping("/webhooks/{provider}")
-	public ResponseEntity<Void> receive(@PathVariable String provider, HttpServletRequest request)
+	@Operation(operationId = "receiveWebhook", summary = "Sağlayıcı ödeme sonucu webhook'u",
+			description = "Sağlayıcı ödemenin sonucunu bildirir; ödeme `succeeded` ya da `failed` olur ve olay "
+					+ "RabbitMQ'ya yayımlanır. Kontrol sırası: sağlayıcı (404) → Content-Type (415) → gövde boyutu "
+					+ "(413) → imza (401) → JSON ve alanlar (400) → ödeme ve tutar (400). İmza ham "
+					+ "gövde üzerinden doğrulanır; imzasız gövde hiç okunmaz. Aynı `eventId` ile tekrar gönderim ve "
+					+ "sonuçlanmış ödeme için gelen olay da 204 alır (ödeme değişmez). Bilinmeyen alanlar yok sayılır.",
+			requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true,
+					content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+							schema = @Schema(implementation = WebhookEvent.class))))
+	@Parameter(name = MockWebhookSigner.TIMESTAMP_HEADER, in = ParameterIn.HEADER, required = true,
+			description = "İmzalanan zaman damgası (epoch saniye). Sunucu saatinden en fazla ±5 dk sapabilir; yoksa "
+					+ "ya da biçimi bozuksa 401.",
+			schema = @Schema(type = "string", pattern = "^[0-9]{1,18}$"))
+	@ApiResponse(responseCode = "204", description = "Olay işlendi ya da daha önce işlenmişti (gövde yok).")
+	@ApiResponse(responseCode = "400", description = "`VALIDATION_FAILED` (alan hataları `errors` dizisinde), "
+			+ "`MALFORMED_REQUEST` (okunamayan JSON, tekrar eden anahtar ya da metin alanına sayı), "
+			+ "`UNKNOWN_PAYMENT` (`providerPaymentId` ile ödeme yok) veya `AMOUNT_MISMATCH` (`amount`/`currency` "
+			+ "ödemeyle aynı değil).",
+			content = @Content(mediaType = OpenApiConfig.PROBLEM_JSON,
+					schema = @Schema(ref = OpenApiConfig.PROBLEM_SCHEMA_REF)))
+	@ApiResponse(responseCode = "404", description = "`NOT_FOUND`: bilinmeyen ya da etkin olmayan sağlayıcı "
+			+ "(gövde okunmaz).",
+			content = @Content(mediaType = OpenApiConfig.PROBLEM_JSON,
+					schema = @Schema(ref = OpenApiConfig.PROBLEM_SCHEMA_REF)))
+	@ApiResponse(responseCode = "413", description = "`PAYLOAD_TOO_LARGE`: gövde sınırdan büyük (varsayılan 64 KiB; "
+			+ "`app.payment.webhook.max-body-bytes`).",
+			content = @Content(mediaType = OpenApiConfig.PROBLEM_JSON,
+					schema = @Schema(ref = OpenApiConfig.PROBLEM_SCHEMA_REF)))
+	@ApiResponse(responseCode = "415", description = "`UNSUPPORTED_MEDIA_TYPE`: Content-Type `application/json` değil.",
+			content = @Content(mediaType = OpenApiConfig.PROBLEM_JSON,
+					schema = @Schema(ref = OpenApiConfig.PROBLEM_SCHEMA_REF)))
+	public ResponseEntity<Void> receive(
+			@Parameter(description = "Sağlayıcı. v1'de yalnızca `mock`.",
+					schema = @Schema(type = "string", allowableValues = "mock")) @PathVariable String provider,
+			@Parameter(hidden = true) HttpServletRequest request)
 			throws IOException, HttpMediaTypeNotSupportedException {
 		PaymentProviderType type = requireActiveProvider(provider);
 		requireJson(request);

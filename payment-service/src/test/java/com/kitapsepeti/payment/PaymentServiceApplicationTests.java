@@ -23,7 +23,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.http.HttpHeaders;
 import org.springframework.util.ClassUtils;
 
-/** Bağlam açılır, Flyway V1 + V2 uygulanır, ddl validate geçer; feign/springdoc yok. */
+/** Bağlam açılır, Flyway V1 + V2 uygulanır, ddl validate geçer; feign yok (springdoc Adım 7'de eklendi). */
 class PaymentServiceApplicationTests extends ApiTestSupport {
 
 	@Autowired
@@ -49,11 +49,10 @@ class PaymentServiceApplicationTests extends ApiTestSupport {
 		assertThat(context.getBean(Clock.class).getZone()).isEqualTo(ZoneOffset.UTC);
 	}
 
-	@ParameterizedTest
-	@ValueSource(strings = { "org.springframework.cloud.openfeign.FeignClient",
-			"org.springdoc.core.configuration.SpringDocConfiguration" })
-	void laterStepDependenciesAreNotOnClasspath(String className) {
-		assertThat(ClassUtils.isPresent(className, getClass().getClassLoader())).isFalse();
+	@Test
+	void feignIsNotOnClasspath() {
+		assertThat(ClassUtils.isPresent("org.springframework.cloud.openfeign.FeignClient", getClass().getClassLoader()))
+			.isFalse();
 	}
 
 	@Test

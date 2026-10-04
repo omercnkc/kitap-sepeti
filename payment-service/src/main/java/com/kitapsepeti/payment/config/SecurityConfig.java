@@ -16,7 +16,8 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * /internal/** ({@link InternalSecurityConfig} sıra 1) ve /webhooks/** ({@link WebhookSecurityConfig} sıra 2) dışındaki
- * her şey. Kullanıcıya açık uç ve JWT yok: yalnızca health ve {@code /error} açık, geri kalan her yol reddedilir.
+ * her şey. Kullanıcıya açık uç ve JWT yok: yalnızca health, {@code /error} ve OpenAPI dokümanı / Swagger UI açık (Gateway
+ * fazında dışarıya kapatılacak), geri kalan her yol reddedilir.
  * <p>
  * Red 403 FORBIDDEN ProblemDetail'dir (401 değil): bu zincirde istemcinin kullanabileceği bir kimlik doğrulama
  * yöntemi yok, 401 ise bir {@code WWW-Authenticate} challenge'ı gerektirir. Bearer challenge bu yüzden hiç yazılmaz;
@@ -46,6 +47,7 @@ public class SecurityConfig {
 				.requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
 				// Aksi halde hatanın /error'a yönlendirilmesi de reddedilirdi.
 				.requestMatchers("/error").permitAll()
+				.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
 				.anyRequest().denyAll())
 			.exceptionHandling(ex -> ex
 				.authenticationEntryPoint(denyWithoutChallenge(accessDeniedHandler))

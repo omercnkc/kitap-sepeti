@@ -1,0 +1,619 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "description": "Sipariş ödemeleri: order-service ödemeyi oluşturur ve sorgular; sağlayıcı sonucu imzalı webhook ile bildirir.\n\n**Erişim:**\n- Internal (`/internal/**`): yalnızca servisler arası, `X-Internal-Api-Key` başlığı (`internalApiKey`).\n- Webhook (`/webhooks/**`): sağlayıcının HMAC imzası, `X-Mock-Signature` + `X-Mock-Timestamp` başlıkları (`mockWebhookSignature`). v1'de tek sağlayıcı `mock`.\n\n**Akış:** `POST /internal/payments` ödemeyi `initiated` olarak oluşturur (aynı `orderId` ile tekrar istek aynı ödemeyi döndürür). Sonuç asenkrondur: sağlayıcı webhook'u gelince ödeme `succeeded` ya da `failed` olur ve olay RabbitMQ'ya (`payment.succeeded` / `payment.failed`) yayımlanır; durum `GET /internal/payments/{paymentId}` ile de sorgulanabilir. Mock sağlayıcıda kuruşu 99 olan tutarlar `CARD_DECLINED` ile reddedilir. Kart verisi bu servise hiç gelmez ve saklanmaz.\n\n**Para:** İstekte ve yanıtta `amount` JSON sayıdır, 2 ondalık basamak; webhook gövdesinde ise JSON metnidir (ör. `\"149.90\"`).\n\n**Hatalar:** Tüm hatalar RFC 9457 ProblemDetail olarak `application/problem+json` ile döner (`Problem` şeması). İstemci hatayı `code` alanına göre ayırt eder; doğrulama hatalarında `errors` dizisi alan bazında mesaj içerir.\n",
+    "title": "Kitap Sepeti Payment API",
+    "version": "0.0.1-SNAPSHOT"
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Dokümanın sunulduğu sunucu"
+    }
+  ],
+  "tags": [
+    {
+      "description": "Servisler arası ödeme uçları (v1'de tek istemci order-service). Kullanıcı kimliği gövdede taşınır; yanıtlarda yer almaz.",
+      "name": "Internal – Payments"
+    },
+    {
+      "description": "Ödeme sağlayıcısından gelen imzalı sonuç bildirimleri.",
+      "name": "Webhooks"
+    }
+  ],
+  "paths": {
+    "/internal/payments": {
+      "post": {
+        "description": "Ödemeyi `initiated` olarak oluşturur ve sağlayıcıya iletir; sonuç webhook ile gelir. Bir siparişin tek ödemesi vardır: aynı `orderId` + `userId` + `amount` + `currency` ile tekrar istek yeni ödeme açmaz, mevcut ödemeyi (durumu ne olursa olsun) 200 ile döndürür.",
+        "operationId": "createPayment",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePaymentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentResponse"
+                }
+              }
+            },
+            "description": "Bu sipariş için ödeme zaten var; mevcut ödeme döner."
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentResponse"
+                }
+              }
+            },
+            "description": "Ödeme oluşturuldu (`status` = `initiated`).",
+            "headers": {
+              "Location": {
+                "description": "Oluşan ödemenin yolu: `/internal/payments/{paymentId}`.",
+                "schema": {
+                  "type": "string",
+                  "format": "uri-reference"
+                },
+                "style": "simple"
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`VALIDATION_FAILED` (alan hataları `errors` dizisinde) veya `MALFORMED_REQUEST` (okunamayan JSON)."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`UNAUTHORIZED`: `X-Internal-Api-Key` yok veya tanınmıyor (iki durum aynı yanıtı alır).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Her zaman `ApiKey realm=\"internal\"`.",
+                "schema": {
+                  "type": "string",
+                  "example": "ApiKey realm=\"internal\""
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`PAYMENT_ORDER_MISMATCH`: sipariş için ödeme var ama `userId`, `amount` veya `currency` farklı. `CONFLICT`: beklenmeyen veri bütünlüğü ihlali."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INTERNAL_ERROR`: beklenmeyen hata; ayrıntı yanıtta yer almaz."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`PAYMENT_PROVIDER_UNAVAILABLE`: sağlayıcıya ulaşılamadı; ödeme `initiated` kalır, aynı istek tekrar denenebilir."
+          }
+        },
+        "security": [
+          {
+            "internalApiKey": []
+          }
+        ],
+        "summary": "Sipariş için ödeme başlat",
+        "tags": [
+          "Internal – Payments"
+        ]
+      }
+    },
+    "/internal/payments/{paymentId}": {
+      "get": {
+        "description": "Ödemenin güncel durumu. Webhook gecikirse sonucu öğrenmenin yolu budur.",
+        "operationId": "getPayment",
+        "parameters": [
+          {
+            "description": "Ödeme id'si.",
+            "in": "path",
+            "name": "paymentId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentResponse"
+                }
+              }
+            },
+            "description": "Ödeme."
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`MALFORMED_REQUEST`: path değişkeni UUID değil."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`UNAUTHORIZED`: `X-Internal-Api-Key` yok veya tanınmıyor (iki durum aynı yanıtı alır).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Her zaman `ApiKey realm=\"internal\"`.",
+                "schema": {
+                  "type": "string",
+                  "example": "ApiKey realm=\"internal\""
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`RESOURCE_NOT_FOUND`: bu id ile ödeme yok."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INTERNAL_ERROR`: beklenmeyen hata; ayrıntı yanıtta yer almaz."
+          }
+        },
+        "security": [
+          {
+            "internalApiKey": []
+          }
+        ],
+        "summary": "Ödemeyi getir",
+        "tags": [
+          "Internal – Payments"
+        ]
+      }
+    },
+    "/webhooks/{provider}": {
+      "post": {
+        "description": "Sağlayıcı ödemenin sonucunu bildirir; ödeme `succeeded` ya da `failed` olur ve olay RabbitMQ'ya yayımlanır. Kontrol sırası: sağlayıcı (404) → Content-Type (415) → gövde boyutu (413) → imza (401) → JSON ve alanlar (400) → ödeme ve tutar (400). İmza ham gövde üzerinden doğrulanır; imzasız gövde hiç okunmaz. Aynı `eventId` ile tekrar gönderim ve sonuçlanmış ödeme için gelen olay da 204 alır (ödeme değişmez). Bilinmeyen alanlar yok sayılır.",
+        "operationId": "receiveWebhook",
+        "parameters": [
+          {
+            "description": "Sağlayıcı. v1'de yalnızca `mock`.",
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "mock"
+              ]
+            }
+          },
+          {
+            "description": "İmzalanan zaman damgası (epoch saniye). Sunucu saatinden en fazla ±5 dk sapabilir; yoksa ya da biçimi bozuksa 401.",
+            "in": "header",
+            "name": "X-Mock-Timestamp",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,18}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookEvent"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Olay işlendi ya da daha önce işlenmişti (gövde yok)."
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`VALIDATION_FAILED` (alan hataları `errors` dizisinde), `MALFORMED_REQUEST` (okunamayan JSON, tekrar eden anahtar ya da metin alanına sayı), `UNKNOWN_PAYMENT` (`providerPaymentId` ile ödeme yok) veya `AMOUNT_MISMATCH` (`amount`/`currency` ödemeyle aynı değil)."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`WEBHOOK_SIGNATURE_INVALID`: `X-Mock-Signature` ya da `X-Mock-Timestamp` yok, biçimi bozuk, zaman damgası ±5 dk dışında ya da imza tutmuyor (hepsi aynı yanıtı alır; gövde okunmaz).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Her zaman `Signature realm=\"webhook\"`.",
+                "schema": {
+                  "type": "string",
+                  "example": "Signature realm=\"webhook\""
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`NOT_FOUND`: bilinmeyen ya da etkin olmayan sağlayıcı (gövde okunmaz)."
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`PAYLOAD_TOO_LARGE`: gövde sınırdan büyük (varsayılan 64 KiB; `app.payment.webhook.max-body-bytes`)."
+          },
+          "415": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`UNSUPPORTED_MEDIA_TYPE`: Content-Type `application/json` değil."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INTERNAL_ERROR`: beklenmeyen hata; ayrıntı yanıtta yer almaz."
+          }
+        },
+        "security": [
+          {
+            "mockWebhookSignature": []
+          }
+        ],
+        "summary": "Sağlayıcı ödeme sonucu webhook'u",
+        "tags": [
+          "Webhooks"
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CreatePaymentRequest": {
+        "type": "object",
+        "description": "Ödeme oluşturma isteği. Aynı `orderId` ile tekrar gönderilebilir; `userId`, `amount` ve `currency` ilk istekle aynı olmalı.",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "description": "Ödenecek tutar: pozitif, en fazla 10 tam ve 2 ondalık basamak; fazla ondalık reddedilir, yuvarlanmaz.",
+            "minimum": 0.01
+          },
+          "currency": {
+            "type": "string",
+            "description": "ISO 4217 para birimi, büyük harf.",
+            "example": "TRY",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "orderId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Siparişin id'si; bir siparişin tek ödemesi vardır."
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Siparişi veren kullanıcının id'si. Yalnızca eşleşme kontrolünde kullanılır; yanıtta yer almaz."
+          }
+        },
+        "required": [
+          "amount",
+          "currency",
+          "orderId",
+          "userId"
+        ]
+      },
+      "FieldError": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "Hatalı alanın adı.",
+            "example": "amount"
+          },
+          "message": {
+            "type": "string",
+            "description": "Doğrulama mesajı.",
+            "example": "must be greater than or equal to 0.01"
+          }
+        },
+        "required": [
+          "field",
+          "message"
+        ]
+      },
+      "PaymentResponse": {
+        "type": "object",
+        "description": "Ödeme. Tüm alanlar her yanıtta bulunur; boş olanlar `null` gelir.",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "description": "Tutar, 2 ondalık basamak."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Oluşturulma zamanı (UTC)."
+          },
+          "currency": {
+            "type": "string",
+            "description": "ISO 4217 para birimi.",
+            "example": "TRY"
+          },
+          "failureCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Sağlayıcının ret kodu; yalnızca `failed` ödemede dolu, diğerlerinde null.",
+            "example": "CARD_DECLINED"
+          },
+          "orderId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Siparişin id'si."
+          },
+          "paymentId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Ödemenin id'si."
+          },
+          "redirectUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Kullanıcının yönlendirileceği sağlayıcı sayfası. v1'de her zaman null."
+          },
+          "status": {
+            "$ref": "#/components/schemas/PaymentStatus"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Son değişiklik zamanı (UTC)."
+          }
+        },
+        "required": [
+          "amount",
+          "createdAt",
+          "currency",
+          "failureCode",
+          "orderId",
+          "paymentId",
+          "redirectUrl",
+          "status",
+          "updatedAt"
+        ]
+      },
+      "PaymentStatus": {
+        "type": "string",
+        "description": "`initiated`: ödeme oluşturuldu, sonuç bekleniyor (sağlayıcı webhook'u). `succeeded` ve `failed` son durumdur; bir daha değişmez.",
+        "enum": [
+          "initiated",
+          "succeeded",
+          "failed"
+        ]
+      },
+      "Problem": {
+        "type": "object",
+        "description": "RFC 9457 Problem Details. İstemci hatayı `code` alanına göre ayırt etmelidir; `title`/`detail` insan içindir ve değişebilir.",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Makine tarafından okunacak hata kodu.",
+            "enum": [
+              "VALIDATION_FAILED",
+              "MALFORMED_REQUEST",
+              "UNAUTHORIZED",
+              "FORBIDDEN",
+              "NOT_FOUND",
+              "RESOURCE_NOT_FOUND",
+              "METHOD_NOT_ALLOWED",
+              "NOT_ACCEPTABLE",
+              "UNSUPPORTED_MEDIA_TYPE",
+              "CONFLICT",
+              "PAYMENT_ORDER_MISMATCH",
+              "PAYMENT_PROVIDER_UNAVAILABLE",
+              "WEBHOOK_SIGNATURE_INVALID",
+              "UNKNOWN_PAYMENT",
+              "AMOUNT_MISMATCH",
+              "PAYLOAD_TOO_LARGE",
+              "INTERNAL_ERROR"
+            ],
+            "example": "PAYMENT_ORDER_MISMATCH"
+          },
+          "detail": {
+            "type": "string",
+            "description": "Genel açıklama; kullanıcı verisi içermez.",
+            "example": "A payment already exists for this order with a different user, amount or currency."
+          },
+          "errors": {
+            "type": "array",
+            "description": "Yalnızca `VALIDATION_FAILED`'da: alan bazında hatalar. Gönderilen değer yer almaz.",
+            "items": {
+              "$ref": "#/components/schemas/FieldError"
+            }
+          },
+          "instance": {
+            "type": "string",
+            "format": "uri-reference",
+            "description": "İsteğin yolu; ödeme id'si `:paymentId` olarak maskelenir.",
+            "example": "/internal/payments/:paymentId"
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "description": "HTTP durum kodu.",
+            "example": 409
+          },
+          "title": {
+            "type": "string",
+            "description": "HTTP durumunun kısa adı.",
+            "example": "Conflict"
+          },
+          "type": {
+            "type": "string",
+            "format": "uri",
+            "description": "Problem tipi; varsayılan `about:blank` olduğunda yanıtta yer almaz."
+          }
+        },
+        "required": [
+          "code",
+          "instance",
+          "status",
+          "title"
+        ]
+      },
+      "WebhookEvent": {
+        "type": "object",
+        "description": "Mock sağlayıcının ödeme sonucu olayı. Tüm alanlar JSON metnidir (tutar dahil); bilinmeyen alanlar yok sayılır.",
+        "properties": {
+          "amount": {
+            "type": "string",
+            "description": "Ödemenin tutarı, JSON metni ve tam 2 ondalık basamak (sayı gönderilirse gövde okunamaz sayılır). Ödemenin tutarıyla aynı olmalı.",
+            "example": "149.90",
+            "pattern": "^(0|[1-9][0-9]{0,9})\\.[0-9]{2}$"
+          },
+          "currency": {
+            "type": "string",
+            "description": "ISO 4217 para birimi; ödemeninkiyle aynı olmalı.",
+            "example": "TRY",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "eventId": {
+            "type": "string",
+            "description": "Sağlayıcının olay kimliği; tekrar teslimde aynıdır (tekrar olay 204 alır, işlenmez).",
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "failureCode": {
+            "type": "string",
+            "description": "Ret kodu. `payment.failed`'da zorunlu, `payment.succeeded`'da gönderilmez.",
+            "example": "CARD_DECLINED",
+            "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+          },
+          "providerPaymentId": {
+            "type": "string",
+            "description": "Ödeme oluşturulurken sağlayıcının verdiği referans; boş ya da yalnızca boşluk olamaz.",
+            "maxLength": 128,
+            "minLength": 0
+          },
+          "type": {
+            "type": "string",
+            "description": "Olayın türü.",
+            "enum": [
+              "payment.succeeded",
+              "payment.failed"
+            ],
+            "pattern": "^payment\\.(succeeded|failed)$"
+          }
+        },
+        "required": [
+          "amount",
+          "currency",
+          "eventId",
+          "providerPaymentId",
+          "type"
+        ]
+      }
+    },
+    "securitySchemes": {
+      "internalApiKey": {
+        "description": "Servisler arası ham anahtar (yalnızca çağıran serviste saklanır; payment yalnızca SHA-256 özetini bilir). v1'de tek istemci order-service.",
+        "in": "header",
+        "name": "X-Internal-Api-Key",
+        "type": "apiKey"
+      },
+      "mockWebhookSignature": {
+        "description": "Mock sağlayıcının imzası: `sha256=` + küçük harf hex(HMAC-SHA256(secret, \"<timestamp>.<ham gövde>\")). `timestamp` aynı istekteki `X-Mock-Timestamp` başlığının değeri (epoch saniye), ham gövde gönderilen baytların kendisi (yeniden serileştirilmiş JSON değil). Zaman damgası sunucu saatinden en fazla ±5 dk sapabilir. Secret yalnızca sağlayıcı ile payment-service arasında paylaşılır.",
+        "in": "header",
+        "name": "X-Mock-Signature",
+        "type": "apiKey"
+      }
+    }
+  }
+}

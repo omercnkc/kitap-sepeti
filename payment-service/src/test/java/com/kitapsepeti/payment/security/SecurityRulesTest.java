@@ -87,7 +87,7 @@ class SecurityRulesTest extends ApiTestSupport {
 	}
 
 	@ParameterizedTest
-	@ValueSource(strings = { "/api/x", "/webhooksx", "/", "/v3/api-docs", "/internalx" })
+	@ValueSource(strings = { "/api/x", "/webhooksx", "/", "/v3/api-docsx", "/swagger-uix", "/internalx" })
 	void everythingElseIsDeniedWithoutBearerChallenge(String path) throws Exception {
 		for (MockHttpServletRequestBuilder request : List.of(get(path), post(path),
 				get(path).header(HttpHeaders.AUTHORIZATION, "Bearer abc"),
