@@ -101,7 +101,11 @@
   matches), `ProviderEvent` (@Immutable), katı küçük harf converter'lar (ortak taban), kilitsiz repository'ler, `PaymentProvider`
   soyutlaması + tek bean (`app.payment.provider`, yalnızca mock açılır), `MockPaymentProvider`, `MockOutcomeRule` (kuruş = fail-cents →
   CARD_DECLINED), `PaymentProperties` (fail-cents 0–99). payment-service 177 test.
-- Payment Adım 8 (henüz commit edilmedi): `payment-service/Dockerfile` (cart kopyası, non-root 10001, 604 MB) + compose kaydı
+- Order Adım 0a (commit `298fe89`, push edildi): common `RequestPathMasker` (desen + UUID güvenlik ağı; instance + tüm hata/internal logları;
+  servis desenleri `SecurityConfig` bean'inde) ve tek internal özet politikası (`InternalApiKeys`: yok/boş/bozuk → açılmaz; catalog'un
+  "boş = kapalı"sı kaldırıldı, compose `${VAR:?}`). cart/payment yerel maskeleme kodu silindi. Testler: common 39, user 85,
+  catalog 284, cart 312, payment 365. Docker canlı kontrol geçti.
+- Payment Adım 8 (commit `c735770` + `58914e0`, push edildi): `payment-service/Dockerfile` (cart kopyası, non-root 10001, 604 MB) + compose kaydı
   (127.0.0.1:8087; mysql + rabbitmq `service_healthy` — catalog gibi, yalnızca açılış sırası; sırlar `${VAR:?}`, env_file yok,
   webhook-url yok), health: readiness yalnızca db (bileşenler db, rabbit, diskSpace, livenessState, readinessState, ping, ssl),
   `docs/docker.md` payment bölümü, `WebhookEvent.providerPaymentId` `@Size(min = 1)` (sözleşme minLength 1). payment-service 365 test.
@@ -124,13 +128,19 @@
   `GET /internal/payments/{id}`, yol maskeleme (log dahil). payment-service 220 test. Yerelde V2 uygulandı, uçtan uca geçti.
 
 ## Yapılacaklar
+- UI (paralel, Ekim 2026): Order sürerken UI-0 → UI-6 ayrı worktree'de (`kitapSepeti-ui`, branch `ui`); durum
+  `memory-bank/frontend.md`'de. UI için backend işleri: B1 catalog `q` araması, B2 Docker'da katalog örnek verisi, B3 ADMIN kullanıcı.
 - PROJE KARARI (Ekim 2026): sıra Payment → Order → Gateway → UI → (vakit kalırsa) Notifications. Notifications v1 yalnızca uygulama
   içi bildirim (OrderPaid/OrderFailed; e-posta, tercih, şablon yok). Order fazında `order-paid.md` ve `order-failed.md` olay
   sözleşmeleri yine yazılacak.
 - Payment artık işleri: iyzico sandbox; eşzamanlı ilk isteklerde birden fazla sağlayıcı çağrısı (gerçek sağlayıcıda idempotency
   anahtarı); outbox kodunu common'a taşıma (Order fazı); outbox yayın hatası WARN'ındaki eventId.
-- Outbox kodunu common'a taşıma (Order fazı başında): user-service, catalog-service ve payment-service'te üç kopya.
-- Cart ertelenenler: CartCheckedOut tüketimi (Order fazı); yol maskeleme + boş özet politikasını common'a taşıma; Catalog OpenAPI nullable.
+- Outbox kodunu common'a taşıma (Order Adım 0b): user-service, catalog-service ve payment-service'te üç kopya.
+- Cart ertelenenler: CartCheckedOut tüketimi (Order Adım 7); Catalog OpenAPI nullable. (Yol maskeleme + özet politikası common'a
+  taşındı → Order Adım 0a.)
+- Order planı (PROJE KARARI, Ekim 2026): 0a common sertleştirme (yapıldı) → 0b outbox → common → 1 modül/db → 2 domain → 3 Feign + CB
+  → 4 checkout mutlu yol + GET {id} → 5 hata yolları/telafi → 6 ödeme sonucu tüketicisi → 7 Cart CartCheckedOut tüketicisi → 8 timeout
+  görevi → 9 liste → 10 OpenAPI/olay belgeleri → 11 Docker. Kararlar activeContext "Sonraki adımlar"da.
 - Gateway fazı: docs/Swagger'ı (dört servis) dışarıya kapatmak.
 - order-service (catalog rezervasyon istemcisi).
 - Search için: yayınevi/yazar/kategori yeniden adlandırması yayındaki kitaplar için olay üretmiyor → yeniden indeksleme gerekecek.
@@ -153,8 +163,8 @@
   kitabı eklemek `uk_cart_items_cart_book`, checkout + yeni aktif sepet `uk_carts_active_user` verir. Adım 6–7 akışları bu yolu
   kullanmaz (tekrar ekleme satırı UPDATE eder; silme/boşaltma yalnızca siler, yeniden ekleme ayrı istek). İleride satır silen/checkout
   yapan akış aynı TX'te yeniden ekleme/yeni sepet yaparsa arada `flush()` şart (CartTransactions javadoc'u).
-- Cart hata yanıtı/logunda yalnızca `/api/cart/items/<x>` maskelenir (`MaskedRequestPaths`); yeni bir uç yolda kullanıcıya/kitaba özgü
-  id taşırsa oraya da eklenmeli.
+- Yol maskeleme desen listesi elle tutulur (her servisin `SecurityConfig.requestPathMasker()` bean'i); yeni bir uç yolda id taşırsa
+  desen eklenmeli. Eklenmezse güvenlik ağı yalnızca UUID biçimli segmentleri `:id` yapar (UUID olmayan değer görünür kalır).
 - catalog'un `FOR UPDATE` sorgularında kilit süresi yok → MySQL varsayılanı 50 sn bekler (cart'ta 5 sn'ye çekildi; catalog'a dokunulmadı).
 - catalog/user durum kolonları `utf8mb4_0900_ai_ci`: catalog `books.status` (`ck_books_status`), `stock_reservations.status`
   (`ck_stock_reservations_status`), user `users.status` (`ck_users_status`; `ck_users_role` de aynı). CHECK büyük/küçük harf

@@ -999,7 +999,7 @@
   - Root `clean verify`: common 25, user 83, catalog 276, cart 312 (2 skipped), payment 357. Yerel spring-boot:run: /v3/api-docs 200,
     3 operasyon, sözleşme dosyasıyla birebir; swagger-ui 200 (`/swagger-ui.html` → 302); WARN/ERROR 0.
 
-- Payment Adım 8 — Docker + compose (henüz commit edilmedi; diğer servislerin Dockerfile/compose kayıtları, common, migration'lar,
+- Payment Adım 8 — Docker + compose (commit `c735770` + memory bank `58914e0`, push'landı; diğer servislerin Dockerfile/compose kayıtları, common, migration'lar,
   `.env` ve `.env.example` değişmedi — `.env.example`'da tüm adlar zaten vardı). **PAYMENT SERVİSİ TAMAMLANDI.**
   - Ön düzeltme: `WebhookEvent.providerPaymentId` `@NotBlank @Size(min = 1, max = 128)` → sözleşmede `minLength: 1` (tek fark),
     drift testi yeşil. Görünür küçük fark: boş metin (`""`) artık iki `errors` girdisi (not blank + size) üretir; durum/kod aynı
@@ -1029,18 +1029,68 @@
     (AmqpIOException ×10, AmqpConnectException ×2) + 1 RabbitHealthIndicator WARN (kök health çağrısı) — OutboxRelay WARN'ı outbox
     `id` (= eventId) ve eventType yazar (bilinen artık iş); diğer WARN'lar beklenen reddetmeler (401/403/imza).
 
+- ORDER FAZI BAŞLADI. Order Adım 0a — common sertleştirme (commit `298fe89`, push'landı; outbox, CB, order modülü, migration YOK; uç durum
+  kodları/gövdeleri değişmedi, yalnızca `instance`'taki id maskelenir). Ayrıntı systemPatterns "common modülü".
+  - A) Yol maskeleme: YENİ `common.web.RequestPathMasker` (segment yapısıyla desen eşleme, desen dışı UUID → `:id`, sorgu yok, her
+    zaman geçerli URI). `ProblemDetails`/`ProblemDetailExceptionHandler` (opsiyonel bean, `logProblem`/`respond`), security
+    entry point/access denied/failure handler, internal entry point ve filtre (INFO + 401 satırı) maskeleyiciyi kullanır.
+    Desenler servislerin `SecurityConfig.requestPathMasker()` bean'inde (user 1, catalog 13, cart 1, payment 1).
+    Silinen: cart `MaskedRequestPaths` + handler override'ları + SecurityConfig sarmalayıcıları; payment `MaskedRequestPaths` +
+    `InternalSecurityConfig.MaskedPathFilter` + override'lar. Cart `CartViewAssembler` maskeleyiciyi ctor'dan alır.
+  - B) Internal özet politikası common `InternalApiKeys`'te tek kural (yok/boş/boşluk/64 hex değil → açılmaz, değer mesajda yok);
+    `Client.enabled()` ve "boş = kapalı" kaldırıldı. cart/payment `InternalAuthConfig` yalnızca bean; catalog'a YENİ
+    `config/InternalAuthConfig` (bean `InternalSecurityConfig`'ten taşındı). Compose `CATALOG_INTERNAL_KEY_ORDER_SHA256` artık
+    `${VAR:?}`; `.env.example` yorumları, catalog application.yml yorumu, `docs/api/catalog-internal-stock.md` güncellendi.
+  - DAVRANIŞ DEĞİŞİKLİKLERİ: catalog ve user `instance`/loglarında id'ler maskeli (ör. `/api/books/:bookId`,
+    `/internal/stock/reservations/:orderId/commit`, `/api/me/addresses/:addressId`); tüm servislerde desen dışı yollarda UUID → `:id`
+    (güvenlik ağı); ayrıştırılamayan yol artık `instance` yok yerine yüzde-kodlu yol; catalog boş özetle AÇILMAZ.
+    OpenAPI: catalog ve user `Problem.instance` açıklaması (tek satır fark her sözleşmede).
+  - Testler: common 25 → 39 (RequestPathMaskerTest 10 yeni; ProblemDetailsTest 4 → 6; InternalApiKeysTest 5 → 7 — "boş özet kapalı"
+    testi silindi, eksik/boş/boşluk, istemcisiz, iki harf düzeni, çoklu istemci eklendi; filtre testi 5 → 5 — devre dışı istemci
+    testi yerine maskeli log/instance testi). user 83 → 85 (YENİ `controller/AddressPathMaskingTest` 2: 404/401 maskeli, bozuk id
+    400 maskeli, logda id yok). catalog 276 → 284 (YENİ `config/InternalAuthConfigTest` 4; YENİ `controller/internal/IdPathMaskingTest`
+    4: rezervasyon 404/401/409 maskeli + logda orderId yok, public/admin 404 + 401 + "abc" + lookup + desen dışı `:id`);
+    `GlobalExceptionHandlerTest.staleVersion...` log beklentisi `/books/:id/stale-update`. cart 312 → 312 (`CatalogGatewayTest` probe
+    yolu `/api/cart/_catalog/books/:id` beklentisi + id artık hiçbir log/gövdede yok; `CartItemChangesTest` maskeleme testleri
+    DEĞİŞMEDEN yeşil). payment 365 → 365 (InternalAuthConfigTest'te servis adı beklentisi kaldırıldı; maskeleme testleri değişmedi).
+  - Root `clean verify` yeşil: common 39, user 85, catalog 284, cart 312 (2 skipped), payment 365.
+  - Docker: 4 imaj yeniden derlendi, `up -d` → hepsi healthy, restart 0 (catalog özetle açıldı). Canlı: catalog anahtarsız
+    `POST /internal/stock/reservations/<uuid>/commit` → 401, instance `/internal/stock/reservations/:orderId/commit`; cart bilinmeyen
+    kitap PATCH → 404 `/api/cart/items/:bookId`; iki servisin loglarında UUID 0.
+
 ## Sonraki adımlar
+- PROJE KARARI (Ekim 2026, UI paralel): UI (Angular 13) Order ile PARALEL başlıyor — ayrı agent, ayrı worktree
+  (`..\kitapSepeti-ui`, branch `ui`), yalnızca `frontend/` + `memory-bank/frontend.md` + `.cursor/rules/frontend-angular13.mdc`.
+  Plan: kitapSepetiPlanlama `ui.md` + `docs/ui-roadmap.md`. Backend agent'ına kurallar: (1) Docker'da yalnızca kendi servisini
+  rebuild et (`docker compose up -d --build order-service`), diğer servisleri durdurma, `down -v` yok (UI aynı container'ları
+  kullanıyor); (2) Order sözleşmesi (CheckoutRequest, OrderResponse, hata kodları) Adım 4 sonunda dondurulur (UI-7 buna göre).
+  UI için küçük backend işleri: B1 catalog `GET /api/books?q=` başlık araması (OpenAPI + drift testi), B2 Docker'da katalog örnek
+  verisi (compose'da catalog varsayılan profilde, seed yok), B3 bir kullanıcıyı ADMIN yapmak (SQL).
 - PROJE KARARI (Ekim 2026): sıra Payment → Order → Gateway → UI → (vakit kalırsa) Notifications. Notifications v1 yalnızca uygulama
   içi bildirim (OrderPaid/OrderFailed; e-posta, tercih, şablon yok). Order fazında `order-paid.md` ve `order-failed.md` olay
   sözleşmeleri yine yazılacak.
+- PROJE KARARLARI — Order (Ekim 2026):
+  - Checkout `201` + `pending` döner; UI sonucu polling ile izler (GET {id}).
+  - Kullanıcı başına tek `pending` sipariş: generated kolon + UNIQUE; ikincisi `409 ORDER_PENDING_EXISTS`.
+  - Teslimat adresi checkout gövdesinden alınır ve siparişe snapshot olarak yazılır (user-service'e çağrı yok).
+  - Sepet `CartCheckedOut` olayıyla kapanır (Cart tüketicisi Adım 7).
+  - Circuit breaker Order Adım 3'te tüm Feign istemcilerine (cart, catalog, payment).
+  - v1 kuponsuz.
+  - Önce kayıt sonra dış çağrı: sipariş satırı kendi TX'inde yazılır, sonra rezervasyon/ödeme çağrıları.
+  - Stok commit/release Catalog internal HTTP ile (`/internal/stock/reservations/{orderId}/commit|release`).
+- Order planı: 0a common sertleştirme (YAPILDI) → 0b outbox → common → 1 modül/db → 2 domain → 3 Feign + CB → 4 checkout mutlu yol +
+  GET {id} → 5 hata yolları/telafi → 6 ödeme sonucu tüketicisi → 7 Cart CartCheckedOut tüketicisi → 8 timeout görevi → 9 liste →
+  10 OpenAPI/olay belgeleri → 11 Docker.
+- order-service eklenirken: `RequestPathMasker` bean'i (`/api/orders/{orderId}` vb.) ve `InternalAuthConfig` (gerekirse) — common
+  politika aynen geçerli.
 - Payment artık işleri: (1) iyzico sandbox sağlayıcısı; (2) aynı siparişe eşzamanlı ilk isteklerde birden fazla sağlayıcı çağrısı
   (gerçek sağlayıcıda idempotency anahtarı = paymentId); (3) outbox kodunu common'a taşıma (Order fazı); (4) outbox yayın hatası
   WARN'ındaki eventId (`OutboxRelay`: `id=…, eventType=…`) kaldırılmalı/maskelenmeli.
 - Order istemcisi `.env` `ORDER_INTERNAL_API_KEY` ile `X-Internal-Api-Key` gönderir (payment özeti `PAYMENT_INTERNAL_KEY_ORDER_SHA256`);
   compose'da `http://payment-service:8087`, istemci `docs/api/payment-service.openapi.json`'dan.
-- Cart ertelenenler: (1) CartCheckedOut tüketimi Order fazında (checkout + yeni sepet aynı TX'te olursa arada `flush()` — flush tuzağı);
-  (2) yol maskelemeyi (`MaskedRequestPaths`) ve boş özet politikasını (internal key özeti boş/bozuksa açılmama) common'a taşıma
-  (Order fazının başında ayrı adım); (3) Catalog OpenAPI'de nullable alanları `types = {"x","null"}` ile işaretleme (cart'taki gibi).
+- Cart ertelenenler: (1) CartCheckedOut tüketimi Order Adım 7'de (checkout + yeni sepet aynı TX'te olursa arada `flush()` — flush
+  tuzağı); (2) Catalog OpenAPI'de nullable alanları `types = {"x","null"}` ile işaretleme (cart'taki gibi). (Yol maskeleme + özet
+  politikası Order Adım 0a'da common'a taşındı.)
   Order'ın sepet istemcisi `docs/api/cart-service.openapi.json`'dan (internal snapshot dahil); compose'da `http://cart-service:8083`.
 - Gateway fazı: `/v3/api-docs` + Swagger UI dört serviste (user, catalog, cart, payment) permitAll; Gateway'de dışarıya kapatılacak (ya da `SPRINGDOC_ENABLED=false`).
 - order-service (rezervasyon istemcisi; fiyat anlık görüntüsü kendisinde; `RESERVATION_RELEASED` → ödeme iadesi telafisi; süre dolumu
@@ -1060,4 +1110,4 @@
 - Açık konu (catalog OpenAPI): `/v3/api-docs` her profilde açık (user-service ile aynı) → internal uçların şekli de herkese görünür
   (sır yok); prod'da `SPRINGDOC_ENABLED=false` düşünülmeli.
 - Yeni servisler eklendikçe kök POM kontrol listesini uygula (bkz. systemPatterns.md; [5] common, [6] Dockerfile).
-- Ayrı adım: outbox kodunu (OutboxRelay/Publisher/Properties/RabbitConfig) common'a taşımak.
+- Order Adım 0b: outbox kodunu (OutboxRelay/Publisher/Properties/RabbitConfig) common'a taşımak.

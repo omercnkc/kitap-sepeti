@@ -117,7 +117,8 @@
   `ORDER_INTERNAL_API_KEY`; webhook imzası Swagger'dan elle üretilmez (mock dispatcher kendisi gönderir).
   Docs/Swagger dört serviste de permitAll; Gateway fazında dışarıya kapatılacak.
 - PowerShell tuzağı (tekrar yaşandı): `.env`'yi okurken `-match '^\s*([A-Za-z_]...'` tr-TR'de adında `I` geçen satırları ATLAR
-  (`CATALOG_INTERNAL_KEY_ORDER_SHA256`, `RABBITMQ_USER`...) → internal istemci kapalı açılır, anahtarla da 401. Her zaman `-cmatch`.
+  (`CATALOG_INTERNAL_KEY_ORDER_SHA256`, `RABBITMQ_USER`...) → değişken boş kalır (Order Adım 0a'dan beri catalog o zaman AÇILMAZ;
+  öncesinde istemci kapalı açılıyordu). Her zaman `-cmatch` / Ordinal StartsWith.
   Ayrıca `Invoke-WebRequest().Content` UTF-8 yanıtı yanlış çözer; karşılaştırma için `WebClient.DownloadData` + UTF8.GetString.
 - OS: Windows, shell: PowerShell
 

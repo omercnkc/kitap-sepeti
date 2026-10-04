@@ -39,6 +39,32 @@
   (RS256 + iss/exp, RestTemplate 2 s / 3 s).
 - `common.security.internal`: `InternalAuthProperties`, `InternalApiKeys`, `InternalApiKeyAuthenticationFilter` (BEAN DEĞİL),
   `InternalApiKeyAuthenticationEntryPoint`. Zincir (`InternalSecurityConfig`) serviste kalır.
+- İNTERNAL ÖZET POLİTİKASI (Order Adım 0a, TEK KURAL, `InternalApiKeys` ctor'u): istemci listesi boş → açılmaz ("must configure at least
+  one internal client"); ad boş/tekrar → açılmaz; her istemcinin `key-sha256`'sı yok/boş/yalnızca boşluk → açılmaz ("... must be set to
+  the 64-character hex SHA-256 digest of the API key"); trim sonrası `[0-9a-fA-F]{64}` değil → açılmaz ("... (configured value not
+  shown)"). Mesajda özellik yolu + istemci adı, DEĞER YOK. Büyük/küçük harf hex kabul. "Boş özet = istemci kapalı" kavramı ve
+  `Client.enabled()` KALDIRILDI. Servis tarafı: `config/InternalAuthConfig` (yalnızca `@EnableConfigurationProperties(InternalAuthProperties)`
+  + `new InternalApiKeys(props)` bean'i; cart, catalog, payment aynı). Compose'da her `*_INTERNAL_KEY_*_SHA256` `${VAR:?}`.
+- `common.web.RequestPathMasker` (Order Adım 0a): hata yanıtının `instance`'ı ve tüm hata/internal log satırlarındaki yol buradan geçer.
+  - API: `RequestPathMasker.of("/api/x/{id}", ...)` (servis desenleri), `uuidOnly()` (desen yok), `mask(HttpServletRequest)`,
+    `mask(String path)`, `ID_SEGMENT = ":id"`.
+  - Desen kuralı: `/` ile başlar, `/` ile bitmez; segment ya literal `[A-Za-z0-9._~-]+` ya tam `{ad}` (`[A-Za-z][A-Za-z0-9]*`);
+    değişken adı tekrarı ve aynı desen iki kez → `IllegalArgumentException`.
+  - Eşleme SEGMENT YAPISINA bakar (değer UUID olmasa da `abc` → `:bookId`); dispatch'e bağlı değil → security filtrelerinde de çalışır.
+    Birden fazla desen eşleşirse en az değişkenli kazanır (eşitlikte ilk kayıtlı) → `/api/books/lookup` `/api/books/{bookId}`'den önce.
+  - Hiçbir desene uymayan yolda güvenlik ağı: tam segment UUID (büyük/küçük harf) → `:id`; diğer segmentler aynen.
+  - Sorgu dizesi/fragment ASLA çıkmaz; context path korunur; sondaki `/` korunur; kalan segmentler RFC 3986 pchar'a yüzde-kodlanır →
+    sonuç her zaman geçerli URI (eski davranış: ayrıştırılamayan yol → `instance` yok; artık `/a%20b%7Cc`).
+  - Bağlama: common auto-config yok. Servis `SecurityConfig`'te `@Bean RequestPathMasker requestPathMasker()` tanımlar;
+    `ProblemDetailExceptionHandler` `@Autowired(required = false)` setter ile alır, `ProblemDetailSecurityHandlers`
+    `ObjectProvider.getIfAvailable(uuidOnly)`; internal entry point/filtre ve failure handler'a ctor parametresi olarak verilir.
+    Bean yoksa her yerde `uuidOnly()`. `ProblemDetails.create/apply/log` maskeleyicisiz overload'ları da `uuidOnly()` kullanır.
+  - Alt sınıf handler'lar `logProblem(code, request, ex, note)` + `respond(code, detail, request)` (instance metotları) kullanır.
+  - Kayıtlı desenler: user `/api/me/addresses/{addressId}`; catalog `/api/books/lookup`, `/api/books/{bookId}`,
+    `/api/admin/books/{bookId}` (+ `/publish`, `/archive`, `/stock-adjustments`), `/api/admin/authors/{authorId}`,
+    `/api/admin/publishers/{publisherId}`, `/api/admin/categories/{categoryId}` (+ `/parent`), `/internal/stock/reservations/{orderId}`
+    (+ `/commit`, `/release`); cart `/api/cart/items/{bookId}`; payment `/internal/payments/{paymentId}`.
+    YENİ UÇ YOLDA ID TAŞIYORSA DESEN EKLE.
 - Bu paketlerdeki sınıfların logger'ı artık `com.kitapsepeti.common.security(.internal).*` (mesaj metni aynı).
 - common'a GİRMEYEN: güvenlik kuralları/yollar (SecurityConfig), user-service'in kendi anahtarlı JwtDecoder'ı (RsaKeyConfig),
   catalog JwtProperties, InternalSecurityConfig, outbox (ayrı adım; hâlâ servis başına kopya).
@@ -66,8 +92,11 @@
    Test altyapısı (servis başına kopya): `support/TestJwt` (anahtar test JVM'inde üretilir — cart; catalog/user pem dosyası + .gitignore
    istisnası kullanır), `support/JwksServer`, `ApiTestSupport` (statik JWKS + `@DynamicPropertySource`), `support/MutableClock(Configuration)`,
    ayrı context'li `security/JwksOutageTest`.
-5. Internal uç sunuyorsa: `@EnableConfigurationProperties(InternalAuthProperties.class)`, `new InternalApiKeys(props)`, filtreyi zincirde
-   `new` ile ekle (bean yapma), entry point'i `exceptionHandling`'e ver.
+5. Internal uç sunuyorsa: `config/InternalAuthConfig` (cart kopyası: `@EnableConfigurationProperties(InternalAuthProperties.class)`,
+   `new InternalApiKeys(props)`), filtreyi zincirde `new InternalApiKeyAuthenticationFilter(keys, entryPoint, pathMasker)` ile ekle
+   (bean yapma), entry point'i (`new InternalApiKeyAuthenticationEntryPoint(jsonMapper, pathMasker)`) `exceptionHandling`'e ver.
+5b. Yolda id taşıyan her uç için `SecurityConfig`'te `@Bean RequestPathMasker requestPathMasker()` desenleri; failure handler'a
+   (`new ProblemDetailAuthenticationFailureHandler(entryPoint, jsonMapper, pathMasker)`) da ver.
 6. `OpenApiConfig`: `code` enum'u `<Servis>ErrorCode.API_CODES.stream().map(ErrorCode::name).toList()`.
 7. Dockerfile: mevcut bir servisinkini kopyala, yalnızca servis adını ve `COPY --parents common/src <servis>/src ./` satırını uyarla.
 
@@ -113,7 +142,7 @@
   `MessageDigest.isEqual` ile karşılaştırır (hep tüm liste gezilir); eşleşme → principal = istemci adı, `ROLE_INTERNAL_SERVICE`,
   INFO `Internal request METHOD path client=<ad>`. Yok/yanlış → `InternalApiKeyAuthenticationEntryPoint`: 401 UNAUTHORIZED,
   `WWW-Authenticate: ApiKey realm="internal"`, tek WARN satırı (method + path). Anahtar/özet ASLA loglanmaz.
-  Yapılandırma `app.internal-auth.clients[{name, key-sha256}]` (yalnızca özet; boş = istemci kapalı). Format doğrulaması
+  Yapılandırma `app.internal-auth.clients[{name, key-sha256}]` (yalnızca özet; yok/boş/bozuk → açılmaz, Order Adım 0a). Format doğrulaması
   bağlamada DEĞİL `InternalApiKeys` ctor'unda (fail-fast `IllegalStateException`, mesajda özellik + istemci adı, değer YOK —
   Boot'un bind failure analyzer'ı değeri yansıtabilirdi; yanlışlıkla ham anahtar girilirse sızmasın). `Client.toString` özeti maskeler.
   Ana zincirdeki `/internal/** denyAll` ek savunma olarak kalır. Yeni istemci = listeye yeni `{name, key-sha256}` + `.env` özeti.
@@ -139,9 +168,8 @@
   (`ApiKey realm="internal"`). Kullanıcı zinciri (`SecurityConfig`) `@Order(2)`, davranışı aynı. Kullanıcı JWT'si /internal'da 401;
   internal anahtar /api/cart'ta 401 `Bearer`. Anahtar kontrolü yönlendirmeden önce → anahtarsız `GET /internal/cart/snapshot` 401
   (Allow yok), anahtarlı 405.
-- `config/InternalAuthConfig`: `InternalAuthProperties` + `InternalApiKeys` bean'i (özet biçimi common'da: 64 hex, değer mesajda yok).
-  CATALOG'DAN FARK: özeti boş/yok istemci kapalı sayılmaz → bağlam açılmaz ("... must be set; cart-service does not start with a
-  disabled internal client"); istemci listesi boşsa da açılmaz. application.yml `app.internal-auth.clients[0]` = `order-service` +
+- `config/InternalAuthConfig`: `InternalAuthProperties` + `InternalApiKeys` bean'i; politika common'da (yukarıda "İNTERNAL ÖZET
+  POLİTİKASI", tüm servislerde aynı). application.yml `app.internal-auth.clients[0]` = `order-service` +
   `key-sha256: ${CART_INTERNAL_KEY_ORDER_SHA256:}`.
 - Internal yolda maskeleme gerekmez: kullanıcı/kitap id'si yolda değil gövdede taşınır (`instance` = `/internal/cart/snapshot`).
 
@@ -397,9 +425,8 @@
   HTTP, `@Primary MutableClock` (created_at, imza ve doğrulama aynı saat), recovery interval 1h (görev elle `resendStale()`),
   `@MockitoSpyBean WebhookService` (TX proxy içi → `AopTestUtils.getUltimateTargetObject`) + `PaymentRepository`; `@BeforeEach`
   `dispatcher.pendingCount()==0` bekler + `clearInvocations` (önceki testin planlı gönderimi sayıma karışmasın).
-- payment yol maskeleme: `MaskedRequestPaths` (cart kopyası) `/internal/payments/<x>` → `:paymentId`; hata handler'ları VE common
-  `InternalApiKeyAuthenticationFilter`'ın INFO/401 logları maskeli — `InternalSecurityConfig.MaskedPathFilter` common filtresine
-  maskeli isteği verir, zincirin geri kalanına orijinal istek gider (common değişmeden).
+- payment yol maskeleme: `SecurityConfig.requestPathMasker()` = `/internal/payments/{paymentId}` (common `RequestPathMasker`, Order
+  Adım 0a; eski `MaskedRequestPaths` + `MaskedPathFilter` silindi). Hata handler'ları VE common internal filtre/entry point logları maskeli.
 - payment ödeme oluşturma (Adım 3): sağlayıcı çağrısı ASLA DB transaction'ı içinde değil. `PaymentService` (TX'siz) →
   `PaymentTransactions.findOrCreate` (READ_COMMITTED, saveAndFlush; `uk_payments_order` ihlali → yeni TX'te bir kez tekrar) →
   sağlayıcı (hata/geçersiz referans → 503, ödeme referanssız kalır, tekrar istek yeniden dener) → `attachReference`
@@ -495,10 +522,10 @@
 - DELETE tümü: `clear(clock)`; sepet silinmez, aktif ve boş kalır. Yanıt her zaman boş (Catalog çağrılmaz). Sepet yoksa açılmaz.
 - Damgalama kararı: DEĞİŞİKLİK YOKSA DAMGA YOK — aynı adetle PATCH (UPDATE SQL'i bile yok), olmayan satırı silmek, zaten boş sepeti
   boşaltmak `updated_at`'e dokunmaz. Değişiklikte satır + sepet `updated_at` = Clock; satır silmede sepet damgalanır.
-- Yol maskeleme: `exception/MaskedRequestPaths` hata yazan her noktada (cart GlobalExceptionHandler override'ları, assembler WARN'ı,
-  SecurityConfig'te sarılmış common security handler'ları) `/api/cart/items/<x>` → `/api/cart/items/:bookId` (ProblemDetail `instance` +
-  log). `{}` kullanılmaz (common `URI.create` → geçersiz → instance null). Path'te bozuk UUID → 400 MALFORMED_REQUEST (TypeMismatch,
-  common'ın varsayılan dalı; mevcut davranış).
+- Yol maskeleme: `SecurityConfig.requestPathMasker()` = `/api/cart/items/{bookId}` (common `RequestPathMasker`, Order Adım 0a; eski
+  `MaskedRequestPaths` ve handler override'ları/sarmalayıcıları silindi). Common handler'lar, security handler'ları ve assembler'ın
+  CATALOG_UNAVAILABLE WARN'ı (`ProblemDetails.log(..., pathMasker)`) aynı bean'i kullanır → `/api/cart/items/:bookId`. Path'te bozuk
+  UUID → 400 MALFORMED_REQUEST (TypeMismatch, common'ın varsayılan dalı; mevcut davranış).
 - Internal snapshot (`POST /internal/cart/snapshot` {userId}, `controller/internal/InternalCartController`, DTO'lar `dto/internal/`):
   `service/CartSnapshotService` `@Transactional(readOnly = true)` → `findByUserIdAndStatus(userId, ACTIVE)` = TEK SQL (EntityGraph
   join, `for update` yok). Kilit yok, sepet açılmaz, damga yok, Catalog yok. Yanıt `{cartId, updatedAt, items[{bookId, quantity,
