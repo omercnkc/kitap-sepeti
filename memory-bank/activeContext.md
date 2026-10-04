@@ -929,7 +929,7 @@
   - Root `clean verify`: common 25, user 83, catalog 276, cart 312 (2 skipped), payment 247. `spring-boot:run` (Docker RabbitMQ):
     health UP, readiness 200, WARN/ERROR 0; broker'da `kitapsepeti.events topic durable`.
 
-- Payment Adım 5 — sağlayıcı webhook ucu `POST /webhooks/{provider}` (henüz commit edilmedi; mock dispatcher, otomatik gönderim,
+- Payment Adım 5 — sağlayıcı webhook ucu `POST /webhooks/{provider}` (commit `26bfbb5` + `c1ac219`, push edildi; mock dispatcher, otomatik gönderim,
   kurtarma görevi YOK; migration, diğer modüller, common değişmedi; ham gövde DB'ye/loga yazılmaz). Kurallar systemPatterns
   "payment webhook":
   - Kod: `provider/mock/` MockWebhookSigner (Adım 6 dispatcher'ı da kullanacak) + MockWebhookVerifier; `config/WebhookSecurityConfig`
@@ -954,9 +954,34 @@
     health UP, readiness 200; imzasız ve bozuk imzalı POST /webhooks/mock → 401 + `Signature realm="webhook"`; POST /webhooks/x → 404;
     GET /webhooks/mock → 403; logda yalnızca beklenen 3 WARN, gönderilen değerler yok. Pozitif uçtan uca Adım 6'da (secret okunmadı).
 
+- Payment Adım 6 — mock'un kendi webhook'una otomatik gönderimi + kurtarma görevi; TAM AKIŞ ÇALIŞIYOR (oluştur → commit sonrası
+  gecikmeli imzalı webhook → succeeded/failed → outbox → RabbitMQ). Henüz commit edilmedi. Migration, webhook ucu (Adım 5 sözleşmesi),
+  diğer modüller, common değişmedi. Kurallar systemPatterns "payment mock webhook gönderimi" / "MockRecoveryJob":
+  - Kod: `provider/mock/` MockPaymentReadyEvent, MockWebhookPayload, MockWebhookDispatcher, MockRecoveryJob; `config/MockWebhookConfig`;
+    `SchedulingConfig` → `AnyJobEnabled` (outbox | mock recovery); `PaymentProperties.Mock` + `delay`, `webhookUrl`,
+    `dispatch(enabled, queueCapacity)`, `recovery(enabled, interval, minAge, batchSize)` (+ doğrulama, toString); `PaymentTransactions`
+    (ApplicationEventPublisher, olay yalnızca referans yazılınca ve mock'ta); `PaymentRepository.findStaleWithReference`; yml.
+  - Kararlar: zamanlayıcı bean değil (bean olsaydı `@Scheduled` onu kullanırdı, `OutboxDisabledTest` TaskScheduler yokluğunu kilitler);
+    kuyruk sınırı sayaçla (ScheduledThreadPoolExecutor kuyruğu sınırsız); `dispatch.enabled=false` göndericiyi kaldırmaz (kurtarma
+    kullanır). `JdkClientHttpRequestFactory` (HttpURLConnection 401'de HttpRetryException). Kurtarma sayısı yalnızca DELIVERED.
+    Test profilinde dispatch + recovery KAPALI, yalnızca Adım 6 akış testleri açar.
+  - Testler (payment 339 = 297 + 42): MockWebhookDispatcherTest 14 (unit, JDK HttpServer stub + gerçek verifier: gövde/imza, failed,
+    sabit eventId, SKIPPED halleri, 401 tekrar yok, 503, kapalı port, read timeout, DB hatası, URL yok, gecikme, kuyruk dolu, kapalı,
+    log), MockWebhookFlowIT 8 (10.00 → succeeded + `mock_evt_<id>` + PaymentSucceeded mesajı messageId/payload; 10.99 → failed
+    CARD_DECLINED + PaymentFailed; yanıt < gecikme; aynı orderId → ikinci gönderim yok; 5xx/4xx gerçek uca karşı; önceden final →
+    SKIPPED; log), MockRecoveryJobIT 6 (seçim kuralları, batch + created_at sırası, yarış → 204 tekrar sayılar aynı, bir hata diğerlerini
+    durdurmaz, boş tur log yok, EXPLAIN), MockDispatchDisabledIT 2 (initiated kalır; görev tamamlar), MockWebhookConfigTest 4,
+    PaymentPropertiesTest +8 (27), OutboxDisabledTest güncellendi.
+  - Root `clean verify`: common 25, user 83, catalog 276, cart 312 (2 skipped), payment 339. Yerel uçtan uca (spring-boot:run, Docker
+    MySQL + RabbitMQ): geçici `payment.#` kuyruğu (konteyner içi rabbitmqadmin 2.35, kimlik bilgisi konteyner env'inden; classic
+    transient non-exclusive kuyruk RabbitMQ 4'te yasak → durable açıldı, sonra silindi); 149.90 → 201 initiated, 2 sn sonra succeeded;
+    149.99 → 201 initiated, 2 sn sonra failed CARD_DECLINED; kuyrukta PaymentSucceeded/payment.succeeded ×2 + PaymentFailed/
+    payment.failed ×1 (fazla olan: kurtarma görevi önceki adımlardan kalan referanslı initiated bir ödemeyi tamamladı, logda
+    `Mock recovery resent 1 webhook(s)`); gerçek DB EXPLAIN range/ix_payments_status_created/key_len 74; log: id, tutar, imza, referans
+    yok, WARN/ERROR 0.
+
 ## Sonraki adımlar
-- Payment Adım 6: mock dispatcher (ödeme oluşturulunca `MockOutcomeRule` sonucunu `MockWebhookSigner` ile imzalayıp kendi
-  `/webhooks/mock` ucuna gönderir; pozitif uçtan uca), kurtarma görevi; sonra OpenAPI, Docker + compose.
+- Payment: OpenAPI, Docker + compose (compose'da `webhook-url` gerekmez: aynı konteynerde localhost:<port>).
   Order istemcisi `.env` `ORDER_INTERNAL_API_KEY` ile `X-Internal-Api-Key` gönderir (payment özeti `PAYMENT_INTERNAL_KEY_ORDER_SHA256`).
 - Cart ertelenenler: (1) CartCheckedOut tüketimi Order fazında (checkout + yeni sepet aynı TX'te olursa arada `flush()` — flush tuzağı);
   (2) yol maskelemeyi (`MaskedRequestPaths`) ve boş özet politikasını (internal key özeti boş/bozuksa açılmama) common'a taşıma

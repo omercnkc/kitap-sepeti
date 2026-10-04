@@ -99,7 +99,11 @@
   matches), `ProviderEvent` (@Immutable), katı küçük harf converter'lar (ortak taban), kilitsiz repository'ler, `PaymentProvider`
   soyutlaması + tek bean (`app.payment.provider`, yalnızca mock açılır), `MockPaymentProvider`, `MockOutcomeRule` (kuruş = fail-cents →
   CARD_DECLINED), `PaymentProperties` (fail-cents 0–99). payment-service 177 test.
-- Payment Adım 5 (henüz commit edilmedi): imzalı mock webhook ucu `POST /webhooks/{provider}` (HMAC-SHA256 `X-Mock-Timestamp` +
+- Payment Adım 6 (henüz commit edilmedi): TAM AKIŞ ÇALIŞIYOR — referans yazılınca (commit sonrası) mock webhook 500ms sonra
+  uygulamanın kendi `/webhooks/mock` ucuna imzalı gönderilir (`MockWebhookDispatcher`, sınırlı kendi zamanlayıcısı, tekrar yok),
+  `MockRecoveryJob` (30 sn; 10 sn'den eski referanslı initiated mock ödemeleri yeniden gönderir, sabit eventId ile zararsız tekrar).
+  Yerelde 149.90 → succeeded, 149.99 → failed CARD_DECLINED, RabbitMQ'da PaymentSucceeded/PaymentFailed. payment-service 339 test.
+- Payment Adım 5 (commit `26bfbb5` + `c1ac219`, push edildi): imzalı mock webhook ucu `POST /webhooks/{provider}` (HMAC-SHA256 `X-Mock-Timestamp` +
   `X-Mock-Signature`, ±5 dk; ayrı güvenlik zinciri @Order 2), `WebhookService` (ödeme FOR UPDATE → tekrar → tutar → provider_events →
   PaymentResults, tek TX), `PAYMENT_MOCK_WEBHOOK_SECRET` zorunlu. payment-service 297 test.
 - Payment Adım 4 (commit `1f5bce0` + `a98ad7a`, push edildi): `PaymentResults` (durum geçişi + outbox aynı TX), outbox → RabbitMQ yayıncısı
@@ -109,8 +113,7 @@
   `GET /internal/payments/{id}`, yol maskeleme (log dahil). payment-service 220 test. Yerelde V2 uygulandı, uçtan uca geçti.
 
 ## Yapılacaklar
-- Payment (Faz 7) sonraki adımlar: mock dispatcher (pozitif webhook uçtan ucu) + kurtarma görevi (Adım 6), OpenAPI,
-  Docker + compose.
+- Payment (Faz 7) sonraki adımlar: OpenAPI, Docker + compose.
 - Outbox kodunu common'a taşıma (Order fazı başında): user-service, catalog-service ve payment-service'te üç kopya.
 - Cart ertelenenler: CartCheckedOut tüketimi (Order fazı); yol maskeleme + boş özet politikasını common'a taşıma; Catalog OpenAPI nullable.
 - Gateway fazı: docs/Swagger'ı (üç servis) dışarıya kapatmak.

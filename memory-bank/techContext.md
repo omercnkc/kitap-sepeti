@@ -39,6 +39,11 @@
   base64url girdi; `.env.example`'da boş) → `app.payment.mock.webhook-secret`. Yok/boş/<32 → payment-service açılmaz. Yalnızca
   payment-service kullanır (Adım 6'daki mock dispatcher da aynı secret'la imzalar). Testler `WebhookTestSecrets.register` ile
   çalıştırma başına rastgele secret verir. `app.payment.webhook.tolerance` (5m) ve `max-body-bytes` (65536) application.yml'de.
+- payment mock gönderim ayarları (Adım 6, `app.payment.mock.*`): `delay` 500ms, `webhook-url` (yoksa uygulamanın portu),
+  `dispatch.enabled` true / `dispatch.queue-capacity` 100, `recovery.enabled` true / `interval` 30s / `min-age` 10s / `batch-size` 50
+  (1–1000). Test profilinde dispatch ve recovery kapalı. Yerelde geçici RabbitMQ kuyruğu: konteyner içindeki `rabbitmqadmin` (2.35,
+  HTTP API) `RABBITMQADMIN_USERNAME/PASSWORD` ← konteynerin `RABBITMQ_DEFAULT_USER/PASS` env'i (değer yazdırılmaz); RabbitMQ 4'te
+  transient non-exclusive classic kuyruk yasak → `--durable true`, iş bitince `delete queue`.
 - payment `app.payment.*` (`config/PaymentProperties`, @Validated): `provider` (varsayılan mock; v1'de yalnızca mock açılır),
   `mock.fail-cents` 0–99 (varsayılan 99). DİKKAT: `app.payment.provider=` (boş) hata vermez, Binder boş değeri null yapıp
   `@DefaultValue("mock")`'a düşer (testle sabitlendi). Bağlam testleri `ApplicationContextRunner().withUserConfiguration(PaymentConfig.class)`.

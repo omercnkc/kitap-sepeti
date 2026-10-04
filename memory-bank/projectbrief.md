@@ -6,5 +6,5 @@ KitapSepeti: Spring Boot tabanlı, çok servisli (mikroservis) bir kitap satış
 - Kök dizin Maven multi-module projesidir; her servis ayrı bir modül/klasördür.
 - Mevcut servisler: `user-service` (8081), `catalog-service` (8082, tamamlandı), `cart-service` (8083, tamamlandı; OpenAPI sözleşmesi
   `docs/api/cart-service.openapi.json`, Docker + compose); ortak kütüphane modülü `common`.
-- Geliştiriliyor: `payment-service` (Faz 7, 8087; Adım 1–5 bitti: iskelet + V1, alan modeli, V2 + güvenlik + internal ödeme ucu,
-  sonuç servisi + outbox → RabbitMQ, imzalı mock webhook ucu).
+- Geliştiriliyor: `payment-service` (Faz 7, 8087; Adım 1–6 bitti: iskelet + V1, alan modeli, V2 + güvenlik + internal ödeme ucu,
+  sonuç servisi + outbox → RabbitMQ, imzalı mock webhook ucu, mock'un otomatik webhook gönderimi + kurtarma görevi — tam akış çalışıyor).

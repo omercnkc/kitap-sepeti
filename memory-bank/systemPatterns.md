@@ -355,6 +355,33 @@
   `support/MutableClock` (cart kopyası), `controller/webhook/WebhookTestSupport` (referanslı ödeme, `signed(...)`). DİKKAT: MockMvc
   `.header()` değer EKLER (değiştirmez) — bozuk imza testinde istek sıfırdan kurulmalı. MockMvc print-on-failure dökümü (istek gövdesi)
   sonraki testin CapturedOutput'una düşebilir: bir log testi kırılırsa önce önceki testin hatasına bak.
+- payment mock webhook gönderimi (Adım 6, `provider/mock/`): `PaymentTransactions.attachReference` referansı GERÇEKTEN yazınca
+  (`attachProviderReference` true) ve sağlayıcı mock ise `MockPaymentReadyEvent(paymentId)` yayınlar → `MockWebhookDispatcher`
+  `@TransactionalEventListener(AFTER_COMMIT)` gönderimi `app.payment.mock.delay` (500ms) sonrasına KENDİ zamanlayıcısına planlar
+  (bean OLMAYAN `ThreadPoolTaskScheduler`, 2 thread, daemon; bean olsaydı `@Scheduled` görevleri ve Boot'un varsayılan scheduler'ı ona
+  geçerdi). Sınır: `AtomicInteger` bekleyen sayacı ≥ `dispatch.queue-capacity` (100) → düşür + WARN (değersiz), kurtarma toparlar.
+  `send(paymentId)`: `findById` (kilitsiz; Spring Data readOnly) → yok/final/referanssız/mock değil → SKIPPED; gövde
+  `MockWebhookPayload` (eventId `mock_evt_<paymentId>` SABİT, amount scale 2 metin, failureCode yalnızca failed — `@JsonInclude
+  NON_NULL`) bir kez `writeValueAsBytes` → aynı baytlar `MockWebhookSigner.sign(clock epoch sn)` → RestClient
+  (`JdkClientHttpRequestFactory`, HTTP/1.1, connect 1000 ms, read 2000 ms, redirect yok, tekrar yok). URL `app.payment.mock.webhook-url`
+  yoksa `WebServerInitializedEvent` portu (`http://localhost:<port>/webhooks/mock`; management namespace atlanır). Sonuç enum
+  `Delivery`: 2xx DELIVERED (DEBUG), 4xx REJECTED (WARN `Mock webhook rejected (status=…)`), 5xx/IO/timeout/beklenmeyen FAILED (WARN
+  `Mock webhook delivery failed (status=…|cause=<SınıfAdı>)`); exception dışarı ÇIKMAZ. `SimpleClientHttpRequestFactory` KULLANMA:
+  HttpURLConnection streaming modda 401'de HttpRetryException atar (4xx sınıflandırması bozulur).
+- payment `MockRecoveryJob`: `@Scheduled(fixedDelay = initialDelay = recovery.interval)` (ilk tur da bir aralık sonra: port açılışta
+  bilinmeyebilir) → `PaymentRepository.findStaleWithReference(INITIATED, MOCK, now - min-age, Limit batch-size)` (JPQL, `order by
+  createdAt, id`; EXPLAIN: `ix_payments_status_created` range, key_len 74 = iki kolon, filesort yok — InnoDB ikincil indeksi PK'yı
+  taşır) → her id için senkron `dispatcher.send` (exception atmaz, biri diğerini durdurmaz). Log yalnızca `Mock recovery resent N
+  webhook(s)` (INFO, N>0; N = DELIVERED). Kilit YOK: çok instance aynı ödemeyi gönderebilir, sabit eventId → webhook 204 tekrar.
+  Referanssız initiated ödemeye dokunmaz (Order'ın tekrar isteği tamamlar).
+- `MockWebhookConfig` (`app.payment.provider=mock`, matchIfMissing): dispatcher her zaman (kurtarma kullanır; `dispatch.enabled=false`
+  yalnızca otomatik planlamayı kapatır, zamanlayıcı da oluşmaz), job `recovery.enabled`. `SchedulingConfig` catalog gibi
+  `AnyJobEnabled` (outbox VEYA provider=mock + recovery; Boot 4'te `@ConditionalOnProperty` tekrarlanabilir → üye sınıfta iki koşul AND).
+- Test profili: `dispatch.enabled=false` + `recovery.enabled=false` (MockMvc testlerinde port yok, mevcut testler initiated'ı kendisi
+  yönetir; `OutboxDisabledTest` zamanlayıcı yokluğunu kilitler). Akış testleri `provider/mock/MockFlowTestSupport`: RANDOM_PORT, gerçek
+  HTTP, `@Primary MutableClock` (created_at, imza ve doğrulama aynı saat), recovery interval 1h (görev elle `resendStale()`),
+  `@MockitoSpyBean WebhookService` (TX proxy içi → `AopTestUtils.getUltimateTargetObject`) + `PaymentRepository`; `@BeforeEach`
+  `dispatcher.pendingCount()==0` bekler + `clearInvocations` (önceki testin planlı gönderimi sayıma karışmasın).
 - payment yol maskeleme: `MaskedRequestPaths` (cart kopyası) `/internal/payments/<x>` → `:paymentId`; hata handler'ları VE common
   `InternalApiKeyAuthenticationFilter`'ın INFO/401 logları maskeli — `InternalSecurityConfig.MaskedPathFilter` common filtresine
   maskeli isteği verir, zincirin geri kalanına orijinal istek gider (common değişmeden).
