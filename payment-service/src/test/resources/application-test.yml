@@ -12,3 +12,11 @@ app:
   # Worker arka planda outbox satırlarını kilitleyip yayınlamasın; yalnızca relay testleri açar.
   outbox:
     enabled: false
+  # Mock webhook otomatik gönderimi ve kurtarma görevi kapalı: ödeme testleri initiated durumunu kendileri yönetir
+  # (MockMvc testlerinde dinlenen port da yok). Yalnızca mock akış testleri (provider/mock) açar.
+  payment:
+    mock:
+      dispatch:
+        enabled: false
+      recovery:
+        enabled: false

@@ -57,6 +57,21 @@ app:
       fail-cents: 99
       # Mock webhook imza anahtarı (HMAC-SHA256). Yok, boş ya da 32 karakterden kısaysa uygulama açılmaz.
       webhook-secret: ${PAYMENT_MOCK_WEBHOOK_SECRET:}
+      # Referans yazıldıktan (commit) bu kadar sonra mock webhook uygulamanın kendi /webhooks/mock ucuna gönderilir.
+      delay: 500ms
+      # Gönderim adresi verilmezse uygulamanın dinlediği port kullanılır (http://localhost:<port>/webhooks/mock).
+      # webhook-url: http://localhost:8087/webhooks/mock
+      dispatch:
+        # Kapalıyken webhook yalnızca kurtarma görevi ile gönderilir.
+        enabled: true
+        # Planlanmış gönderim üst sınırı; dolunca yenisi düşürülür (WARN), kurtarma görevi toparlar.
+        queue-capacity: 100
+      recovery:
+        # min-age'den eski, referanslı, hâlâ initiated mock ödemelerin webhook'unu yeniden gönderir.
+        enabled: true
+        interval: 30s
+        min-age: 10s
+        batch-size: 50
     webhook:
       # X-Mock-Timestamp saatten en fazla bu kadar geride ya da ileride olabilir.
       tolerance: 5m

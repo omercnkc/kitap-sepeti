@@ -1,11 +1,15 @@
 package com.kitapsepeti.payment.repository;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import com.kitapsepeti.payment.entity.Payment;
 import com.kitapsepeti.payment.entity.PaymentProviderType;
+import com.kitapsepeti.payment.entity.PaymentStatus;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -39,5 +43,20 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
 	@Query("select p from Payment p where p.providerType = :providerType and p.providerPaymentId = :providerPaymentId")
 	Optional<Payment> findByProviderReferenceForUpdate(@Param("providerType") PaymentProviderType providerType,
 			@Param("providerPaymentId") String providerPaymentId);
+
+	/**
+	 * Verilen durumda, {@code createdBefore}'dan eski, referansı yazılmış ödemelerin id'leri; {@code created_at}
+	 * sırasıyla. Kilitsiz. {@code ix_payments_status_created (status, created_at)} üzerinde aralık taraması: sıra
+	 * indeksten gelir (InnoDB ikincil indeksi birincil anahtarı da taşır, {@code id} eşitlik bozucu), sağlayıcı ve
+	 * referans koşulları yalnızca aralıktaki satırlarda denetlenir.
+	 */
+	@Query("""
+			select p.id from Payment p
+			where p.status = :status and p.createdAt < :createdBefore
+				and p.providerType = :providerType and p.providerPaymentId is not null
+			order by p.createdAt, p.id""")
+	List<UUID> findStaleWithReference(@Param("status") PaymentStatus status,
+			@Param("providerType") PaymentProviderType providerType, @Param("createdBefore") Instant createdBefore,
+			Limit limit);
 
 }

@@ -7,11 +7,14 @@ import java.util.UUID;
 
 import com.kitapsepeti.common.error.ResourceNotFoundException;
 import com.kitapsepeti.payment.entity.Payment;
+import com.kitapsepeti.payment.entity.PaymentProviderType;
 import com.kitapsepeti.payment.exception.PaymentOrderMismatchException;
 import com.kitapsepeti.payment.provider.PaymentProvider;
+import com.kitapsepeti.payment.provider.mock.MockPaymentReadyEvent;
 import com.kitapsepeti.payment.repository.PaymentRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,10 +40,14 @@ public class PaymentTransactions {
 
 	private final Clock clock;
 
-	public PaymentTransactions(PaymentRepository payments, PaymentProvider provider, Clock clock) {
+	private final ApplicationEventPublisher events;
+
+	public PaymentTransactions(PaymentRepository payments, PaymentProvider provider, Clock clock,
+			ApplicationEventPublisher events) {
 		this.payments = payments;
 		this.provider = provider;
 		this.clock = clock;
+		this.events = events;
 	}
 
 	/** @param created ödeme bu çağrıda mı oluşturuldu (yanıt 201 / 200) */
@@ -73,6 +80,9 @@ public class PaymentTransactions {
 	 * girer. Referans boşsa yazılır; aynıysa hiçbir şey değişmez. Başka bir referans zaten yazılmışsa (aynı ödeme için
 	 * eşzamanlı ikinci sağlayıcı çağrısı) mevcut korunur, yeni referans atılır ve WARN yazılır. Ödeme bu arada
 	 * sonuçlanmışsa da dokunulmaz.
+	 * <p>
+	 * Referans bu çağrıda yazıldıysa ve sağlayıcı mock ise {@link MockPaymentReadyEvent} yayınlanır; dinleyici
+	 * commit'ten sonra çalışır (geri alınan transaction webhook göndermez).
 	 */
 	@Transactional(isolation = Isolation.READ_COMMITTED)
 	public Payment attachReference(UUID paymentId, String providerPaymentId) {
@@ -88,6 +98,9 @@ public class PaymentTransactions {
 		}
 		if (payment.attachProviderReference(providerPaymentId, this.clock)) {
 			this.payments.flush();
+			if (payment.getProviderType() == PaymentProviderType.MOCK) {
+				this.events.publishEvent(new MockPaymentReadyEvent(paymentId));
+			}
 		}
 		return payment;
 	}
