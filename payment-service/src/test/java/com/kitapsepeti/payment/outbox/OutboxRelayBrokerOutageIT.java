@@ -20,6 +20,7 @@ import com.kitapsepeti.payment.TestcontainersConfiguration;
 import com.kitapsepeti.payment.entity.TransitionResult;
 import com.kitapsepeti.payment.service.PaymentResults;
 import com.kitapsepeti.payment.support.InternalTestKeys;
+import com.kitapsepeti.payment.support.WebhookTestSecrets;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -95,6 +96,7 @@ class OutboxRelayBrokerOutageIT {
 		registry.add("spring.rabbitmq.username", broker::getAdminUsername);
 		registry.add("spring.rabbitmq.password", broker::getAdminPassword);
 		InternalTestKeys.register(registry);
+		WebhookTestSecrets.register(registry);
 	}
 
 	@AfterAll

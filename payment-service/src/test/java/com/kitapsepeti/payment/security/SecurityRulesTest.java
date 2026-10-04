@@ -17,15 +17,23 @@ import com.kitapsepeti.payment.support.InternalTestKeys;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.security.web.FilterChainProxy;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 /**
- * İki zincir: /internal/** yalnızca {@code X-Internal-Api-Key} (401 {@code ApiKey realm="internal"}), geri kalan her
+ * Üç zincir: /internal/** yalnızca {@code X-Internal-Api-Key} (401 {@code ApiKey realm="internal"}), /webhooks/**
+ * yalnızca {@code POST /webhooks/*} (imza controller'da; kuralları {@code WebhookControllerTest}), geri kalan her
  * şey health ve /error dışında denyAll (403, challenge yok). Hiçbir yanıtta Bearer challenge yok.
  */
 class SecurityRulesTest extends ApiTestSupport {
+
+	@Autowired
+	private FilterChainProxy filterChainProxy;
 
 	private static final String PAYMENTS = "/internal/payments";
 
@@ -66,8 +74,20 @@ class SecurityRulesTest extends ApiTestSupport {
 		mockMvc.perform(get("/actuator/health/readiness")).andExpect(status().isOk());
 	}
 
+	/** Sıra: internal (1) → webhook (2) → varsayılan (3); her istek ilk eşleşen zincire girer. */
+	@Test
+	void chainsAreOrderedInternalWebhookDefault() {
+		List<SecurityFilterChain> chains = filterChainProxy.getFilterChains();
+		assertThat(chains).hasSize(3);
+		assertThat(firstMatchingChain(chains, "/internal/payments")).isZero();
+		assertThat(firstMatchingChain(chains, "/webhooks/mock")).isEqualTo(1);
+		assertThat(firstMatchingChain(chains, "/webhooks")).isEqualTo(1);
+		assertThat(firstMatchingChain(chains, "/actuator/health")).isEqualTo(2);
+		assertThat(firstMatchingChain(chains, "/webhooksx")).isEqualTo(2);
+	}
+
 	@ParameterizedTest
-	@ValueSource(strings = { "/api/x", "/webhooks/mock", "/", "/v3/api-docs", "/internalx" })
+	@ValueSource(strings = { "/api/x", "/webhooksx", "/", "/v3/api-docs", "/internalx" })
 	void everythingElseIsDeniedWithoutBearerChallenge(String path) throws Exception {
 		for (MockHttpServletRequestBuilder request : List.of(get(path), post(path),
 				get(path).header(HttpHeaders.AUTHORIZATION, "Bearer abc"),
@@ -82,6 +102,16 @@ class SecurityRulesTest extends ApiTestSupport {
 
 	private MockHttpServletRequestBuilder create() {
 		return post(PAYMENTS).contentType(MediaType.APPLICATION_JSON).content(body);
+	}
+
+	private static int firstMatchingChain(List<SecurityFilterChain> chains, String path) {
+		MockHttpServletRequest request = new MockHttpServletRequest("POST", path);
+		for (int i = 0; i < chains.size(); i++) {
+			if (chains.get(i).matches(request)) {
+				return i;
+			}
+		}
+		return -1;
 	}
 
 }

@@ -31,4 +31,13 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
 	@Query("select p from Payment p where p.id = :id")
 	Optional<Payment> findByIdForUpdate(@Param("id") UUID id);
 
+	/**
+	 * Webhook'un ödemesi {@code FOR UPDATE} ile ({@code uk_payments_provider_ref} indeksi); aynı ödemeye gelen eşzamanlı
+	 * webhook'lar sıraya girer. Referans harf duyarlı karşılaştırılır.
+	 */
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("select p from Payment p where p.providerType = :providerType and p.providerPaymentId = :providerPaymentId")
+	Optional<Payment> findByProviderReferenceForUpdate(@Param("providerType") PaymentProviderType providerType,
+			@Param("providerPaymentId") String providerPaymentId);
+
 }

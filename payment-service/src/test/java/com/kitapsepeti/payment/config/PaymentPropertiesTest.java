@@ -3,20 +3,33 @@ package com.kitapsepeti.payment.config;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
+import java.time.Duration;
+import java.util.List;
 
 import com.kitapsepeti.payment.entity.PaymentProviderType;
 import com.kitapsepeti.payment.provider.MockOutcomeRule;
 import com.kitapsepeti.payment.provider.MockPaymentProvider;
 import com.kitapsepeti.payment.provider.PaymentProvider;
+import com.kitapsepeti.payment.provider.mock.MockWebhookSigner;
+import com.kitapsepeti.payment.provider.mock.MockWebhookVerifier;
+import com.kitapsepeti.payment.support.InternalTestKeys;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.core.env.PropertySource;
+import org.springframework.core.io.ClassPathResource;
 
 class PaymentPropertiesTest {
 
-	private final ApplicationContextRunner runner = new ApplicationContextRunner()
-		.withUserConfiguration(PaymentConfig.class);
+	private static final String SECRET = InternalTestKeys.randomKey();
+
+	private final ApplicationContextRunner withoutSecret = new ApplicationContextRunner()
+		.withUserConfiguration(PaymentConfig.class, ClockConfig.class);
+
+	private final ApplicationContextRunner runner = withoutSecret
+		.withPropertyValues("app.payment.mock.webhook-secret=" + SECRET);
 
 	@Test
 	void defaultsToMockProviderAndNinetyNineFailCents() {
@@ -60,9 +73,70 @@ class PaymentPropertiesTest {
 
 	@ParameterizedTest
 	@ValueSource(strings = { "app.payment.provider=paypal", "app.payment.provider=MOCK_X",
-			"app.payment.mock.fail-cents=100", "app.payment.mock.fail-cents=-1" })
+			"app.payment.mock.fail-cents=100", "app.payment.mock.fail-cents=-1", "app.payment.webhook.tolerance=0s",
+			"app.payment.webhook.tolerance=-5m", "app.payment.webhook.max-body-bytes=0" })
 	void invalidValuesFailStartup(String invalid) {
 		runner.withPropertyValues(invalid).run(context -> assertThat(context).hasFailed());
+	}
+
+	@Test
+	void webhookDefaultsAndSignerVerifierBeans() {
+		runner.run(context -> {
+			PaymentProperties.Webhook webhook = context.getBean(PaymentProperties.class).webhook();
+			assertThat(webhook.tolerance()).isEqualTo(Duration.ofMinutes(5));
+			assertThat(webhook.maxBodyBytes()).isEqualTo(65536);
+			assertThat(context).hasSingleBean(MockWebhookSigner.class).hasSingleBean(MockWebhookVerifier.class);
+		});
+		runner.withPropertyValues("app.payment.webhook.tolerance=30s", "app.payment.webhook.max-body-bytes=1024")
+			.run(context -> {
+				PaymentProperties.Webhook webhook = context.getBean(PaymentProperties.class).webhook();
+				assertThat(webhook.tolerance()).isEqualTo(Duration.ofSeconds(30));
+				assertThat(webhook.maxBodyBytes()).isEqualTo(1024);
+			});
+	}
+
+	/** Secret yok / boş / 31 karakter → bağlam açılmaz; hata zincirinde değer yok. */
+	@Test
+	void missingEmptyOrShortWebhookSecretFailsStartupWithoutEchoingIt() {
+		String shortSecret = SECRET.substring(0, 31);
+		withoutSecret.run(context -> assertSecretFailure(context.getStartupFailure(), "must be set"));
+		for (String invalid : List.of("", "   ", shortSecret)) {
+			withoutSecret.withPropertyValues("app.payment.mock.webhook-secret=" + invalid).run(context -> {
+				String messages = assertSecretFailure(context.getStartupFailure(),
+						invalid.isBlank() ? "must be set" : "at least 32 characters");
+				assertThat(messages).doesNotContain(shortSecret);
+			});
+		}
+		withoutSecret.withPropertyValues("app.payment.mock.webhook-secret=" + SECRET.substring(0, 32))
+			.run(context -> assertThat(context).hasNotFailed());
+	}
+
+	@Test
+	void propertiesToStringMasksTheSecret() {
+		runner.run(context -> assertThat(context.getBean(PaymentProperties.class).toString())
+			.contains("webhookSecret=***")
+			.doesNotContain(SECRET));
+	}
+
+	@Test
+	void applicationYmlReadsSecretFromEnvAndDefinesWebhookLimits() throws Exception {
+		List<PropertySource<?>> sources = new YamlPropertySourceLoader().load("application",
+				new ClassPathResource("application.yml"));
+		PropertySource<?> yml = sources.get(0);
+
+		assertThat(yml.getProperty("app.payment.mock.webhook-secret")).hasToString("${PAYMENT_MOCK_WEBHOOK_SECRET:}");
+		assertThat(yml.getProperty("app.payment.webhook.tolerance")).hasToString("5m");
+		assertThat(yml.getProperty("app.payment.webhook.max-body-bytes")).hasToString("65536");
+	}
+
+	private static String assertSecretFailure(Throwable failure, String expected) {
+		assertThat(failure).isNotNull();
+		StringBuilder messages = new StringBuilder();
+		for (Throwable current = failure; current != null; current = current.getCause()) {
+			messages.append(current).append('\n');
+		}
+		assertThat(messages.toString()).contains("app.payment.mock.webhook-secret", expected).doesNotContain(SECRET);
+		return messages.toString();
 	}
 
 }

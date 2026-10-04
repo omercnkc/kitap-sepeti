@@ -55,6 +55,13 @@ app:
     mock:
       # Kuruşu bu değer olan tutarlar CARD_DECLINED ile failed (0–99).
       fail-cents: 99
+      # Mock webhook imza anahtarı (HMAC-SHA256). Yok, boş ya da 32 karakterden kısaysa uygulama açılmaz.
+      webhook-secret: ${PAYMENT_MOCK_WEBHOOK_SECRET:}
+    webhook:
+      # X-Mock-Timestamp saatten en fazla bu kadar geride ya da ileride olabilir.
+      tolerance: 5m
+      # Daha büyük gövde 413 (imza doğrulanmadan).
+      max-body-bytes: 65536
 
 logging:
   level:

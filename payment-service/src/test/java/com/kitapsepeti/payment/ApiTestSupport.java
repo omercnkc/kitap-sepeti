@@ -2,8 +2,10 @@ package com.kitapsepeti.payment;
 
 import com.kitapsepeti.payment.provider.PaymentProvider;
 import com.kitapsepeti.payment.repository.PaymentRepository;
+import com.kitapsepeti.payment.repository.ProviderEventRepository;
 import com.kitapsepeti.payment.service.OutboxService;
 import com.kitapsepeti.payment.support.InternalTestKeys;
+import com.kitapsepeti.payment.support.WebhookTestSecrets;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -18,8 +20,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 /**
  * Tam uygulama bağlamı açan testlerin ortak tabanı: MockMvc, Testcontainers MySQL ve RabbitMQ, test JVM'inde
- * üretilen internal anahtar ({@link InternalTestKeys}). Bütün alt sınıflar aynı bağlamı ve aynı konteynerleri paylaşır
- * (outbox worker'ı açan relay testleri hariç).
+ * üretilen internal anahtar ({@link InternalTestKeys}) ve webhook secret'ı ({@link WebhookTestSecrets}). Bütün alt
+ * sınıflar aynı bağlamı ve aynı konteynerleri paylaşır (outbox worker'ı açan relay testleri hariç).
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -45,9 +47,14 @@ public abstract class ApiTestSupport {
 	@MockitoSpyBean
 	protected OutboxService outbox;
 
+	/** Gerçek repository; webhook güvenlik ağı testi tekrar kontrolünü atlatır (her testten sonra sıfırlanır). */
+	@MockitoSpyBean
+	protected ProviderEventRepository providerEvents;
+
 	@DynamicPropertySource
-	static void internalKeys(DynamicPropertyRegistry registry) {
+	static void secrets(DynamicPropertyRegistry registry) {
 		InternalTestKeys.register(registry);
+		WebhookTestSecrets.register(registry);
 	}
 
 	@BeforeEach

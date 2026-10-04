@@ -17,7 +17,12 @@ public enum PaymentErrorCode implements ErrorCode {
 	PAYMENT_ORDER_MISMATCH(HttpStatus.CONFLICT, Level.INFO,
 			"A payment already exists for this order with a different user, amount or currency."),
 	PAYMENT_PROVIDER_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, Level.WARN,
-			"Payment provider is temporarily unavailable; retry later.");
+			"Payment provider is temporarily unavailable; retry later."),
+	/** Log satırını {@link GlobalExceptionHandler} kendisi yazar (yalnızca sağlayıcı adı). */
+	WEBHOOK_SIGNATURE_INVALID(HttpStatus.UNAUTHORIZED, Level.WARN, "Webhook signature is missing or invalid."),
+	UNKNOWN_PAYMENT(HttpStatus.BAD_REQUEST, Level.WARN, "Webhook refers to an unknown payment."),
+	AMOUNT_MISMATCH(HttpStatus.BAD_REQUEST, Level.WARN, "Webhook amount or currency does not match the payment."),
+	PAYLOAD_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, Level.INFO, "Request body is too large.");
 
 	/**
 	 * Bu servisin döndürebildiği tüm kodlar (OpenAPI {@code Problem.code} enum'u eklenince bu sırayla yazılır).
@@ -36,6 +41,10 @@ public enum PaymentErrorCode implements ErrorCode {
 			CommonErrorCode.CONFLICT,
 			PAYMENT_ORDER_MISMATCH,
 			PAYMENT_PROVIDER_UNAVAILABLE,
+			WEBHOOK_SIGNATURE_INVALID,
+			UNKNOWN_PAYMENT,
+			AMOUNT_MISMATCH,
+			PAYLOAD_TOO_LARGE,
 			CommonErrorCode.INTERNAL_ERROR);
 
 	private final HttpStatus status;

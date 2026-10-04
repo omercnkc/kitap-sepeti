@@ -37,6 +37,19 @@ public class GlobalExceptionHandler extends ProblemDetailExceptionHandler {
 		return respond(code, ex.getDetail(), masked);
 	}
 
+	/**
+	 * Tek WARN satırı, yalnızca sabit metin ve sağlayıcı adı: yol, imza, zaman damgası ve hangi kontrolün başarısız
+	 * olduğu yazılmaz.
+	 */
+	@ExceptionHandler(WebhookSignatureException.class)
+	public ResponseEntity<Object> handleWebhookSignature(WebhookSignatureException ex, HttpServletRequest request) {
+		this.log.warn("Rejected webhook: invalid signature (provider={})", ex.getProvider().dbValue());
+		ErrorCode code = ex.getErrorCode();
+		return ResponseEntity.status(code.status())
+			.header(HttpHeaders.WWW_AUTHENTICATE, WebhookSignatureException.CHALLENGE)
+			.body(ProblemDetails.create(code, ex.getDetail(), request));
+	}
+
 	@Override
 	@ExceptionHandler(ApiException.class)
 	public ResponseEntity<Object> handleApiException(ApiException ex, HttpServletRequest request) {
