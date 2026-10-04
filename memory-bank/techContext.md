@@ -28,7 +28,9 @@
   `infra/mysql/init/30-payment-db.sh`; compose mysql env'inde `${VAR:?}` → .env'de yoksa HİÇBİR compose komutu çalışmaz). Çalıştırma
   `.\mvnw.cmd -pl payment-service spring-boot:run` (önce `.\mvnw.cmd -pl common -am install -DskipTests`), testler
   `.\mvnw.cmd -pl payment-service -am test`. Bağımlılıklar webmvc, data-jpa, flyway(-mysql), validation, actuator, security (Adım 3),
-  amqp (Adım 4), mysql, common; springdoc/openfeign YOK (testle kilitli). Compose servis kaydı/Dockerfile yok. `spring-boot:run` DB,
+  amqp (Adım 4), springdoc (Adım 7), mysql, common; openfeign YOK (testle kilitli). Container (Adım 8): `docker compose build
+  payment-service` + `docker compose up -d` (imaj `kitapsepeti/payment-service:local`, 604 MB, kullanıcı `app` 10001; yerel
+  `spring-boot:run` ile aynı anda çalışamaz). Health `/actuator/health/{liveness,readiness}`; ayrıntı `docs/docker.md`. `spring-boot:run` DB,
   RabbitMQ (`RABBITMQ_HOST/PORT/USER/PASSWORD`, catalog ile aynı adlar) ve internal anahtar özetini `spring.config.import` ile
   `.env`'den kendisi okur. Testler RabbitMQ'yu `RabbitTestcontainersConfiguration` (rabbitmq:4-management) ile alır;
   outbox worker testte kapalı (`app.outbox.enabled: false`), relay testleri açar.

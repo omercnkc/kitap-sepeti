@@ -4,6 +4,8 @@
 - GitHub reposu bağlı; multi-module Maven yapısı (kök parent POM + `user-service`).
 - Docker Compose: MySQL 8.4 (`user_db` + `catalog_db`) + RabbitMQ 4 + user-service (non-root image, compose secrets,
   healthcheck) + catalog-service (aynı imaj kalıbı, readiness yalnızca DB). Kullanım: `docs/docker.md`.
+- **payment-service: TAMAMLANDI** (Faz 7 Adım 1–8; mock sağlayıcı, imzalı webhook, outbox → RabbitMQ, OpenAPI, Docker + compose
+  8087). 365 test yeşil.
 - **catalog-service: TAMAMLANDI** (Adım 1–11: şema, public okuma, admin CRUD, kitap yaşam döngüsü + stok, outbox olayları,
   internal stok rezervasyonu + süre dolumu, OpenAPI + drift testi, actuator, Docker + compose). 270 test yeşil.
 - user-service: Flyway V1 şeması, entity/repository, RS256 JWT + JWKS, kayıt/giriş/refresh (rotation),
@@ -99,7 +101,13 @@
   matches), `ProviderEvent` (@Immutable), katı küçük harf converter'lar (ortak taban), kilitsiz repository'ler, `PaymentProvider`
   soyutlaması + tek bean (`app.payment.provider`, yalnızca mock açılır), `MockPaymentProvider`, `MockOutcomeRule` (kuruş = fail-cents →
   CARD_DECLINED), `PaymentProperties` (fail-cents 0–99). payment-service 177 test.
-- Payment Adım 7 (henüz commit edilmedi): OpenAPI — springdoc, `OpenApiConfig` (internalApiKey / mockWebhookSignature yol önekinden),
+- Payment Adım 8 (henüz commit edilmedi): `payment-service/Dockerfile` (cart kopyası, non-root 10001, 604 MB) + compose kaydı
+  (127.0.0.1:8087; mysql + rabbitmq `service_healthy` — catalog gibi, yalnızca açılış sırası; sırlar `${VAR:?}`, env_file yok,
+  webhook-url yok), health: readiness yalnızca db (bileşenler db, rabbit, diskSpace, livenessState, readinessState, ping, ssl),
+  `docs/docker.md` payment bölümü, `WebhookEvent.providerPaymentId` `@Size(min = 1)` (sözleşme minLength 1). payment-service 365 test.
+  Docker uçtan uca (succeeded/failed + olaylar, RabbitMQ kesintisinde healthy + outbox birikip boşalıyor, chunked 70 KB → 413,
+  401/403/401, restart kalıcılığı) geçti. **Payment servisi tamamlandı.**
+- Payment Adım 7 (commit `db2a9fe` + `e36bca7`, push edildi): OpenAPI — springdoc, `OpenApiConfig` (internalApiKey / mockWebhookSignature yol önekinden),
   `docs/api/payment-service.openapi.json` + drift testi, doküman/required-nullable testleri, kart verisi yokluğu testi (sınıf alanları +
   doküman adları), tam akış log hijyeni testi. Swagger UI `http://localhost:8087/swagger-ui.html`. payment-service 357 test.
 - Payment Adım 6 (commit `fbf586c` + `b11d1ac`, push edildi): TAM AKIŞ ÇALIŞIYOR — referans yazılınca (commit sonrası) mock webhook 500ms sonra
@@ -116,7 +124,11 @@
   `GET /internal/payments/{id}`, yol maskeleme (log dahil). payment-service 220 test. Yerelde V2 uygulandı, uçtan uca geçti.
 
 ## Yapılacaklar
-- Payment (Faz 7) sonraki adım: Docker + compose (Adım 8).
+- PROJE KARARI (Ekim 2026): sıra Payment → Order → Gateway → UI → (vakit kalırsa) Notifications. Notifications v1 yalnızca uygulama
+  içi bildirim (OrderPaid/OrderFailed; e-posta, tercih, şablon yok). Order fazında `order-paid.md` ve `order-failed.md` olay
+  sözleşmeleri yine yazılacak.
+- Payment artık işleri: iyzico sandbox; eşzamanlı ilk isteklerde birden fazla sağlayıcı çağrısı (gerçek sağlayıcıda idempotency
+  anahtarı); outbox kodunu common'a taşıma (Order fazı); outbox yayın hatası WARN'ındaki eventId.
 - Outbox kodunu common'a taşıma (Order fazı başında): user-service, catalog-service ve payment-service'te üç kopya.
 - Cart ertelenenler: CartCheckedOut tüketimi (Order fazı); yol maskeleme + boş özet politikasını common'a taşıma; Catalog OpenAPI nullable.
 - Gateway fazı: docs/Swagger'ı (dört servis) dışarıya kapatmak.

@@ -980,7 +980,7 @@
     `Mock recovery resent 1 webhook(s)`); gerçek DB EXPLAIN range/ix_payments_status_created/key_len 74; log: id, tutar, imza, referans
     yok, WARN/ERROR 0.
 
-- Payment Adım 7 — OpenAPI (henüz commit edilmedi; Docker YOK; uç davranışı, DTO alan adları, durum kodları, migration, common ve
+- Payment Adım 7 — OpenAPI (commit `db2a9fe` kod + `e36bca7` memory-bank, push edildi; Docker YOK; uç davranışı, DTO alan adları, durum kodları, migration, common ve
   diğer modüller, .env değişmedi). Kurallar systemPatterns "payment-service OpenAPI" + "Kart verisi kontrolü":
   - Kod: pom'a springdoc (kök BOM 3.1.1); yml `springdoc` bloğu (cart'la aynı; paths `/internal/**`, `/webhooks/**`) + `app.version`;
     `SecurityConfig` (@Order 3) docs/Swagger permitAll; `config/OpenApiConfig` (internalApiKey + mockWebhookSignature, PaymentStatus/
@@ -990,7 +990,7 @@
     GET /internal/payments/{paymentId} 200/400/401/404/500; POST /webhooks/{provider} 204/400/401/404/413/415/500.
   - Sapmalar: WebhookEvent.amount pattern gerçek doğrulamanınki (`^(0|[1-9][0-9]{0,9})\.[0-9]{2}$`, istenen `^\d+\.\d{2}$` değil);
     internal genel 406/415 ve webhook'ta pratikte ulaşılamayan 409 belgelenmedi (cart kuralı); providerPaymentId `minLength: 0`
-    (@Size ezer; @NotBlank açıklamada); para alanlarında `example` yok.
+    (@Size ezer; @NotBlank açıklamada; Adım 8'de `@Size(min = 1, max = 128)` ile 1'e çekildi); para alanlarında `example` yok.
   - Testler (payment 357 = 339 + 18): OpenApiContractTest 1 (bozma denemesi: failureCode tipi → yol + değerle kırıldı, geri alındı),
     OpenApiDocsTest 12 (gerçek hata yanıtları: 409/400/503/401 ApiKey, 404/400/401, webhook 404/415/413/401 Signature/400 ×4, 204),
     OpenApiRequiredFieldsTest 1 (201/200 POST, initiated/succeeded/failed GET), CardDataAbsenceTest 3 (negatif kontrol dahil),
@@ -999,9 +999,45 @@
   - Root `clean verify`: common 25, user 83, catalog 276, cart 312 (2 skipped), payment 357. Yerel spring-boot:run: /v3/api-docs 200,
     3 operasyon, sözleşme dosyasıyla birebir; swagger-ui 200 (`/swagger-ui.html` → 302); WARN/ERROR 0.
 
+- Payment Adım 8 — Docker + compose (henüz commit edilmedi; diğer servislerin Dockerfile/compose kayıtları, common, migration'lar,
+  `.env` ve `.env.example` değişmedi — `.env.example`'da tüm adlar zaten vardı). **PAYMENT SERVİSİ TAMAMLANDI.**
+  - Ön düzeltme: `WebhookEvent.providerPaymentId` `@NotBlank @Size(min = 1, max = 128)` → sözleşmede `minLength: 1` (tek fark),
+    drift testi yeşil. Görünür küçük fark: boş metin (`""`) artık iki `errors` girdisi (not blank + size) üretir; durum/kod aynı
+    (400 VALIDATION_FAILED); null ve boşluk tek girdi.
+  - `payment-service/Dockerfile`: cart'ın birebir kopyası (servis adı + `EXPOSE 8087`); ARG/ENV ile sır yok.
+  - Compose `payment-service`: `127.0.0.1:8087:8087`; depends_on mysql + rabbitmq `service_healthy` (catalog'un seçimi; yalnızca
+    açılış sırası — readiness RabbitMQ'ya bağlı değil); env tek tek (env_file yok): PAYMENT_DB_HOST=mysql, PAYMENT_DB_PORT=3306,
+    PAYMENT_DB_USER/PASSWORD `${VAR:?}`, RABBITMQ_HOST=rabbitmq, RABBITMQ_PORT=5672, RABBITMQ_USER/PASSWORD (catalog gibi `${VAR}`),
+    PAYMENT_INTERNAL_KEY_ORDER_SHA256 `${VAR:?}`, PAYMENT_MOCK_WEBHOOK_SECRET `${VAR:?}`; `webhook-url` yok (konteyner içi
+    localhost:8087); restart unless-stopped, mem_limit 768m, readiness healthcheck (cart'la aynı).
+  - Health: bileşenler db, rabbit, diskSpace, livenessState, readinessState, ping, ssl (Spring Cloud yok); readiness = readinessState
+    + db; yalnızca `health` açık, ayrıntı yok. Kök `/actuator/health` broker kapalıyken 503 (compose readiness kullandığı için sağlıklı).
+  - Testler (payment 365 = 357 − 7 + 15): yeni `config/ActuatorHealthTest` 15 (problar STRICT `{"status":"UP"}`, kök health ayrıntısız,
+    8 actuator yolu 403 challenge'sız + internal key ile de 403, yalnızca `/actuator/health` eşlenmiş, POST 403, bileşen listesi
+    birebir, rabbit readiness/liveness'ta yok; broker kapalıyken readiness UP → `OutboxRelayBrokerOutageIT`);
+    PaymentServiceApplicationTests 3'e indi (health testleri taşındı); WebhookControllerTest validasyon haritasına `""` ve `"   "`.
+  - `docs/docker.md` payment bölümü (port, env ADLARI, sabit compose değerleri, health, RabbitMQ kapalıyken davranış, mock akışı).
+  - Root `clean verify`: common 25, user 83, catalog 276, cart 312 (2 skipped), payment 365. İmaj 604 MB, `id` → uid 10001(app).
+  - Docker uçtan uca (geçici durable `payment.#` kuyruğu, sonra silindi): 149.90 → 201, 2 sn sonra succeeded; 149.99 → failed
+    CARD_DECLINED; kuyrukta payment.succeeded/PaymentSucceeded + payment.failed/PaymentFailed. RabbitMQ durdurulunca payment healthy
+    kaldı (readiness 200, kök 503), 149.80 → succeeded, 1 yayınlanmamış outbox satırı; RabbitMQ açılınca ~10 sn'de 0, mesaj kuyrukta
+    (durable kuyruk restart'tan sağ çıktı). Chunked 70 KB (Content-Length yok, bozuk imza başlıkları) → 413 PAYLOAD_TOO_LARGE.
+    Anahtarsız internal 401, GET /webhooks/mock 403, imzasız webhook 401 WEBHOOK_SIGNATURE_INVALID. `restart payment-service` →
+    üç ödeme aynı durumda. İmaj: history'de sır yok (eşleşen 2 satır taban imajın JDK checksum'ı ve ubuntu config'i), Env adları
+    PATH/JAVA_HOME/LANG/LANGUAGE/LC_ALL/JAVA_VERSION/JAVA_TOOL_OPTIONS, find taramasında yalnızca `/usr/lib/ssl/cert.pem` (sistem CA
+    paketine openssl symlink'i; cart imajında da aynı). Log: tutar/referans/imza/sır/özet yok; kesintide 12 OutboxRelay WARN
+    (AmqpIOException ×10, AmqpConnectException ×2) + 1 RabbitHealthIndicator WARN (kök health çağrısı) — OutboxRelay WARN'ı outbox
+    `id` (= eventId) ve eventType yazar (bilinen artık iş); diğer WARN'lar beklenen reddetmeler (401/403/imza).
+
 ## Sonraki adımlar
-- Payment: Docker + compose (Adım 8; compose'da `webhook-url` gerekmez: aynı konteynerde localhost:<port>).
-  Order istemcisi `.env` `ORDER_INTERNAL_API_KEY` ile `X-Internal-Api-Key` gönderir (payment özeti `PAYMENT_INTERNAL_KEY_ORDER_SHA256`).
+- PROJE KARARI (Ekim 2026): sıra Payment → Order → Gateway → UI → (vakit kalırsa) Notifications. Notifications v1 yalnızca uygulama
+  içi bildirim (OrderPaid/OrderFailed; e-posta, tercih, şablon yok). Order fazında `order-paid.md` ve `order-failed.md` olay
+  sözleşmeleri yine yazılacak.
+- Payment artık işleri: (1) iyzico sandbox sağlayıcısı; (2) aynı siparişe eşzamanlı ilk isteklerde birden fazla sağlayıcı çağrısı
+  (gerçek sağlayıcıda idempotency anahtarı = paymentId); (3) outbox kodunu common'a taşıma (Order fazı); (4) outbox yayın hatası
+  WARN'ındaki eventId (`OutboxRelay`: `id=…, eventType=…`) kaldırılmalı/maskelenmeli.
+- Order istemcisi `.env` `ORDER_INTERNAL_API_KEY` ile `X-Internal-Api-Key` gönderir (payment özeti `PAYMENT_INTERNAL_KEY_ORDER_SHA256`);
+  compose'da `http://payment-service:8087`, istemci `docs/api/payment-service.openapi.json`'dan.
 - Cart ertelenenler: (1) CartCheckedOut tüketimi Order fazında (checkout + yeni sepet aynı TX'te olursa arada `flush()` — flush tuzağı);
   (2) yol maskelemeyi (`MaskedRequestPaths`) ve boş özet politikasını (internal key özeti boş/bozuksa açılmama) common'a taşıma
   (Order fazının başında ayrı adım); (3) Catalog OpenAPI'de nullable alanları `types = {"x","null"}` ile işaretleme (cart'taki gibi).

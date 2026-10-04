@@ -285,7 +285,9 @@
   WebhookEvent)` ile, `X-Mock-Timestamp` metotta `@Parameter(in = HEADER, required)`, `provider` `allowableValues = "mock"`;
   `WebhookEvent.isFailureCodeMatchesType` `@Schema(hidden = true)`. `PaymentStatus` component şeması OpenApiConfig'te
   (`PaymentStatus.dbValue()`'dan), `PaymentResponse.status` `@Schema(ref)`. PaymentResponse cart gibi tüm alanlar REQUIRED, nullable
-  yalnızca failureCode + redirectUrl. Para örneği (`example`) yazılmaz (sayı `149.9` görünür). `@Size(max)` `@Schema(minLength)`'i ezer.
+  yalnızca failureCode + redirectUrl. Para örneği (`example`) yazılmaz (sayı `149.9` görünür). `@Size(max)` `@Schema(minLength)`'i ezer → alt sınır
+  `@Size(min = 1, max = N)` ile verilir (Adım 8, `WebhookEvent.providerPaymentId`). Yan etki: `@NotBlank` + `@Size(min = 1)` boş
+  metinde iki `errors` girdisi üretir (400 VALIDATION_FAILED aynı).
   Belgelenmeyen (bilinçli): internal uçlarda genel 406/415, webhook'ta pratikte ulaşılamayan 409 CONFLICT.
 - Kart verisi kontrolü (payment `CardDataAbsenceTest`): main sınıfların static olmayan alanları + OpenAPI özellik/parametre/başlık
   adları kelimelere bölünüp (camelCase/`_`/`-`) card, pan, cvv, cvc, expiry, cardholder, cardnumber ile karşılaştırılır (`company`
