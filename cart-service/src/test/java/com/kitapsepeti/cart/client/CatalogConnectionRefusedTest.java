@@ -15,6 +15,8 @@ import com.kitapsepeti.cart.support.InternalTestKeys;
 import com.kitapsepeti.cart.support.JwksServer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
+import org.springframework.boot.health.contributor.Status;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.NestedExceptionUtils;
@@ -33,6 +35,9 @@ class CatalogConnectionRefusedTest {
 	@Autowired
 	private CatalogGateway gateway;
 
+	@Autowired
+	private HealthEndpoint healthEndpoint;
+
 	@DynamicPropertySource
 	static void catalogProperties(DynamicPropertyRegistry registry) {
 		registry.add("app.catalog.base-url", () -> "http://127.0.0.1:" + CLOSED_PORT);
@@ -49,6 +54,12 @@ class CatalogConnectionRefusedTest {
 		assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofMillis(2500));
 		assertThatThrownBy(() -> gateway.lookup(List.of(UUID.randomUUID())))
 			.isInstanceOf(CatalogUnavailableException.class);
+	}
+
+	@Test
+	void healthIsUpWhileNothingListensOnCatalogAddress() {
+		assertThat(healthEndpoint.health().getStatus()).isEqualTo(Status.UP);
+		assertThat(healthEndpoint.healthForPath("readiness").getStatus()).isEqualTo(Status.UP);
 	}
 
 }

@@ -34,6 +34,14 @@ spring:
           # Açık anahtar ilk doğrulamada çekilir ve önbelleğe alınır; açılışta istek atılmaz.
           jwk-set-uri: ${USER_SERVICE_JWKS_URI:http://localhost:8081/.well-known/jwks.json}
   cloud:
+    # OpenFeign'in getirdiği Spring Cloud health göstergeleri (discoveryComposite); health yalnızca servisin kendi
+    # bileşenlerine bakar.
+    discovery:
+      client:
+        composite-indicator:
+          enabled: false
+        health-indicator:
+          enabled: false
     openfeign:
       client:
         config:
@@ -96,6 +104,10 @@ management:
       # /actuator link listesi de kapalı; dışarıya yalnızca health açılır.
       discovery:
         enabled: false
+  health:
+    # Spring Cloud'un refreshScope göstergesi (OpenFeign ile gelir).
+    refresh:
+      enabled: false
   endpoint:
     health:
       show-details: never

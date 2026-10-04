@@ -126,6 +126,39 @@ services:
       start_period: 40s
     mem_limit: 768m
 
+  cart-service:
+    build:
+      context: .
+      dockerfile: cart-service/Dockerfile
+    image: kitapsepeti/cart-service:local
+    container_name: kitapsepeti-cart-service
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8083:8083"
+    # user-service'e ve catalog-service'e bağımlılık yok: JWKS ilk istekte çekilir; Catalog kapalıyken sepet okuma/
+    # değiştirme 200 (catalogStatus UNAVAILABLE), kitap ekleme 503 CATALOG_UNAVAILABLE döner.
+    depends_on:
+      mysql:
+        condition: service_healthy
+    # .env toplu verilmez (env_file yok); yalnızca gereken değişkenler. Sırlar zorunlu: boşsa compose başlamaz
+    # (cart zaten özetsiz açılmaz).
+    environment:
+      CART_DB_HOST: mysql
+      CART_DB_PORT: "3306"
+      CART_DB_USER: ${CART_DB_USER:?CART_DB_USER .env içinde tanımlı olmalı}
+      CART_DB_PASSWORD: ${CART_DB_PASSWORD:?CART_DB_PASSWORD .env içinde tanımlı olmalı}
+      USER_SERVICE_JWKS_URI: http://user-service:8081/.well-known/jwks.json
+      CATALOG_BASE_URL: http://catalog-service:8082
+      CART_INTERNAL_KEY_ORDER_SHA256: ${CART_INTERNAL_KEY_ORDER_SHA256:?CART_INTERNAL_KEY_ORDER_SHA256 .env içinde tanımlı olmalı}
+    # Readiness yalnızca DB'ye bakar; catalog-service veya user-service kapalıyken servis healthy kalır.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "--max-time", "4", "-o", "/dev/null", "http://localhost:8083/actuator/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    mem_limit: 768m
+
   # Opsiyonel geliştirme aracı (yalnızca bakmak için): docker compose --profile tools up -d adminer
   adminer:
     image: adminer:latest
