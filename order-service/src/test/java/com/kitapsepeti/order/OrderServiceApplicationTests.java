@@ -1,7 +1,6 @@
 package com.kitapsepeti.order;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Clock;
 import java.time.ZoneOffset;
@@ -90,10 +89,12 @@ class OrderServiceApplicationTests extends ApiTestSupport {
 		assertThat(context.getBeansOfType(OutboxRelay.class)).isEmpty();
 	}
 
-	/** Henüz olay yok: eşlemesiz olay tipi yayınlanmaz, açıkça hata verir. */
+	/** Order olayları mevcut adlandırma kuralıyla yönlendirilir. */
 	@Test
-	void routingKeyMappingIsEmpty() {
-		assertThatThrownBy(() -> EventRoutingKeys.forEventType("OrderPaid")).isInstanceOf(IllegalStateException.class);
+	void routingKeysAreMapped() {
+		assertThat(EventRoutingKeys.forEventType("OrderPaid")).isEqualTo("order.paid");
+		assertThat(EventRoutingKeys.forEventType("OrderFailed")).isEqualTo("order.failed");
+		assertThat(EventRoutingKeys.forEventType("CartCheckedOut")).isEqualTo("cart.checked-out");
 	}
 
 	/** Resilience4j yalnızca çekirdek kütüphane olarak var; Spring Cloud'un otomatik circuit breaker katmanları yok. */

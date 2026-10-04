@@ -12,6 +12,9 @@ app:
   # Worker arka planda outbox satırlarını kilitleyip yayınlamasın.
   outbox:
     enabled: false
+  # Listener yalnızca gerçek broker entegrasyon testlerinin ayrı bağlamında açılır.
+  payment-results:
+    enabled: false
   clients:
     # Sahte; .env'deki gerçek anahtar testlere girmez. Adresler ApiTestSupport'taki stub sunuculardan gelir.
     internal-api-key: order-test-internal-key-not-a-secret

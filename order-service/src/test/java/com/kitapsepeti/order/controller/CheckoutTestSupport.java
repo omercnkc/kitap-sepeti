@@ -294,6 +294,12 @@ abstract class CheckoutTestSupport extends ApiTestSupport {
 				FROM order_items WHERE order_id = UUID_TO_BIN(?) ORDER BY id""", orderId.toString());
 	}
 
+	List<String> outboxTypes(UUID orderId) {
+		return jdbc.queryForList("""
+				SELECT event_type FROM outbox WHERE aggregate_id = UUID_TO_BIN(?) ORDER BY created_at, id""",
+				String.class, orderId.toString());
+	}
+
 	static UUID orderIdOf(ResultActions result) throws Exception {
 		String body = result.andReturn().getResponse().getContentAsString();
 		return UUID.fromString(JsonPath.read(body, "$.orderId"));

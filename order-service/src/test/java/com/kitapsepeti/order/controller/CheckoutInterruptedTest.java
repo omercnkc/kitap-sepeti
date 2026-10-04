@@ -54,6 +54,7 @@ class CheckoutInterruptedTest extends CheckoutTestSupport {
 		assertThat(row).containsEntry("s", "failed")
 			.containsEntry("f", "CHECKOUT_INTERRUPTED")
 			.containsEntry("st", "released");
+		assertThat(outboxTypes(orderId)).containsExactly("OrderFailed");
 
 		assertCleanLogs(output, orderId);
 	}
@@ -79,6 +80,7 @@ class CheckoutInterruptedTest extends CheckoutTestSupport {
 		Map<String, Object> row = orderRow(orderId);
 		assertThat(row).containsEntry("s", "pending").containsEntry("st", "requested");
 		assertThat(row.get("f")).isNull();
+		assertThat(outboxTypes(orderId)).isEmpty();
 
 		assertCleanLogs(output, orderId);
 	}
@@ -106,6 +108,7 @@ class CheckoutInterruptedTest extends CheckoutTestSupport {
 		Map<String, Object> row = orderRow(orderId);
 		assertThat(row).containsEntry("s", "pending").containsEntry("st", "held");
 		assertThat(row.get("p")).isNull();
+		assertThat(outboxTypes(orderId)).isEmpty();
 
 		assertThat(output).contains("ERROR").contains("Payment attachment violated unique constraint");
 		assertCleanLogs(output, orderId);
@@ -127,6 +130,7 @@ class CheckoutInterruptedTest extends CheckoutTestSupport {
 
 		Map<String, Object> row = orderRow(orderId);
 		assertThat(row).containsEntry("s", "pending").containsEntry("st", "held");
+		assertThat(outboxTypes(orderId)).isEmpty();
 		assertThat(output).contains("WARN").contains("Payment attachment failed due to database error");
 		assertCleanLogs(output, orderId);
 	}
@@ -150,6 +154,7 @@ class CheckoutInterruptedTest extends CheckoutTestSupport {
 		// DB'de sipariş failed yapılmadı (pending+held kaldı).
 		Map<String, Object> row = orderRow(orderId);
 		assertThat(row).containsEntry("s", "pending").containsEntry("st", "held");
+		assertThat(outboxTypes(orderId)).isEmpty();
 
 		assertThat(output).contains("WARN")
 			.contains("Failed to read order after payment attachment failure; returning interrupted");
@@ -181,6 +186,7 @@ class CheckoutInterruptedTest extends CheckoutTestSupport {
 		Map<String, Object> row = orderRow(orderId);
 		assertThat(row).containsEntry("s", "pending").containsEntry("st", "requested");
 		assertThat(row.get("f")).isNull();
+		assertThat(outboxTypes(orderId)).isEmpty();
 
 		assertThat(output).contains("WARN")
 			.contains("Failed to mark order failed after reserve failure; attempting stock release");
@@ -212,6 +218,8 @@ class CheckoutInterruptedTest extends CheckoutTestSupport {
 		Map<String, Object> row = orderRow(orderId);
 		assertThat(row).containsEntry("s", "pending").containsEntry("st", "held");
 		assertThat(row.get("f")).isNull();
+		assertThat(outboxTypes(orderId)).isEmpty();
+		assertThat(outboxTypes(orderId)).isEmpty();
 
 		assertThat(output).contains("WARN")
 			.contains("Failed to mark order failed after payment failure; skipping stock release");

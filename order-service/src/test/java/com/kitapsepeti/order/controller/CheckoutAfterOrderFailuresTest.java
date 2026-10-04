@@ -216,6 +216,7 @@ class CheckoutAfterOrderFailuresTest extends CheckoutTestSupport {
 		assertThat(history.get(0)).containsEntry("ts", "pending").containsEntry("r", "ORDER_PLACED");
 		assertThat(history.get(1)).containsEntry("fs", "pending").containsEntry("ts", "failed").containsEntry("r",
 				failureCode);
+		assertThat(outboxTypes(orderId)).containsExactly("OrderFailed");
 		if ("requested".equals(stockState)) {
 			assertThat(paymentRequests()).isEmpty();
 		}

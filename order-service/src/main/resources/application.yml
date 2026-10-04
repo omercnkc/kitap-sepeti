@@ -103,6 +103,9 @@ app:
     poll-interval: 2s
     batch-size: 50
     confirm-timeout: 5s
+  # PaymentSucceeded/PaymentFailed consumer; kuyruk, retry ve DLQ ayarları kodda sözleşme olarak sabittir.
+  payment-results:
+    enabled: true
   clients:
     # Cart/Catalog/Payment /internal/** uçlarına giden ham anahtar; yok/boşsa uygulama açılmaz.
     internal-api-key: ${ORDER_INTERNAL_API_KEY:}
