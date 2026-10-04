@@ -321,10 +321,25 @@
   Tablo varsayılanı `utf8mb4_0900_ai_ci` olduğundan aksi halde `CHECK (status IN (...))` ve `status = 'active'` içeren generated
   ifadeler büyük/küçük harf duyarsız olur ('ACTIVE' geçer ve aktif sayılır). Şema testi kolonun collation'ını ve 'ACTIVE'/'Active'
   INSERT'inin 3819 verdiğini doğrular (cart `CartSchemaConstraintsTest`). Metin kolonları (başlık vb.) `_ai_ci` kalır.
-- payment-service Adım 1 (security'siz iskelet): kullanıcıya açık uç olmadığı için geçici SecurityFilterChain YOK, security bağımlılığı
-  da yok; health açık, diğer actuator yolları 404. `PaymentServiceApplicationTests` sonraki adım bağımlılıklarının (security, amqp,
-  openfeign, springdoc) classpath'te olmadığını kilitler — security/amqp eklenince o satırlar kaldırılır.
-- payment şeması (V1): enum benzeri her kolon `utf8mb4_bin` (provider, status, currency, event_type). Para birimi
+- payment-service güvenliği (Adım 3; Adım 1'deki security'siz iskeletin yerine): kullanıcıya açık uç ve JWT YOK. İki zincir:
+  `InternalSecurityConfig` @Order(1) `/internal/**` (cart kalıbı, istemci `order-service`, 401 `ApiKey realm="internal"`) ve
+  `SecurityConfig` @Order(2) (GET health(/**) + `/error` permitAll, gerisi denyAll). Varsayılan zincirde anonim istek 403 FORBIDDEN,
+  WWW-Authenticate YOK (entry point `ProblemDetailAccessDeniedHandler`'a delege eder; common'daki `ProblemDetailAuthenticationEntryPoint`
+  Bearer challenge yazdığı için kullanılmaz). `/internal` (eki yok) da `/internal/**` eşleşir → 401. Webhook gelince `/webhooks/**`
+  için ayrı kural gerekecek. `PaymentServiceApplicationTests` amqp/openfeign/springdoc'un classpath'te olmadığını kilitler.
+- payment yol maskeleme: `MaskedRequestPaths` (cart kopyası) `/internal/payments/<x>` → `:paymentId`; hata handler'ları VE common
+  `InternalApiKeyAuthenticationFilter`'ın INFO/401 logları maskeli — `InternalSecurityConfig.MaskedPathFilter` common filtresine
+  maskeli isteği verir, zincirin geri kalanına orijinal istek gider (common değişmeden).
+- payment ödeme oluşturma (Adım 3): sağlayıcı çağrısı ASLA DB transaction'ı içinde değil. `PaymentService` (TX'siz) →
+  `PaymentTransactions.findOrCreate` (READ_COMMITTED, saveAndFlush; `uk_payments_order` ihlali → yeni TX'te bir kez tekrar) →
+  sağlayıcı (hata/geçersiz referans → 503, ödeme referanssız kalır, tekrar istek yeniden dener) → `attachReference`
+  (`findByIdForUpdate` kilidi; farklı referans zaten varsa mevcut korunur + değer içermeyen WARN, exception yok). Final ödeme için
+  sağlayıcı çağrılmaz. TX metotları ilişkisiz (lazy alansız) entity döndürür; yanıt TX dışında `PaymentResponse.of`.
+- payment testleri: `ApiTestSupport` (tam bağlam + MockMvc + Testcontainers, `@MockitoSpyBean` PaymentProvider ve PaymentRepository,
+  her testten önce tablolar silinir). Repository spy'ında `callRealMethod` yerine yarış testi aynı sorguyu `EntityManager.find(...,
+  PESSIMISTIC_WRITE)` ile yapar.
+- payment şeması (V1 + V2): enum benzeri her kolon `utf8mb4_bin` (provider, status, currency, event_type); V2 ile sağlayıcı
+  kimlikleri (`provider_payment_id`, `provider_event_id`) de `utf8mb4_bin` (harf duyarlı sağlayıcı kimlikleri çakışmasın). Para birimi
   `CHECK (REGEXP_LIKE(currency, '^[A-Z]{3}$', 'c'))`; CHAR(3)'e sığmayan değer (ör. 'TRYY') CHECK'e gelmeden 1406 "Data too long" →
   `DataIntegrityViolationException`. "failed ⇔ failure_code dolu" tek CHECK: `(status = 'failed') = (failure_code IS NOT NULL)`.
   payments/provider_events zaman kolonlarında DB default'u YOK (uygulama Clock ile yazar; cart Adım 6 kararı); outbox catalog'unkiyle

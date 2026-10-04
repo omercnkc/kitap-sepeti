@@ -95,14 +95,17 @@
   security/amqp/springdoc/openfeign yok), `infra/mysql/init/30-payment-db.sh` + compose mysql env (`PAYMENT_DB_*`, `${VAR:?}`),
   V1 (payments, provider_events, outbox — outbox catalog'la birebir). payment-service 60 test (49 şema/kısıt + 11 bağlam/health).
   Yerel `payment_db` + `payment_svc` (yetki yalnızca `payment_db.*`), V1 `spring-boot:run` ile uygulandı.
-- Payment Adım 2 (henüz commit edilmedi): `Payment` (initiate → attachProviderReference; succeed/fail → TransitionResult;
+- Payment Adım 2 (commit `13bcd86` + `dbb3630`, push edildi): `Payment` (initiate → attachProviderReference; succeed/fail → TransitionResult;
   matches), `ProviderEvent` (@Immutable), katı küçük harf converter'lar (ortak taban), kilitsiz repository'ler, `PaymentProvider`
   soyutlaması + tek bean (`app.payment.provider`, yalnızca mock açılır), `MockPaymentProvider`, `MockOutcomeRule` (kuruş = fail-cents →
   CARD_DECLINED), `PaymentProperties` (fail-cents 0–99). payment-service 177 test.
+- Payment Adım 3 (henüz commit edilmedi): V2 (sağlayıcı kimlikleri `utf8mb4_bin`), security (internal API key zinciri `order-service`
+  + denyAll varsayılan zincir, anonim 403 challenge'sız), `POST /internal/payments` (idempotent, 201/200/409/503) +
+  `GET /internal/payments/{id}`, yol maskeleme (log dahil). payment-service 220 test. Yerelde V2 uygulandı, uçtan uca geçti.
 
 ## Yapılacaklar
-- Payment (Faz 7) sonraki adımlar: internal ödeme oluşturma ucu (API key, Order), mock sağlayıcı imzalı webhook (HMAC),
-  outbox + RabbitMQ ile sonucun Order'a gitmesi, OpenAPI, Docker + compose (Adım 8).
+- Payment (Faz 7) sonraki adımlar: mock sağlayıcı imzalı webhook (HMAC) + mock dispatcher, outbox + RabbitMQ ile sonucun Order'a
+  gitmesi, OpenAPI, Docker + compose.
 - Cart ertelenenler: CartCheckedOut tüketimi (Order fazı); yol maskeleme + boş özet politikasını common'a taşıma; Catalog OpenAPI nullable.
 - Gateway fazı: docs/Swagger'ı (üç servis) dışarıya kapatmak.
 - Outbox kodunu common'a taşıma (ayrı adım; şu an servis başına kopya).
@@ -118,8 +121,8 @@
   user-service/JWKS kapalıysa son bilinen anahtarla doğrulamaya devam (şu an önbellek süresi içinde 200, sonrasında 503).
 
 ## Bilinen sorunlar
-- payment `provider_payment_id` / `provider_event_id` `utf8mb4_0900_ai_ci`: referans araması ve iki UNIQUE kısıt büyük/küçük harf
-  duyarsız. Mock için sorun değil; harf duyarlı kimlikli gerçek sağlayıcı eklenmeden V2 (`utf8mb4_bin`) değerlendirilmeli.
+- payment: aynı siparişe eşzamanlı ilk isteklerde sağlayıcı birden fazla çağrılabilir (yalnızca ilk referans yazılır, diğerleri WARN ile
+  atılır). Mock'ta zararsız; gerçek sağlayıcıda sahipsiz ödeme oturumu kalabilir (idempotency anahtarı = paymentId ile çözülmeli).
 - payment `app.payment.provider=` (boş) açılışı durdurmaz, varsayılan mock'a düşer (Spring Binder davranışı).
 - cart flush sırası (Hibernate INSERT → UPDATE → DELETE; orphanRemoval da DELETE'i sona bırakır): aynı flush'ta satırı silip aynı
   kitabı eklemek `uk_cart_items_cart_book`, checkout + yeni aktif sepet `uk_carts_active_user` verir. Adım 6–7 akışları bu yolu
@@ -149,3 +152,4 @@
 - `BookUpserted.priceAmount` metin, HTTP'deki `priceAmount` sayı (outbox payload kolonu MySQL JSON; sayı DOUBLE'a dönüşür).
   Sayıya geçmek için payload kolonunu metin tipine çeviren yeni migration + `eventVersion` kararı gerekir.
   (Kapatılan bilinen sorun: "yeni `<module>` için her Dockerfile'a pom COPY satırı" → `COPY --parents */pom.xml`.)
+  (Kapatılan bilinen sorun: payment sağlayıcı kimlikleri harf duyarsızdı → Payment Adım 3 V2 `utf8mb4_bin`.)

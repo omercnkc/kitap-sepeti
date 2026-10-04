@@ -27,9 +27,12 @@
 - payment-service: port 8087, şema `payment_db`, kullanıcı `.env` `PAYMENT_DB_USER/PASSWORD` (yerelde `payment_svc`;
   `infra/mysql/init/30-payment-db.sh`; compose mysql env'inde `${VAR:?}` → .env'de yoksa HİÇBİR compose komutu çalışmaz). Çalıştırma
   `.\mvnw.cmd -pl payment-service spring-boot:run` (önce `.\mvnw.cmd -pl common -am install -DskipTests`), testler
-  `.\mvnw.cmd -pl payment-service -am test`. Bağımlılıklar yalnızca webmvc, data-jpa, flyway(-mysql), validation, actuator, mysql, common;
-  security/amqp/springdoc/openfeign YOK (testle kilitli; security/amqp sonraki adımlarda eklenecek, openfeign hiç). Compose servis
-  kaydı/Dockerfile yok (Adım 8). `spring-boot:run` DB bilgisini `spring.config.import` ile `.env`'den kendisi okur (env vermek gerekmez).
+  `.\mvnw.cmd -pl payment-service -am test`. Bağımlılıklar webmvc, data-jpa, flyway(-mysql), validation, actuator, security (Adım 3),
+  mysql, common; amqp/springdoc/openfeign YOK (testle kilitli; amqp sonraki adımlarda, openfeign hiç). Compose servis kaydı/Dockerfile
+  yok. `spring-boot:run` DB bilgisini ve internal anahtar özetini `spring.config.import` ile `.env`'den kendisi okur.
+- payment internal anahtarı: `.env` `PAYMENT_INTERNAL_KEY_ORDER_SHA256` (Order'ın ham anahtarı `ORDER_INTERNAL_API_KEY`'in SHA-256 hex
+  özeti; `.env.example`'da boş). Yok/boş/bozuk → payment-service açılmaz. Testler JVM'de üretilen anahtarı `InternalTestKeys.register`
+  (DynamicPropertySource) ile verir.
 - payment `app.payment.*` (`config/PaymentProperties`, @Validated): `provider` (varsayılan mock; v1'de yalnızca mock açılır),
   `mock.fail-cents` 0–99 (varsayılan 99). DİKKAT: `app.payment.provider=` (boş) hata vermez, Binder boş değeri null yapıp
   `@DefaultValue("mock")`'a düşer (testle sabitlendi). Bağlam testleri `ApplicationContextRunner().withUserConfiguration(PaymentConfig.class)`.

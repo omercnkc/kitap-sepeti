@@ -865,11 +865,40 @@
     PaymentServiceApplicationTests 12 (+1: tek MOCK sağlayıcı bean'i, UTC Clock), PaymentSchemaConstraintsTest 49.
   - Root `clean verify`: common 25, user 83, catalog 276, cart 312 (2 skipped), payment 177. `spring-boot:run` → Hibernate validate geçti,
     health + readiness UP, log'da WARN/ERROR 0.
+  - Commit `13bcd86` (kod) + `dbb3630` (memory-bank), push edildi.
+
+- Payment Adım 3 — V2, güvenlik, internal ödeme oluşturma/sorgulama ucu (henüz commit edilmedi; webhook, outbox, amqp, mock dispatcher
+  YOK; V1, diğer modüller ve common değişmedi):
+  - V2 `V2__provider_ids_case_sensitive.sql`: `payments.provider_payment_id` VARCHAR(128) utf8mb4_bin NULL,
+    `provider_events.provider_event_id` VARCHAR(128) utf8mb4_bin NOT NULL; UNIQUE'ler korundu (yerel DB'de doğrulandı). Adım 2 bulgusu kapandı.
+  - Güvenlik (cart Adım 8 kalıbı): `spring-boot-starter-security`; `UserDetailsServiceAutoConfiguration` exclude.
+    `InternalSecurityConfig` @Order(1) `/internal/**` (X-Internal-Api-Key, istemci `order-service`, env
+    `PAYMENT_INTERNAL_KEY_ORDER_SHA256` → `app.internal-auth.clients[0].key-sha256`; yok/boş/bozuk → açılmaz, `InternalAuthConfig`).
+    `SecurityConfig` @Order(2): GET health(/**) + `/error` permitAll, gerisi denyAll; anonim → 403 FORBIDDEN ProblemDetail,
+    WWW-Authenticate YOK (entry point access denied handler'a delege eder; JWT yok → Bearer challenge yanlış olurdu).
+  - Hata: `PaymentErrorCode` PAYMENT_ORDER_MISMATCH 409 (INFO), PAYMENT_PROVIDER_UNAVAILABLE 503 (WARN, logda yalnızca kök neden sınıf adı);
+    `DbConstraintCodes` (3 UNIQUE → CONFLICT); `MaskedRequestPaths` `/internal/payments/<x>` → `/internal/payments/:paymentId`.
+    Common filtresinin INFO/401 logu da maskeli: `InternalSecurityConfig.MaskedPathFilter` common filtresine maskeli isteği verir,
+    zincirin geri kalanı orijinal istekle devam eder.
+  - Uç: `POST /internal/payments` (orderId, userId, amount ≥0.01 Digits(10,2), currency ^[A-Z]{3}$) → 201 + Location / 200;
+    `GET /internal/payments/{id}` → 200 / 404 RESOURCE_NOT_FOUND / 400. Yanıt `PaymentResponse` (userId yok, redirectUrl v1'de hep null).
+  - Akış: `PaymentService` (TX yok) → `PaymentTransactions.findOrCreate` (READ_COMMITTED; var+eşleşir → döner, var+farklı → 409,
+    yok → initiate+saveAndFlush; `uk_payments_order` ihlali → yeni TX'te bir kez tekrar) → initiated + referanssız ise sağlayıcı TX DIŞINDA
+    (RuntimeException ya da geçersiz referans → 503, ödeme referanssız kalır; tekrar istek yeniden dener) → `attachReference`
+    (`findByIdForUpdate` PESSIMISTIC_WRITE; boş → yaz, aynı → no-op, farklı → mevcut korunur + WARN değer yok; final+referanssız → dokunma).
+    Final ödeme → sağlayıcı çağrılmaz, 200.
+  - Testler (payment 220 = 177 − 1 + 44): InternalPaymentControllerTest 27, PaymentSchemaConstraintsTest 51 (+2), PaymentRepositoryTest 12
+    (+1), SecurityRulesTest 8, InternalAuthConfigTest 4, PaymentConcurrencyTest 2, PaymentServiceApplicationTests 11 (−1 security classpath
+    parametresi; diğer actuator 404 → 403). Eşzamanlılık: 10 paralel ilk istek → tek satır, tek 201, sağlayıcı bu koşularda 1 kez;
+    deterministik attach yarışında ilk referans korunur. Test tabanı `ApiTestSupport` (`@MockitoSpyBean` PaymentProvider + PaymentRepository).
+  - Root `clean verify`: common 25, user 83, catalog 276, cart 312 (2 skipped), payment 220. `spring-boot:run` → V2 uygulandı
+    (flyway_schema_history 1, 2), health UP. Uçtan uca: anahtarsız 401 (ApiKey challenge), POST 201 → aynı 200 → farklı tutar 409 →
+    GET 200, durum initiated, referans `mock_`; loglarda id/tutar/referans/anahtar/özet yok.
 
 ## Sonraki adımlar
-- Payment Adım 3+: internal ödeme oluşturma ucu (API key; Order; initiate → save → provider.create → attach), DbConstraints eşlemesi,
-  mock HMAC webhook (MockOutcomeRule + TransitionResult + ProviderEvent tekrar koruması), outbox + RabbitMQ (PaymentSucceeded/PaymentFailed
-  → Order), OpenAPI, Docker + compose (Adım 8).
+- Payment Adım 4+: mock HMAC webhook (MockOutcomeRule + TransitionResult + ProviderEvent tekrar koruması; `/webhooks/**` için
+  SecurityConfig'e kural), mock dispatcher, outbox + RabbitMQ (PaymentSucceeded/PaymentFailed → Order), OpenAPI, Docker + compose.
+  Order istemcisi `.env` `ORDER_INTERNAL_API_KEY` ile `X-Internal-Api-Key` gönderir (payment özeti `PAYMENT_INTERNAL_KEY_ORDER_SHA256`).
 - Cart ertelenenler: (1) CartCheckedOut tüketimi Order fazında (checkout + yeni sepet aynı TX'te olursa arada `flush()` — flush tuzağı);
   (2) yol maskelemeyi (`MaskedRequestPaths`) ve boş özet politikasını (internal key özeti boş/bozuksa açılmama) common'a taşıma
   (Order fazının başında ayrı adım); (3) Catalog OpenAPI'de nullable alanları `types = {"x","null"}` ile işaretleme (cart'taki gibi).
