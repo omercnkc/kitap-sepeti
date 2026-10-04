@@ -8,13 +8,20 @@ import static org.mockito.Mockito.times;
 
 import java.security.MessageDigest;
 import java.util.List;
+import java.util.UUID;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import com.kitapsepeti.common.web.RequestPathMasker;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -24,28 +31,55 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Filtrenin tek başına davranışı; istemci yapılandırılmamışsa (özet boş) hiçbir anahtar kabul edilmez. */
+/** Filtrenin tek başına davranışı. */
 class InternalApiKeyAuthenticationFilterTest {
 
 	private static final InternalAuthProperties.Client ENABLED = new InternalAuthProperties.Client("order-service",
 			TestKeys.ORDER_SERVICE_KEY_SHA256);
 
-	private static final InternalAuthProperties.Client DISABLED = new InternalAuthProperties.Client("order-service", "");
+	private final ListAppender<ILoggingEvent> appender = new ListAppender<>();
+
+	private final List<Logger> loggers = List.of(
+			(Logger) LoggerFactory.getLogger(InternalApiKeyAuthenticationFilter.class),
+			(Logger) LoggerFactory.getLogger(InternalApiKeyAuthenticationEntryPoint.class));
+
+	@BeforeEach
+	void attachAppender() {
+		this.appender.start();
+		this.loggers.forEach(logger -> logger.addAppender(this.appender));
+	}
 
 	@AfterEach
 	void clearContext() {
 		SecurityContextHolder.clearContext();
+		this.loggers.forEach(logger -> logger.detachAppender(this.appender));
 	}
 
+	/** Başarılı isteğin INFO satırı, reddin WARN satırı ve 401 instance'ı maskeli yolu taşır; dispatch asıl yolla sürer. */
 	@Test
-	void disabledClientRejectsEvenTheRightKey() throws Exception {
-		MockHttpServletResponse response = new MockHttpServletResponse();
+	void logLinesAndInstanceUseTheMaskedPath() throws Exception {
+		String paymentId = UUID.randomUUID().toString();
+		RequestPathMasker masker = RequestPathMasker.of("/internal/payments/{paymentId}");
+		InternalApiKeyAuthenticationFilter filter = new InternalApiKeyAuthenticationFilter(
+				new InternalApiKeys(new InternalAuthProperties(List.of(ENABLED))),
+				new InternalApiKeyAuthenticationEntryPoint(JsonMapper.builder().build(), masker), masker);
+
+		MockHttpServletRequest accepted = new MockHttpServletRequest("GET", "/internal/payments/" + paymentId);
+		accepted.addHeader(InternalApiKeyAuthenticationFilter.HEADER, TestKeys.ORDER_SERVICE_KEY);
 		MockFilterChain chain = new MockFilterChain();
+		filter.doFilter(accepted, new MockHttpServletResponse(), chain);
+		assertThat(((HttpServletRequest) chain.getRequest()).getRequestURI()).endsWith(paymentId);
 
-		filter(DISABLED).doFilter(requestWithKey(TestKeys.ORDER_SERVICE_KEY), response, chain);
+		SecurityContextHolder.clearContext();
+		MockHttpServletResponse rejected = new MockHttpServletResponse();
+		filter.doFilter(new MockHttpServletRequest("GET", "/internal/payments/" + paymentId), rejected,
+				new MockFilterChain());
 
-		assertThat(response.getStatus()).isEqualTo(401);
-		assertThat(chain.getRequest()).isNull();
+		assertThat(this.appender.list).extracting(ILoggingEvent::getFormattedMessage).containsExactly(
+				"Internal request GET /internal/payments/:paymentId client=order-service",
+				"Rejected internal request GET /internal/payments/:paymentId -> UNAUTHORIZED");
+		assertThat(rejected.getContentAsString()).contains("\"instance\":\"/internal/payments/:paymentId\"")
+			.doesNotContain(paymentId);
 	}
 
 	@Test

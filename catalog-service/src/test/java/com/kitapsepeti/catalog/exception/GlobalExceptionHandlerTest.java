@@ -108,7 +108,9 @@ class GlobalExceptionHandlerTest extends ApiTestSupport {
 
 		assertNoLeak(body, output);
 		assertThat(output).doesNotContain("version=?");
-		assertThat(output).contains("POST " + BASE + "/books/" + bookId + "/stale-update -> CONCURRENT_MODIFICATION");
+		// Desen dışı yol: UUID güvenlik ağıyla :id olur.
+		assertThat(output).contains("POST " + BASE + "/books/:id/stale-update -> CONCURRENT_MODIFICATION")
+			.doesNotContain(bookId.toString());
 		assertThat(bookRepository.findById(bookId).orElseThrow().getTitle()).isEqualTo("İlk");
 	}
 

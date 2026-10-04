@@ -5,7 +5,6 @@ import java.util.List;
 import com.kitapsepeti.common.error.ApiException;
 import com.kitapsepeti.common.error.ErrorCode;
 import com.kitapsepeti.common.error.ProblemDetailExceptionHandler;
-import com.kitapsepeti.common.error.ProblemDetails;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -17,7 +16,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 /**
  * Controller katmanından çıkan her hatayı RFC 9457 ProblemDetail'e çevirir; ortak handler'lar tabandan gelir.
  * Burada yalnızca katalog'a özgü olanlar var: DB kısıtı → kod eşlemesi ({@link DbConstraintCodes}),
- * {@code @Version} çakışması ve bazı ApiException'ların ek alanları ({@code errors}, {@code bookIds}).
+ * {@code @Version} çakışması ve bazı ApiException'ların ek alanları ({@code errors}, {@code bookIds}). Yoldaki id'ler
+ * tabanda maskelenir (servisin {@code RequestPathMasker} bean'i, {@code SecurityConfig}).
  * Security filtrelerinde oluşan 401/403/503 buraya ulaşmaz; onları common'daki security handler'ları yazar.
  */
 @RestControllerAdvice
@@ -28,7 +28,7 @@ public class GlobalExceptionHandler extends ProblemDetailExceptionHandler {
 	public ResponseEntity<Object> handleOptimisticLockingFailure(OptimisticLockingFailureException ex,
 			HttpServletRequest request) {
 		ErrorCode code = CatalogErrorCode.CONCURRENT_MODIFICATION;
-		ProblemDetails.log(this.log, code, request, ex);
+		logProblem(code, request, ex, null);
 		return respond(code, code.defaultDetail(), request);
 	}
 

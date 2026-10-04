@@ -3,10 +3,12 @@ package com.kitapsepeti.common.error;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.net.URI;
+import java.util.UUID;
 
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.kitapsepeti.common.web.RequestPathMasker;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -53,13 +55,44 @@ class ProblemDetailsTest {
 		assertThat(problem.getProperties()).containsEntry("code", "CONFLICT");
 	}
 
+	/** Eskiden URI'ye çevrilemeyen yolda instance boş kalırdı; maskeleyici artık geçersiz karakterleri kodluyor. */
 	@Test
-	void unparsableRequestUriLeavesInstanceEmpty() {
+	void unparsableRequestUriIsEncodedIntoAValidInstance() {
 		ProblemDetail problem = ProblemDetails.create(CommonErrorCode.NOT_FOUND, "d",
 				new MockHttpServletRequest("GET", "/a b|c"));
 
-		assertThat(problem.getInstance()).isNull();
+		assertThat(problem.getInstance()).isEqualTo(URI.create("/a%20b%7Cc"));
 		assertThat(problem.getStatus()).isEqualTo(404);
+	}
+
+	@Test
+	void instanceAndLogUseTheMaskerAndNeverTheQueryString() {
+		String id = UUID.randomUUID().toString();
+		RequestPathMasker masker = RequestPathMasker.of("/api/cart/items/{bookId}");
+		MockHttpServletRequest request = new MockHttpServletRequest("PATCH", "/api/cart/items/" + id);
+		request.setQueryString("secret=" + id);
+
+		ProblemDetail problem = ProblemDetails.create(CommonErrorCode.NOT_FOUND, "d", request, masker);
+		ProblemDetails.log(this.logger, CommonErrorCode.NOT_FOUND, request, null, null, masker);
+
+		assertThat(problem.getInstance()).isEqualTo(URI.create("/api/cart/items/:bookId"));
+		assertThat(this.appender.list).singleElement()
+			.extracting(ILoggingEvent::getFormattedMessage)
+			.isEqualTo("PATCH /api/cart/items/:bookId -> NOT_FOUND");
+	}
+
+	@Test
+	void overloadsWithoutMaskerStillApplyTheUuidSafetyNet() {
+		String id = UUID.randomUUID().toString().toUpperCase();
+		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/books/" + id + "/x");
+
+		ProblemDetail problem = ProblemDetails.create(CommonErrorCode.NOT_FOUND, "d", request);
+		ProblemDetails.log(this.logger, CommonErrorCode.NOT_FOUND, request, null);
+
+		assertThat(problem.getInstance()).isEqualTo(URI.create("/api/books/:id/x"));
+		assertThat(this.appender.list).singleElement()
+			.extracting(ILoggingEvent::getFormattedMessage)
+			.isEqualTo("GET /api/books/:id/x -> NOT_FOUND");
 	}
 
 	@Test

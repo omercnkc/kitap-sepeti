@@ -21,8 +21,9 @@ class InternalApiKeysTest {
 
 	@Test
 	void invalidHashFailsStartupWithoutEchoingTheValue() {
-		for (String invalid : new String[] { "abc", RAW_LOOKING_SECRET, TestKeys.ORDER_SERVICE_KEY_SHA256 + "0",
-				"z".repeat(64) }) {
+		String sha = TestKeys.ORDER_SERVICE_KEY_SHA256;
+		for (String invalid : new String[] { "abc", RAW_LOOKING_SECRET, sha + "0", sha.substring(1), "z".repeat(64),
+				sha.substring(0, 63) + "g", sha.substring(0, 32) + " " + sha.substring(32) }) {
 			runner.withPropertyValues("app.internal-auth.clients[0].key-sha256=" + invalid).run(context -> {
 				assertThat(context).hasFailed();
 				Throwable failure = context.getStartupFailure();
@@ -47,30 +48,59 @@ class InternalApiKeysTest {
 			});
 	}
 
+	/** "Özet boş = istemci kapalı" yok: yok, boş ya da yalnızca boşluk olan özet de açılışı durdurur. */
 	@Test
-	void emptyHashDisablesClientButContextStarts() {
-		runner.withPropertyValues("app.internal-auth.clients[0].key-sha256=").run(context -> {
-			assertThat(context).hasNotFailed();
-			InternalApiKeys keys = context.getBean(InternalApiKeys.class);
-			assertThat(keys.clientFor(TestKeys.ORDER_SERVICE_KEY)).isEmpty();
-			assertThat(keys.clientFor("")).isEmpty();
-		});
+	void missingEmptyOrBlankHashFailsStartup() {
+		runner.run(context -> assertMissingHashFailure(context.getStartupFailure()));
+		for (String blank : new String[] { "", "   ", "\t" }) {
+			runner.withPropertyValues("app.internal-auth.clients[0].key-sha256=" + blank)
+				.run(context -> assertMissingHashFailure(context.getStartupFailure()));
+		}
+	}
+
+	@Test
+	void noConfiguredClientFailsStartup() {
 		new ApplicationContextRunner().withUserConfiguration(KeysConfig.class).run(context -> {
-			assertThat(context).hasNotFailed();
-			assertThat(context.getBean(InternalApiKeys.class).clientFor(TestKeys.ORDER_SERVICE_KEY)).isEmpty();
+			assertThat(context).hasFailed();
+			assertThat(messageChain(context.getStartupFailure())).contains("at least one internal client");
 		});
 	}
 
 	@Test
-	void validHashMatchesOnlyTheRightKey() {
-		runner.withPropertyValues("app.internal-auth.clients[0].key-sha256="
-				+ TestKeys.ORDER_SERVICE_KEY_SHA256.toUpperCase())
-			.run(context -> {
+	void validHashInEitherCaseMatchesOnlyTheRightKey() {
+		for (String hash : new String[] { TestKeys.ORDER_SERVICE_KEY_SHA256.toLowerCase(),
+				TestKeys.ORDER_SERVICE_KEY_SHA256.toUpperCase(), " " + TestKeys.ORDER_SERVICE_KEY_SHA256 + " " }) {
+			runner.withPropertyValues("app.internal-auth.clients[0].key-sha256=" + hash).run(context -> {
+				assertThat(context).hasNotFailed();
 				InternalApiKeys keys = context.getBean(InternalApiKeys.class);
 				assertThat(keys.clientFor(TestKeys.ORDER_SERVICE_KEY)).isEqualTo(Optional.of("order-service"));
 				assertThat(keys.clientFor(TestKeys.ORDER_SERVICE_KEY + "x")).isEmpty();
 				assertThat(keys.clientFor(TestKeys.ORDER_SERVICE_KEY_SHA256)).isEmpty();
+				assertThat(keys.clientFor("")).isEmpty();
 			});
+		}
+	}
+
+	@Test
+	void everyConfiguredClientIsValidated() {
+		runner.withPropertyValues("app.internal-auth.clients[0].key-sha256=" + TestKeys.ORDER_SERVICE_KEY_SHA256,
+				"app.internal-auth.clients[1].name=cart-service", "app.internal-auth.clients[1].key-sha256=")
+			.run(context -> {
+				assertThat(context).hasFailed();
+				assertThat(messageChain(context.getStartupFailure()))
+					.contains("app.internal-auth.clients[1].key-sha256")
+					.contains("cart-service")
+					.contains("must be set")
+					.doesNotContain(TestKeys.ORDER_SERVICE_KEY_SHA256);
+			});
+	}
+
+	private static void assertMissingHashFailure(Throwable failure) {
+		assertThat(failure).isNotNull();
+		assertThat(messageChain(failure)).contains("app.internal-auth.clients[0].key-sha256")
+			.contains("order-service")
+			.contains("must be set")
+			.contains("64-character hex");
 	}
 
 	@Test

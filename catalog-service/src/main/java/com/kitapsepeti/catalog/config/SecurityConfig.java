@@ -6,6 +6,7 @@ import com.kitapsepeti.common.security.ProblemDetailAccessDeniedHandler;
 import com.kitapsepeti.common.security.ProblemDetailAuthenticationEntryPoint;
 import com.kitapsepeti.common.security.ProblemDetailAuthenticationFailureHandler;
 import com.kitapsepeti.common.security.ProblemDetailSecurityHandlers;
+import com.kitapsepeti.common.web.RequestPathMasker;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -30,11 +31,35 @@ public class SecurityConfig {
 
 	private static final String[] PUBLIC_GET_PATHS = { "/api/books/**", "/api/categories/**" };
 
+	/**
+	 * id taşıyan yollar (controller'lardaki {@code {id}}/{@code {orderId}}): hata yanıtının {@code instance}'ında ve
+	 * loglarda {@code :<ad>} olur. {@code /api/books/lookup} sabit kalıp olarak kayıtlı; {@code /api/books/{bookId}}'den
+	 * önce gelir. Yeni bir uç yolda id taşırsa buraya eklenmeli.
+	 */
+	@Bean
+	public RequestPathMasker requestPathMasker() {
+		return RequestPathMasker.of(
+				"/api/books/lookup",
+				"/api/books/{bookId}",
+				"/api/admin/books/{bookId}",
+				"/api/admin/books/{bookId}/publish",
+				"/api/admin/books/{bookId}/archive",
+				"/api/admin/books/{bookId}/stock-adjustments",
+				"/api/admin/authors/{authorId}",
+				"/api/admin/publishers/{publisherId}",
+				"/api/admin/categories/{categoryId}",
+				"/api/admin/categories/{categoryId}/parent",
+				"/internal/stock/reservations/{orderId}",
+				"/internal/stock/reservations/{orderId}/commit",
+				"/internal/stock/reservations/{orderId}/release");
+	}
+
 	/** JWKS'e ulaşılamazsa 503; diğer token hataları entry point'e (401). */
 	@Bean
 	public ProblemDetailAuthenticationFailureHandler problemDetailAuthenticationFailureHandler(
-			ProblemDetailAuthenticationEntryPoint authenticationEntryPoint, JsonMapper jsonMapper) {
-		return new ProblemDetailAuthenticationFailureHandler(authenticationEntryPoint, jsonMapper);
+			ProblemDetailAuthenticationEntryPoint authenticationEntryPoint, JsonMapper jsonMapper,
+			RequestPathMasker pathMasker) {
+		return new ProblemDetailAuthenticationFailureHandler(authenticationEntryPoint, jsonMapper, pathMasker);
 	}
 
 	@Bean

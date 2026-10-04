@@ -1,6 +1,7 @@
 package com.kitapsepeti.payment.config;
 
 import com.kitapsepeti.common.security.ProblemDetailAccessDeniedHandler;
+import com.kitapsepeti.common.web.RequestPathMasker;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -27,10 +28,20 @@ import tools.jackson.databind.json.JsonMapper;
 @EnableWebSecurity
 public class SecurityConfig {
 
+	/**
+	 * id taşıyan yollar: hata yanıtında, internal filtrenin logunda ve red satırlarında {@code :paymentId} olur
+	 * (exception handler, security handler'ları ve internal zincir bu bean'i kullanır).
+	 */
+	@Bean
+	public RequestPathMasker requestPathMasker() {
+		return RequestPathMasker.of("/internal/payments/{paymentId}");
+	}
+
 	/** Yalnızca 403 handler'ı; common'daki Bearer challenge yazan entry point bu serviste bean olmamalı. */
 	@Bean
-	public ProblemDetailAccessDeniedHandler problemDetailAccessDeniedHandler(JsonMapper jsonMapper) {
-		return new ProblemDetailAccessDeniedHandler(jsonMapper);
+	public ProblemDetailAccessDeniedHandler problemDetailAccessDeniedHandler(JsonMapper jsonMapper,
+			RequestPathMasker pathMasker) {
+		return new ProblemDetailAccessDeniedHandler(jsonMapper, pathMasker);
 	}
 
 	@Bean

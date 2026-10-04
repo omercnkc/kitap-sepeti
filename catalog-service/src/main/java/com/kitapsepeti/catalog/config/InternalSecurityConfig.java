@@ -4,8 +4,7 @@ import com.kitapsepeti.common.security.ProblemDetailAccessDeniedHandler;
 import com.kitapsepeti.common.security.internal.InternalApiKeyAuthenticationEntryPoint;
 import com.kitapsepeti.common.security.internal.InternalApiKeyAuthenticationFilter;
 import com.kitapsepeti.common.security.internal.InternalApiKeys;
-import com.kitapsepeti.common.security.internal.InternalAuthProperties;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import com.kitapsepeti.common.web.RequestPathMasker;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -19,22 +18,19 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * /internal/** için ayrı, ana zincirden ({@link SecurityConfig}) önce eşleşen zincir. Kimlik yalnızca
  * {@code X-Internal-Api-Key} ile kanıtlanır; resource server YOK, kullanıcı JWT'si (ADMIN dahil) burada geçersizdir.
- * Filtre bean DEĞİLDİR; yalnızca bu zincire eklenir.
+ * Filtre bean DEĞİLDİR; yalnızca bu zincire eklenir. İstemciler ve özetler {@link InternalAuthConfig}'te. Filtrenin
+ * INFO satırı ve entry point reddi yolu servisin {@link RequestPathMasker}'ından geçirir (sipariş id'si {@code :orderId}).
  */
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(InternalAuthProperties.class)
 public class InternalSecurityConfig {
-
-	@Bean
-	public InternalApiKeys internalApiKeys(InternalAuthProperties properties) {
-		return new InternalApiKeys(properties);
-	}
 
 	@Bean
 	@Order(1)
 	public SecurityFilterChain internalSecurityFilterChain(HttpSecurity http, InternalApiKeys apiKeys,
-			JsonMapper jsonMapper, ProblemDetailAccessDeniedHandler accessDeniedHandler) throws Exception {
-		InternalApiKeyAuthenticationEntryPoint entryPoint = new InternalApiKeyAuthenticationEntryPoint(jsonMapper);
+			JsonMapper jsonMapper, ProblemDetailAccessDeniedHandler accessDeniedHandler, RequestPathMasker pathMasker)
+			throws Exception {
+		InternalApiKeyAuthenticationEntryPoint entryPoint = new InternalApiKeyAuthenticationEntryPoint(jsonMapper,
+				pathMasker);
 		http
 			.securityMatcher("/internal/**")
 			.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -43,7 +39,8 @@ public class InternalSecurityConfig {
 			.formLogin(AbstractHttpConfigurer::disable)
 			.logout(AbstractHttpConfigurer::disable)
 			.anonymous(AbstractHttpConfigurer::disable)
-			.addFilterBefore(new InternalApiKeyAuthenticationFilter(apiKeys, entryPoint), AuthorizationFilter.class)
+			.addFilterBefore(new InternalApiKeyAuthenticationFilter(apiKeys, entryPoint, pathMasker),
+					AuthorizationFilter.class)
 			.authorizeHttpRequests(auth -> auth.anyRequest().hasRole(InternalApiKeyAuthenticationFilter.ROLE))
 			.exceptionHandling(ex -> ex
 				.authenticationEntryPoint(entryPoint)

@@ -300,7 +300,7 @@ class CatalogGatewayTest extends ApiTestSupport {
 		assertThat(output.getOut().lines().filter(line -> line.contains("-> CATALOG_UNAVAILABLE")))
 			.singleElement()
 			.satisfies(line -> assertThat(line).contains(" WARN ")
-				.contains("GET /api/cart/_catalog/books/" + id + " -> CATALOG_UNAVAILABLE (cause=ServiceUnavailable)"));
+				.contains("GET /api/cart/_catalog/books/:id -> CATALOG_UNAVAILABLE (cause=ServiceUnavailable)"));
 		assertNoCatalogDetails(body, output, id, true);
 	}
 
@@ -355,10 +355,9 @@ class CatalogGatewayTest extends ApiTestSupport {
 			assertThat(body).doesNotContain(value);
 			assertThat(output).doesNotContain(value);
 		}
-		// instance = cart'taki probe yolu (kitap id'si orada istemcinin kendi isteğinden gelir).
-		assertThat(body.replace("/api/cart/_catalog/books/" + id, "")).doesNotContain(id.toString());
-		assertThat(output.getOut().lines().filter(line -> line.contains(id.toString())))
-			.allSatisfy(line -> assertThat(line).contains("/api/cart/_catalog/books/" + id + " -> "));
+		// Probe yolu desen dışı: UUID güvenlik ağıyla instance'ta ve logda :id olur.
+		assertThat(body).doesNotContain(id.toString());
+		assertThat(output).doesNotContain(id.toString());
 		if (noStackTrace) {
 			assertThat(output).doesNotContain("Caused by").doesNotContain("\tat ").doesNotContain("FeignException");
 		}

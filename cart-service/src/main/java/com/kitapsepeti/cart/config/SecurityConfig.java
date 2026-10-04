@@ -1,11 +1,11 @@
 package com.kitapsepeti.cart.config;
 
-import com.kitapsepeti.cart.exception.MaskedRequestPaths;
 import com.kitapsepeti.common.security.JwtRoleConverters;
 import com.kitapsepeti.common.security.ProblemDetailAccessDeniedHandler;
 import com.kitapsepeti.common.security.ProblemDetailAuthenticationEntryPoint;
 import com.kitapsepeti.common.security.ProblemDetailAuthenticationFailureHandler;
 import com.kitapsepeti.common.security.ProblemDetailSecurityHandlers;
+import com.kitapsepeti.common.web.RequestPathMasker;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -15,10 +15,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.access.AccessDeniedHandler;
-import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -26,7 +23,8 @@ import tools.jackson.databind.json.JsonMapper;
  * Herkese açık uçlar yalnızca health ve OpenAPI dokümanı/Swagger UI; sepetin tamamı kimlik ister (USER ve ADMIN, ayrı
  * rol şartı yok).
  * Diğer yollar da kimlik ister (catalog ile aynı): kimliksiz 401, kimlikli olmayan yol 404.
- * Ortak security handler'larına istek {@link MaskedRequestPaths} üzerinden verilir (yoldaki kitap id'si logda/yanıtta yok).
+ * Yoldaki kitap id'si hata yanıtında ve logda {@code :bookId} olur ({@link #requestPathMasker()}; ortak handler'lar
+ * ve exception handler bu bean'i kullanır).
  * /internal/** bu zincire hiç gelmez ({@link InternalSecurityConfig}, sıra 1).
  */
 @Configuration
@@ -34,10 +32,17 @@ import tools.jackson.databind.json.JsonMapper;
 @Import(ProblemDetailSecurityHandlers.class)
 public class SecurityConfig {
 
+	/** id taşıyan yollar; yeni bir uç yolda id taşırsa buraya eklenmeli. */
+	@Bean
+	public RequestPathMasker requestPathMasker() {
+		return RequestPathMasker.of("/api/cart/items/{bookId}");
+	}
+
 	@Bean
 	public ProblemDetailAuthenticationFailureHandler problemDetailAuthenticationFailureHandler(
-			ProblemDetailAuthenticationEntryPoint authenticationEntryPoint, JsonMapper jsonMapper) {
-		return new ProblemDetailAuthenticationFailureHandler(authenticationEntryPoint, jsonMapper);
+			ProblemDetailAuthenticationEntryPoint authenticationEntryPoint, JsonMapper jsonMapper,
+			RequestPathMasker pathMasker) {
+		return new ProblemDetailAuthenticationFailureHandler(authenticationEntryPoint, jsonMapper, pathMasker);
 	}
 
 	@Bean
@@ -46,12 +51,6 @@ public class SecurityConfig {
 			ProblemDetailAuthenticationEntryPoint authenticationEntryPoint,
 			ProblemDetailAccessDeniedHandler accessDeniedHandler,
 			ProblemDetailAuthenticationFailureHandler authenticationFailureHandler) throws Exception {
-		AuthenticationEntryPoint maskedEntryPoint = (request, response, ex) -> authenticationEntryPoint
-			.commence(MaskedRequestPaths.mask(request), response, ex);
-		AccessDeniedHandler maskedAccessDenied = (request, response, ex) -> accessDeniedHandler
-			.handle(MaskedRequestPaths.mask(request), response, ex);
-		AuthenticationFailureHandler maskedFailure = (request, response, ex) -> authenticationFailureHandler
-			.onAuthenticationFailure(MaskedRequestPaths.mask(request), response, ex);
 		http
 			.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 			.csrf(AbstractHttpConfigurer::disable)
@@ -67,12 +66,13 @@ public class SecurityConfig {
 				.anyRequest().authenticated())
 			.oauth2ResourceServer(resourceServer -> resourceServer
 				.jwt(jwt -> jwt.jwtAuthenticationConverter(JwtRoleConverters.roleClaim()))
-				.authenticationEntryPoint(maskedEntryPoint)
-				.accessDeniedHandler(maskedAccessDenied)
-				.withObjectPostProcessor(ProblemDetailAuthenticationFailureHandler.postProcessorFor(maskedFailure)))
+				.authenticationEntryPoint(authenticationEntryPoint)
+				.accessDeniedHandler(accessDeniedHandler)
+				.withObjectPostProcessor(
+						ProblemDetailAuthenticationFailureHandler.postProcessorFor(authenticationFailureHandler)))
 			.exceptionHandling(ex -> ex
-				.authenticationEntryPoint(maskedEntryPoint)
-				.accessDeniedHandler(maskedAccessDenied));
+				.authenticationEntryPoint(authenticationEntryPoint)
+				.accessDeniedHandler(accessDeniedHandler));
 		return http.build();
 	}
 

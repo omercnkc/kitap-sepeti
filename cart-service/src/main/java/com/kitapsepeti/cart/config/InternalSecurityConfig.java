@@ -4,6 +4,7 @@ import com.kitapsepeti.common.security.ProblemDetailAccessDeniedHandler;
 import com.kitapsepeti.common.security.internal.InternalApiKeyAuthenticationEntryPoint;
 import com.kitapsepeti.common.security.internal.InternalApiKeyAuthenticationFilter;
 import com.kitapsepeti.common.security.internal.InternalApiKeys;
+import com.kitapsepeti.common.web.RequestPathMasker;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -25,8 +26,10 @@ public class InternalSecurityConfig {
 	@Bean
 	@Order(1)
 	public SecurityFilterChain internalSecurityFilterChain(HttpSecurity http, InternalApiKeys apiKeys,
-			JsonMapper jsonMapper, ProblemDetailAccessDeniedHandler accessDeniedHandler) throws Exception {
-		InternalApiKeyAuthenticationEntryPoint entryPoint = new InternalApiKeyAuthenticationEntryPoint(jsonMapper);
+			JsonMapper jsonMapper, ProblemDetailAccessDeniedHandler accessDeniedHandler, RequestPathMasker pathMasker)
+			throws Exception {
+		InternalApiKeyAuthenticationEntryPoint entryPoint = new InternalApiKeyAuthenticationEntryPoint(jsonMapper,
+				pathMasker);
 		http
 			.securityMatcher("/internal/**")
 			.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -35,7 +38,8 @@ public class InternalSecurityConfig {
 			.formLogin(AbstractHttpConfigurer::disable)
 			.logout(AbstractHttpConfigurer::disable)
 			.anonymous(AbstractHttpConfigurer::disable)
-			.addFilterBefore(new InternalApiKeyAuthenticationFilter(apiKeys, entryPoint), AuthorizationFilter.class)
+			.addFilterBefore(new InternalApiKeyAuthenticationFilter(apiKeys, entryPoint, pathMasker),
+					AuthorizationFilter.class)
 			.authorizeHttpRequests(auth -> auth.anyRequest().hasRole(InternalApiKeyAuthenticationFilter.ROLE))
 			.exceptionHandling(ex -> ex
 				.authenticationEntryPoint(entryPoint)

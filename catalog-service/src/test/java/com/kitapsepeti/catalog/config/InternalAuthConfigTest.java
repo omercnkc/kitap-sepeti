@@ -1,12 +1,14 @@
-package com.kitapsepeti.payment.config;
+package com.kitapsepeti.catalog.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.security.SecureRandom;
+import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
 
+import com.kitapsepeti.catalog.support.InternalTestKeys;
 import com.kitapsepeti.common.security.internal.InternalApiKeys;
-import com.kitapsepeti.payment.support.InternalTestKeys;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -14,8 +16,8 @@ import org.springframework.core.env.PropertySource;
 import org.springframework.core.io.ClassPathResource;
 
 /**
- * {@code app.internal-auth} açılış doğrulaması (common {@code InternalApiKeys} politikası, tüm servislerde aynı): özet
- * yok, boş ya da bozuksa bağlam açılmaz, hata mesajı değeri yansıtmaz.
+ * {@code app.internal-auth} açılış doğrulaması: "boş özet = istemci kapalı" artık yok; özet yok, boş ya da bozuksa
+ * bağlam açılmaz, hata mesajı değeri yansıtmaz. Politika tüm servislerde aynı (common {@link InternalApiKeys}).
  */
 class InternalAuthConfigTest {
 
@@ -26,7 +28,7 @@ class InternalAuthConfigTest {
 		.withPropertyValues("app.internal-auth.clients[0].name=order-service");
 
 	@Test
-	void missingOrEmptyHashFailsStartup() {
+	void missingEmptyOrBlankHashFailsStartup() {
 		orderClient.run(context -> assertFailure(context.getStartupFailure(),
 				"app.internal-auth.clients[0].key-sha256", "order-service", "must be set"));
 		orderClient.withPropertyValues("app.internal-auth.clients[0].key-sha256=").run(context -> assertFailure(
@@ -38,7 +40,7 @@ class InternalAuthConfigTest {
 
 	@Test
 	void malformedHashFailsStartupWithoutEchoingTheValue() {
-		String rawKey = InternalTestKeys.randomKey();
+		String rawKey = randomKey();
 		for (String invalid : List.of("abc", rawKey, InternalTestKeys.ORDER_SERVICE_KEY_SHA256 + "0",
 				InternalTestKeys.ORDER_SERVICE_KEY_SHA256.substring(1), "g".repeat(64))) {
 			orderClient.withPropertyValues("app.internal-auth.clients[0].key-sha256=" + invalid).run(context -> {
@@ -61,14 +63,20 @@ class InternalAuthConfigTest {
 	}
 
 	@Test
-	void applicationYmlReadsOrderHashFromPaymentEnvVariable() throws Exception {
+	void applicationYmlReadsOrderHashFromCatalogEnvVariable() throws Exception {
 		List<PropertySource<?>> sources = new YamlPropertySourceLoader().load("application",
 				new ClassPathResource("application.yml"));
 		PropertySource<?> yml = sources.get(0);
 
 		assertThat(yml.getProperty("app.internal-auth.clients[0].name")).hasToString("order-service");
 		assertThat(yml.getProperty("app.internal-auth.clients[0].key-sha256"))
-			.hasToString("${PAYMENT_INTERNAL_KEY_ORDER_SHA256:}");
+			.hasToString("${CATALOG_INTERNAL_KEY_ORDER_SHA256:}");
+	}
+
+	private static String randomKey() {
+		byte[] bytes = new byte[32];
+		new SecureRandom().nextBytes(bytes);
+		return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
 	}
 
 	private static String assertFailure(Throwable failure, String... expectedParts) {

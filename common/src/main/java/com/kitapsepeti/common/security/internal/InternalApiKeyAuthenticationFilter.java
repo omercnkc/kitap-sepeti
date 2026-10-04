@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 
+import com.kitapsepeti.common.web.RequestPathMasker;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -44,9 +45,18 @@ public class InternalApiKeyAuthenticationFilter extends OncePerRequestFilter {
 
 	private final AuthenticationEntryPoint entryPoint;
 
+	private final RequestPathMasker pathMasker;
+
 	public InternalApiKeyAuthenticationFilter(InternalApiKeys apiKeys, AuthenticationEntryPoint entryPoint) {
+		this(apiKeys, entryPoint, RequestPathMasker.uuidOnly());
+	}
+
+	/** @param pathMasker başarılı isteğin INFO satırındaki yol için; dispatch asıl istekle sürer */
+	public InternalApiKeyAuthenticationFilter(InternalApiKeys apiKeys, AuthenticationEntryPoint entryPoint,
+			RequestPathMasker pathMasker) {
 		this.apiKeys = apiKeys;
 		this.entryPoint = entryPoint;
+		this.pathMasker = pathMasker;
 	}
 
 	@Override
@@ -63,7 +73,7 @@ public class InternalApiKeyAuthenticationFilter extends OncePerRequestFilter {
 		SecurityContext context = this.securityContextHolderStrategy.createEmptyContext();
 		context.setAuthentication(UsernamePasswordAuthenticationToken.authenticated(client.get(), null, AUTHORITIES));
 		this.securityContextHolderStrategy.setContext(context);
-		log.info("Internal request {} {} client={}", request.getMethod(), request.getRequestURI(), client.get());
+		log.info("Internal request {} {} client={}", request.getMethod(), this.pathMasker.mask(request), client.get());
 		chain.doFilter(request, response);
 	}
 

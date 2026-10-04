@@ -1017,7 +1017,7 @@
           "instance": {
             "type": "string",
             "format": "uri-reference",
-            "description": "İsteğin yolu.",
+            "description": "İsteğin yolu; adres id'si `:addressId` olarak maskelenir (`/api/me/addresses/:addressId`).",
             "example": "/api/auth/register"
           },
           "status": {

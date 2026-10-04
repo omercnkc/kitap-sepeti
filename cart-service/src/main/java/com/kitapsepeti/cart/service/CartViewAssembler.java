@@ -14,8 +14,8 @@ import com.kitapsepeti.cart.dto.response.CartLineResponse;
 import com.kitapsepeti.cart.dto.response.CartResponse;
 import com.kitapsepeti.cart.dto.response.CatalogStatus;
 import com.kitapsepeti.cart.exception.CatalogUnavailableException;
-import com.kitapsepeti.cart.exception.MaskedRequestPaths;
 import com.kitapsepeti.common.error.ProblemDetails;
+import com.kitapsepeti.common.web.RequestPathMasker;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,8 +39,11 @@ public class CartViewAssembler {
 
 	private final CatalogGateway catalog;
 
-	public CartViewAssembler(CatalogGateway catalog) {
+	private final RequestPathMasker pathMasker;
+
+	public CartViewAssembler(CatalogGateway catalog, RequestPathMasker pathMasker) {
 		this.catalog = catalog;
+		this.pathMasker = pathMasker;
 	}
 
 	/** Boş içerik için Catalog çağrılmaz. */
@@ -113,13 +116,13 @@ public class CartViewAssembler {
 	 * Hata handler'ının CATALOG_UNAVAILABLE satırıyla aynı biçim; yalnızca kök nedenin sınıf adı (mesajı URL/host,
 	 * istek kitap id'leri içerebilir).
 	 */
-	private static void logUnavailable(CatalogUnavailableException ex) {
+	private void logUnavailable(CatalogUnavailableException ex) {
 		Throwable rootCause = NestedExceptionUtils.getRootCause(ex);
 		String note = ((rootCause != null) ? "cause=" + rootCause.getClass().getSimpleName() + ", " : "")
 				+ "served from snapshot";
 		if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes) {
-			HttpServletRequest request = MaskedRequestPaths.mask(attributes.getRequest());
-			ProblemDetails.log(log, ex.getErrorCode(), request, ex, note);
+			HttpServletRequest request = attributes.getRequest();
+			ProblemDetails.log(log, ex.getErrorCode(), request, ex, note, this.pathMasker);
 		}
 		else {
 			log.atLevel(ex.getErrorCode().logLevel()).log("cart view -> {} ({})", ex.getErrorCode().name(), note);

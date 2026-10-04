@@ -28,8 +28,10 @@ X-Internal-Api-Key: <ham anahtar>
   | `ORDER_INTERNAL_API_KEY` | order-service | Ham anahtar (rastgele 32 bayt, base64url) |
   | `CATALOG_INTERNAL_KEY_ORDER_SHA256` | catalog-service | Ham anahtarın UTF-8 baytlarının SHA-256 özeti, hex |
 
-  Özet boşsa istemci kapalıdır (uygulama yine açılır, istekler 401 alır). Dolu ama 64 karakter hex değilse
-  catalog-service açılmaz (hata mesajı değeri içermez).
+  Özet yoksa, boşsa ya da 64 karakter hex değilse catalog-service açılmaz (hata mesajı değeri içermez);
+  docker compose da değişken boşken başlamaz. Politika cart ve payment ile aynıdır (common `InternalApiKeys`).
+- Hata yanıtının `instance` alanında ve loglarda sipariş id'si maskelenir:
+  `/internal/stock/reservations/:orderId`, `…/:orderId/commit`, `…/:orderId/release`.
 - Anahtar değiştirmek: yeni anahtar üret, iki değişkeni birlikte güncelle, iki servisi yeniden başlat.
 
 ## Kurallar

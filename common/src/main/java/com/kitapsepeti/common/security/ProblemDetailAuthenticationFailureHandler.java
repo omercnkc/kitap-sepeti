@@ -5,6 +5,7 @@ import java.io.IOException;
 import com.kitapsepeti.common.error.CommonErrorCode;
 import com.kitapsepeti.common.error.ErrorCode;
 import com.kitapsepeti.common.error.ProblemDetails;
+import com.kitapsepeti.common.web.RequestPathMasker;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -36,10 +37,18 @@ public class ProblemDetailAuthenticationFailureHandler implements Authentication
 
 	private final JsonMapper jsonMapper;
 
+	private final RequestPathMasker pathMasker;
+
 	public ProblemDetailAuthenticationFailureHandler(AuthenticationEntryPoint authenticationEntryPoint,
 			JsonMapper jsonMapper) {
+		this(authenticationEntryPoint, jsonMapper, RequestPathMasker.uuidOnly());
+	}
+
+	public ProblemDetailAuthenticationFailureHandler(AuthenticationEntryPoint authenticationEntryPoint,
+			JsonMapper jsonMapper, RequestPathMasker pathMasker) {
 		this.authenticationEntryPoint = authenticationEntryPoint;
 		this.jsonMapper = jsonMapper;
+		this.pathMasker = pathMasker;
 	}
 
 	@Override
@@ -51,9 +60,9 @@ public class ProblemDetailAuthenticationFailureHandler implements Authentication
 		}
 		ErrorCode code = CommonErrorCode.AUTHENTICATION_UNAVAILABLE;
 		String rootCause = NestedExceptionUtils.getMostSpecificCause(exception).getClass().getSimpleName();
-		ProblemDetails.log(log, code, request, exception, "cause=" + rootCause);
+		ProblemDetails.log(log, code, request, exception, "cause=" + rootCause, this.pathMasker);
 		ProblemDetailResponses.write(this.jsonMapper, response,
-				ProblemDetails.create(code, code.defaultDetail(), request));
+				ProblemDetails.create(code, code.defaultDetail(), request, this.pathMasker));
 	}
 
 	/**

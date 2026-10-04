@@ -215,7 +215,9 @@ public class OpenApiConfig {
 			.addProperty("status", new IntegerSchema().description("HTTP durum kodu.").example(409))
 			.addProperty("detail", new StringSchema().description("Genel açıklama; kullanıcı verisi içermez.")
 				.example("Slug is already in use."))
-			.addProperty("instance", new StringSchema().format("uri-reference").description("İsteğin yolu.")
+			.addProperty("instance", new StringSchema().format("uri-reference")
+				.description("İsteğin yolu; yoldaki id'ler `:<ad>` olarak maskelenir (ör. `/api/admin/books/:bookId`, "
+						+ "`/internal/stock/reservations/:orderId/commit`).")
 				.example("/api/admin/publishers"))
 			.addProperty("code", new StringSchema()._enum(codes).description("Makine tarafından okunacak hata kodu.")
 				.example(CatalogErrorCode.SLUG_ALREADY_EXISTS.name()))

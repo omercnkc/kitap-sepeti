@@ -15,7 +15,7 @@ import org.springframework.core.io.ClassPathResource;
 
 /**
  * {@code app.internal-auth} açılış doğrulaması: özet yok ya da bozuksa bağlam açılmaz, hata mesajı değeri yansıtmaz.
- * Biçim kuralı catalog'unkiyle aynı (common {@link InternalApiKeys}); boş özetin reddi cart'a özgü.
+ * Politika tüm servislerde aynı (common {@link InternalApiKeys}).
  */
 class InternalAuthConfigTest {
 

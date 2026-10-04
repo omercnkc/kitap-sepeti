@@ -5,12 +5,14 @@ import java.util.List;
 import java.util.Set;
 
 import com.kitapsepeti.common.security.BearerChallenge;
+import com.kitapsepeti.common.web.RequestPathMasker;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
@@ -43,11 +45,25 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
  * İstemciye yalnızca {@link ErrorCode}'daki genel açıklama gider; exception mesajı, Jackson/DB
  * ayrıntısı ve reddedilen alan değerleri (rejectedValue) ne yanıta ne loga yazılır.
  * Security filtrelerinde oluşan 401/403 buraya ulaşmaz; onları security paketindeki handler'lar yazar.
+ * {@code instance} ve log satırındaki yol servisin {@link RequestPathMasker} bean'inden geçer (yoksa yalnızca UUID
+ * güvenlik ağı); alt sınıflar log/yanıt için {@link #logProblem} ve {@link #respond} kullanır.
  */
 public abstract class ProblemDetailExceptionHandler extends ResponseEntityExceptionHandler {
 
 	/** CGLIB alt sınıfı olsa da logger adı servisin advice sınıfı olsun. */
 	protected final Logger log = LoggerFactory.getLogger(ClassUtils.getUserClass(getClass()));
+
+	private RequestPathMasker pathMasker = RequestPathMasker.uuidOnly();
+
+	/** Opsiyonel bean: servis kalıp kaydetmezse varsayılan {@link RequestPathMasker#uuidOnly()} kalır. */
+	@Autowired(required = false)
+	public void setRequestPathMasker(RequestPathMasker pathMasker) {
+		this.pathMasker = pathMasker;
+	}
+
+	protected final RequestPathMasker pathMasker() {
+		return this.pathMasker;
+	}
 
 	/** {@code errors} dizisinin bir elemanı; reddedilen değer bilinçli olarak yok. */
 	public record FieldViolation(String field, String message) {
@@ -64,12 +80,12 @@ public abstract class ProblemDetailExceptionHandler extends ResponseEntityExcept
 	@ExceptionHandler(ApiException.class)
 	public ResponseEntity<Object> handleApiException(ApiException ex, HttpServletRequest request) {
 		ErrorCode code = ex.getErrorCode();
-		ProblemDetails.log(this.log, code, request, ex);
+		logProblem(code, request, ex, null);
 		ResponseEntity.BodyBuilder response = ResponseEntity.status(code.status());
 		if (code == CommonErrorCode.UNAUTHORIZED) {
 			response.header(HttpHeaders.WWW_AUTHENTICATE, BearerChallenge.INVALID_TOKEN);
 		}
-		ProblemDetail problem = ProblemDetails.create(code, ex.getDetail(), request);
+		ProblemDetail problem = ProblemDetails.create(code, ex.getDetail(), request, this.pathMasker);
 		addProperties(problem, ex);
 		return response.body(problem);
 	}
@@ -80,7 +96,7 @@ public abstract class ProblemDetailExceptionHandler extends ResponseEntityExcept
 			HttpServletRequest request) {
 		ConstraintOutcome outcome = classify(ex);
 		ErrorCode code = outcome.code();
-		ProblemDetails.log(this.log, code, request, ex, outcome.logNote());
+		logProblem(code, request, ex, outcome.logNote());
 		return respond(code, code.defaultDetail(), request);
 	}
 
@@ -92,8 +108,8 @@ public abstract class ProblemDetailExceptionHandler extends ResponseEntityExcept
 	public ResponseEntity<Object> handleConstraintViolation(ConstraintViolationException ex,
 			HttpServletRequest request) {
 		ErrorCode code = CommonErrorCode.VALIDATION_FAILED;
-		ProblemDetails.log(this.log, code, request, ex);
-		ProblemDetail problem = ProblemDetails.create(code, code.defaultDetail(), request);
+		logProblem(code, request, ex, null);
+		ProblemDetail problem = ProblemDetails.create(code, code.defaultDetail(), request, this.pathMasker);
 		problem.setProperty("errors", violations(ex.getConstraintViolations()));
 		return ResponseEntity.status(code.status()).body(problem);
 	}
@@ -111,7 +127,7 @@ public abstract class ProblemDetailExceptionHandler extends ResponseEntityExcept
 	@ExceptionHandler(Exception.class)
 	public ResponseEntity<Object> handleUnexpected(Exception ex, HttpServletRequest request) {
 		ErrorCode code = CommonErrorCode.INTERNAL_ERROR;
-		ProblemDetails.log(this.log, code, request, ex);
+		logProblem(code, request, ex, null);
 		return respond(code, code.defaultDetail(), request);
 	}
 
@@ -134,8 +150,8 @@ public abstract class ProblemDetailExceptionHandler extends ResponseEntityExcept
 		ProblemDetail problem = problemOf(ex, body, statusCode);
 		if (request instanceof ServletWebRequest servletRequest) {
 			HttpServletRequest httpRequest = servletRequest.getRequest();
-			ProblemDetails.log(this.log, code, httpRequest, ex);
-			ProblemDetails.apply(problem, code, code.defaultDetail(), httpRequest);
+			logProblem(code, httpRequest, ex, null);
+			ProblemDetails.apply(problem, code, code.defaultDetail(), httpRequest, this.pathMasker);
 		}
 		return super.handleExceptionInternal(ex, problem, headers, statusCode, request);
 	}
@@ -150,8 +166,13 @@ public abstract class ProblemDetailExceptionHandler extends ResponseEntityExcept
 		return new ConstraintOutcome(CommonErrorCode.CONFLICT, (constraint != null) ? "constraint=" + constraint : null);
 	}
 
-	protected static ResponseEntity<Object> respond(ErrorCode code, String detail, HttpServletRequest request) {
-		return ResponseEntity.status(code.status()).body(ProblemDetails.create(code, detail, request));
+	protected ResponseEntity<Object> respond(ErrorCode code, String detail, HttpServletRequest request) {
+		return ResponseEntity.status(code.status()).body(ProblemDetails.create(code, detail, request, this.pathMasker));
+	}
+
+	/** @param note kullanıcı verisi İÇERMEYEN ek bilgi; yoksa null */
+	protected void logProblem(ErrorCode code, HttpServletRequest request, Throwable ex, String note) {
+		ProblemDetails.log(this.log, code, request, ex, note, this.pathMasker);
 	}
 
 	private static ProblemDetail problemOf(Exception ex, Object body, HttpStatusCode statusCode) {

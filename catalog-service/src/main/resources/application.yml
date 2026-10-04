@@ -70,7 +70,8 @@ app:
     poll-interval: 2s
     batch-size: 50
     confirm-timeout: 5s
-  # /internal/** istemcileri. Ham anahtar burada değil; yalnızca SHA-256 özeti (64 hex). Boşsa istemci kapalı.
+  # /internal/** istemcileri. Ham anahtar burada değil; yalnızca SHA-256 özeti (64 hex). Yok, boş ya da 64 hex değilse
+  # uygulama açılmaz (common InternalApiKeys).
   internal-auth:
     clients:
       - name: order-service

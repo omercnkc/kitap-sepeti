@@ -5,6 +5,7 @@ import com.kitapsepeti.common.security.JwtRoleConverters;
 import com.kitapsepeti.common.security.ProblemDetailAccessDeniedHandler;
 import com.kitapsepeti.common.security.ProblemDetailAuthenticationEntryPoint;
 import com.kitapsepeti.common.security.ProblemDetailSecurityHandlers;
+import com.kitapsepeti.common.web.RequestPathMasker;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -34,6 +35,15 @@ import org.springframework.security.web.SecurityFilterChain;
 public class SecurityConfig {
 
 	private static final String AUTH_PATH_PREFIX = "/api/auth/";
+
+	/**
+	 * id taşıyan yollar: hata yanıtının {@code instance}'ında ve loglarda {@code :addressId} olur (ortak handler'lar ve
+	 * exception handler bu bean'i kullanır). Yeni bir uç yolda id taşırsa buraya eklenmeli.
+	 */
+	@Bean
+	public RequestPathMasker requestPathMasker() {
+		return RequestPathMasker.of("/api/me/addresses/{addressId}");
+	}
 
 	/** BCrypt, varsayılan strength 10. */
 	@Bean
