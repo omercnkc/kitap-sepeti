@@ -165,8 +165,19 @@
 - Cart ertelenenler: CartCheckedOut tüketimi (Order Adım 7); Catalog OpenAPI nullable. (Yol maskeleme + özet politikası common'a
   taşındı → Order Adım 0a.)
 - Order planı (PROJE KARARI, Ekim 2026): 0a common sertleştirme (yapıldı) → 0b outbox → common (yapıldı) → 1 modül/db (yapıldı) → 2 domain (yapıldı) → 3a Order istemcileri + CB (yapıldı)
-  → 3b Cart→Catalog CB (yapıldı) → 4 checkout mutlu yol + GET {id} (yapıldı) → 5 hata yolları/telafi (YAPILDI: satır içi stok release, yarıda kesilme senaryoları a-e, 541 test) → 6 ödeme sonucu tüketicisi → 7 Cart CartCheckedOut tüketicisi → 8 timeout
+  → 3b Cart→Catalog CB (yapıldı) → 4 checkout mutlu yol + GET {id} (yapıldı) → 5 hata yolları/telafi (YAPILDI: satır içi stok release, yarıda kesilme senaryoları a-e, 541 test) → 6a ödeme sonucu tüketicisi (YAPILDI) → 6b stok commit/release +
+  StockSyncJob + V2 lost → 7 Cart CartCheckedOut tüketicisi → 8 timeout
   görevi → 9 liste → 10 OpenAPI/olay belgeleri → 11 Docker. Kararlar activeContext "Sonraki adımlar"da.
+- Order Adım 6a YAPILDI (COMMIT EDİLMEDİ): projenin ilk RabbitMQ consumer'ı. Durable `order.payment-results`, direct
+  `kitapsepeti.dlx`, durable DLQ ve iki payment binding'i; ortak, auto-config olmayan `DeadLetterQueueTopology`. Prefetch 10 /
+  concurrency 1; poison doğrudan DLQ, geçici hata toplam 3 deneme (1s/2s, 4s tavan) sonra DLQ. PaymentSucceeded → paid +
+  aynı TX'te OrderPaid/CartCheckedOut; PaymentFailed → failed + OrderFailed (Cart aktif); tekrar/çelişki ack. Checkout dahil failed
+  olan her sipariş APPLIED'da OrderFailed üretir. Stok çağrısı/V2/job YOK (6b). Routing `order.paid`, `order.failed`,
+  `cart.checked-out`; payloadlar eventId+v1, para metin. Kabul edilen 6b kararı: commit AlreadyReleased → paid+lost, tekrar yok,
+  ERROR, DB admin listesi. Doğrulama: common 67, user 86, catalog 285, cart 321 (2 skipped), payment 367, order 560;
+  ikinci kök `clean verify` yeşil (ilk denemede kapsam dışı Cart concurrency testi bir kez 500 üretti, tekil tekrar ve kök tekrar
+  yeşil). Yerel E2E: yeni kullanıcıyla checkout 201 → paid; history 2; yayımlanmış OrderPaid+CartCheckedOut; başarısız mock
+  senaryosu failed + yayımlanmış OrderFailed; geçici kuyruk üç tip/routing'i gördü ve silindi; DLQ boş; eski pending kalıntı duruyor.
 - Gateway fazı: docs/Swagger'ı (dört servis) dışarıya kapatmak.
 - order-service (catalog rezervasyon istemcisi).
 - Search için: yayınevi/yazar/kategori yeniden adlandırması yayındaki kitaplar için olay üretmiyor → yeniden indeksleme gerekecek.
@@ -179,11 +190,12 @@
   user-service/JWKS kapalıysa son bilinen anahtarla doğrulamaya devam (şu an önbellek süresi içinde 200, sonrasında 503).
 
 ## Bilinen sorunlar
-- AÇIK RİSK (Order): commit'te `AlreadyReleased` (rezervasyon süresi 15m doldu) → paid + released DB'de temsil edilemez. ÖNERİ
-  (Adım 6 kararı): V2 ile `stock_state 'lost'`. Pending zaman aşımı KARARI 10 dk (Adım 8; < 15 dk rezervasyon süresi).
+- KARAR (Order Adım 6b): commit'te `AlreadyReleased` (rezervasyon süresi 15m doldu) → V2 `stock_state 'lost'` yalnız paid ile;
+  tekrar commit yok, ERROR ve DB'den admin listesi. Adım 6a'da uygulanmadı. Pending zaman aşımı KARARI 10 dk (Adım 8; < 15 dk).
 - Order (Adım 5 sonrası): Kayıt sonrası başarısız siparişlerde stok satır içi telafi (`releaseStock`) ile serbest bırakılır.
   Yarıda kesilme durumlarında (a-e) sipariş ve stok tutarlı bırakılır; `pending + requested/held` kalıntıları Adım 8 uzlaştırma
-  görevi tarafından toplanacaktır. Ödeme sonucu tüketicisi henüz yok → başarılı ödemede de sipariş pending kalır ve kullanıcının yeni checkout'unu engeller (Adım 6).
+  görevi tarafından toplanacaktır. Adım 6a ile yeni ödeme olayları tüketilir; Adım 4'ten olayı kaybolmuş eski pending siparişleri
+  ise Adım 8 kapatacaktır.
 - Kök `/actuator/health` (catalog ve payment) RabbitMQ kapalıyken 503 DOWN ve her çağrıda stack trace'li WARN
   (RabbitHealthIndicator); readiness etkilenmez. Healthcheck'ler readiness kullanmalı.
 - payment: aynı siparişe eşzamanlı ilk isteklerde sağlayıcı birden fazla çağrılabilir (yalnızca ilk referans yazılır, diğerleri WARN ile

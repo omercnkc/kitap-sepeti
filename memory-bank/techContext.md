@@ -45,6 +45,11 @@
   Adım 5 ile gelenler: satır içi stok release (`releaseStock`), yarıda kesilme (interrupted checkout a-e) yönetimi,
   `OrderReasons.CHECKOUT_INTERRUPTED` ("CHECKOUT_INTERRUPTED"), `OrderErrorCode.ORDER_UNAVAILABLE` (503),
   `OrderErrorCode.CHECKOUT_INTERRUPTED` (503).
+  Adım 6a: ilk inbound Rabbit consumer; `order.payment-results` (payment.succeeded/failed), `kitapsepeti.dlx` direct,
+  `order.payment-results.dlq`. Prefetch 10/concurrency 1; stateless toplam 3 deneme, 1s→2s (4s tavan), poison retry yok.
+  `common.amqp.DeadLetterQueueTopology` saf Declarables kurucusu (auto-config yok). Order outbox event/routing:
+  OrderPaid→order.paid, OrderFailed→order.failed, CartCheckedOut→cart.checked-out. Test profilinde consumer ve relay varsayılan kapalı;
+  `PaymentResultListenerIT` ayrı bağlamda ikisini gerçek RabbitMQ Testcontainer ile açar.
   Yerel uçtan uca: Docker'da user/catalog/cart/payment + `spring-boot:run` order (compose host portlarına localhost'tan bağlanır);
   kontrol script'i `.env`'yi Ordinal okur, değer yazdırmaz; DB sorgusu `$env:MYSQL_PWD` + `docker compose exec -T -e MYSQL_PWD mysql
   mysql -u<kullanıcı> <db> -N` (SQL stdin'den).

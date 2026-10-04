@@ -734,6 +734,31 @@ Eskimiş `pending` siparişlerde:
 3. 10 dk sonunda: `ORDER_EXPIRED` + Catalog release yapar.
 (Adım 5'te scheduler/job YOKTUR; yalnızca Adım 5'in bıraktığı kalıntılar Adım 8 tarafından tutarlı biçimde toplanacak durumdadır).
 
+### RabbitMQ consumer kalıbı + Payment sonucu (Order Adım 6a)
+- Consumer kendi durable kuyruğunu ve binding'lerini tanımlar; producer yalnızca ortak durable topic exchange'i tanımlar. Ortak saf
+  kurucu `common.amqp.DeadLetterQueueTopology` = durable work queue (`x-dead-letter-exchange`, `x-dead-letter-routing-key`) + durable
+  direct DLX + durable DLQ + DLQ binding + kaynak topic binding'leri. Auto-config/@Configuration YOK; Order, ileride Cart ve
+  Notifications kendi config'inde `Declarables` bean'i yapar.
+- Order topolojisi: `order.payment-results` → `kitapsepeti.events` üzerinde `payment.succeeded`, `payment.failed`;
+  `kitapsepeti.dlx` (direct) → `order.payment-results.dlq`, key `order.payment-results.dead`.
+- Listener container (`PaymentResultsConsumerConfig`): prefetch 10, tek consumer; stateless toplam 3 deneme (`maxRetries=2`),
+  exponential 1s/2s, 4s tavan; retry tükenince `PaymentResultDeadLetterRecoverer` requeue'suz reject (queue DLX'e yollar).
+  `PoisonMessageException` cause zincirinde görülürse retry policy false: doğrudan recoverer/DLQ. Framework'ün stack trace'li varsayılan
+  error logu kapalı; listener/recoverer yalnızca tip+sonuç/reason+süre içeren güvenli satırlar yazar.
+- Poison: JSON parse, bilinmeyen AMQP type, eventVersion≠1, zorunlu/geçersiz alan, order yok, amount/currency uyuşmazlığı.
+  Teknik DB/kilit hataları retry. Domain final-state çelişkileri poison DEĞİL: ERROR + ack, sipariş değişmez.
+- `OrderTransactions` ödeme sonucunu READ_COMMITTED + `findByIdForUpdate` ile uygular; amount `BigDecimal.compareTo`, currency birebir.
+  Succeeded APPLIED → paid + aynı TX'te `OrderPaid` ve `CartCheckedOut`; Failed APPLIED → failed + aynı TX'te yalnız `OrderFailed`.
+  ALREADY → ack/yazma yok. Farklı paymentId → PAYMENT_ID_CONFLICT ERROR+ack. Failed siparişe geç başarı →
+  LATE_PAYMENT_SUCCESS ERROR+ack. Adım 6a stok HTTP çağrısı YAPMAZ; paid+held ve failed+held/requested kalabilir (6b).
+- `OrderTransactions.markFailed` APPLIED olduğunda her kaynak için aynı TX'te `OrderFailed` yazar; checkout yolları otomatik kapsanır.
+  failed yapılamayan interrupted yol pending kaldığı için olay üretmez. Başarısız ödemede CartCheckedOut YOK, sepet aktif kalır.
+- Order outbox: aggregate_type `order`, aggregate_id orderId. Event type/routing:
+  `OrderPaid`/`order.paid`, `OrderFailed`/`order.failed`, `CartCheckedOut`/`cart.checked-out`.
+  Payload eventId + eventVersion 1; occurredAt order geçişinin Clock zamanı; para metin. Record alan sırası testle kilitli.
+- KABUL (uygulama 6b): Catalog commit `AlreadyReleased` → yalnız paid ile geçerli V2 `stock_state='lost'`; tekrar commit yok,
+  ERROR, admin listesi DB sorgusundan. V1 bu adımda değişmedi.
+
 - Hata kodları `exception/OrderErrorCode` (ErrorCode): 404 ORDER_NOT_FOUND; 409 ORDER_PENDING_EXISTS, BOOK_NOT_AVAILABLE,
   INSUFFICIENT_STOCK; 422 CART_EMPTY, MIXED_CURRENCY, ORDER_TOTAL_ZERO, ORDER_TOTAL_TOO_LARGE, EMPTY_ORDER, DUPLICATE_BOOK,
   INVALID_QUANTITY, INVALID_PRICE, INVALID_CURRENCY; 503 CART_UNAVAILABLE, CATALOG_UNAVAILABLE, PAYMENT_UNAVAILABLE, ORDER_UNAVAILABLE, CHECKOUT_INTERRUPTED (WARN). Diğerleri INFO.

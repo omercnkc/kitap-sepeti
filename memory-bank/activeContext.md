@@ -1281,6 +1281,40 @@
     diğer OrderRuleViolation'lar 422 kendi koduyla; yeni failure kodları BOOK_NOT_AVAILABLE ve PAYMENT_REJECTED; Payment başka siparişin
     paymentId'sini dönerse `uk_orders_payment` → 409 CONFLICT (sözleşme ihlali kenarı, systemPatterns'te).
 
+- Order Adım 6a — Payment sonucu RabbitMQ consumer + atomik Order olayları (COMMIT EDİLMEDİ; stok commit/release ve V2 YOK):
+  - Keşfedilen upstream sözleşme: `PaymentSucceeded` / `PaymentFailed`, `eventVersion=1`, exchange `kitapsepeti.events`, routing
+    `payment.succeeded` / `payment.failed`; payload ortak alanları `eventId`, `paymentId`, `orderId`, metin `amount`, `currency`,
+    `occurredAt` (+ failed'da `failureCode`). AMQP: messageId=eventId, type=event_type, JSON/UTF-8, persistent, timestamp,
+    `aggregateType=payment`, `aggregateId=paymentId`.
+  - Topoloji: consumer sahibi Order; durable `order.payment-results`, topic exchange'e iki exact binding. Durable direct
+    `kitapsepeti.dlx`, durable `order.payment-results.dlq`; ana kuyrukta DLX + `order.payment-results.dead` routing argümanı.
+    Yeniden kullanılabilir saf kurucu `common.amqp.DeadLetterQueueTopology`; auto-config / component scan YOK, servis açıkça bean yapar.
+  - Listener: prefetch 10, concurrency 1; stateless toplam 3 deneme (`maxRetries=2`), backoff 1s → 2s (4s üst sınır);
+    retry tükenince requeue'suz reject → broker DLQ. `PoisonMessageException` tekrar edilmez: bozuk JSON, bilinmeyen type,
+    sürüm ≠1, eksik/geçersiz alan, olmayan order, tutar veya para birimi uyuşmazlığı doğrudan DLQ. Güvenli tek satır sonuç logları;
+    DLQ WARN, tutar/para uyuşmazlığı ERROR; id/tutar/gövde yok.
+  - `PaymentSucceeded`: Order `FOR UPDATE`, tutar/para doğrulaması, farklı bağlı paymentId → PAYMENT_ID_CONFLICT ack; `markPaid` APPLIED
+    → aynı READ_COMMITTED TX'te `OrderPaid` + `CartCheckedOut`; ALREADY → ack/yazma yok; failed sipariş → LATE_PAYMENT_SUCCESS ERROR + ack.
+    Adım 6a'da paid sipariş `held` kalır.
+  - `PaymentFailed`: Order `FOR UPDATE`, tutar/para doğrulaması, geçersiz failureCode → `PAYMENT_FAILED`; APPLIED → aynı TX'te
+    yalnızca `OrderFailed`; ALREADY → ack; paid/farklı paymentId → ERROR + ack. Cart aktif kalır, CartCheckedOut YOK.
+  - KARAR: failed olan HER sipariş (checkout Adım 4/5 yolları dahil) `OrderFailed` üretir. Bu nedenle
+    `OrderTransactions.markFailed` yalnızca APPLIED'da aynı TX içinde outbox yazar; yarıda kesilip failed yapılamayan pending kalıntıda olay yok.
+  - Outbound payload record sırası: `OrderPaid(eventId,eventVersion,orderId,userId,paymentId,totalAmount,currency,itemCount,occurredAt)`,
+    `OrderFailed(eventId,eventVersion,orderId,userId,failureCode,occurredAt)`,
+    `CartCheckedOut(eventId,eventVersion,cartId,userId,orderId,occurredAt)`; tümü v1, eventId'li, occurredAt=Order Clock zamanı,
+    para metin. aggregate_type=`order`, aggregate_id=orderId. Routing: `order.paid`, `order.failed`, `cart.checked-out`.
+  - KABUL EDİLEN Adım 6b kararı: Catalog commit `AlreadyReleased` dönerse yalnızca paid siparişte V2 `stock_state='lost'`;
+    tekrar commit yok, ERROR, DB'den admin listesi. V1/commit çağrısı/StockSyncJob bu adımda eklenmedi.
+  - Testler: common `DeadLetterQueueTopologyTest` (2); Order `PaymentResultListenerIT` (mutlu yol+gerçek relay, tekrar teslim,
+    failed/fallback, 7 poison, geçici retry/kalıcı retry, iki conflict, log hijyeni, gerçek broker topolojisi/container ayarları)
+    + payload record sıra/sürüm testleri; checkout failed yollarına OrderFailed ve interrupted pending yollarına olay yok beklentileri eklendi.
+    Nihai sayılar: common 67, user 86, catalog 285, cart 321 (2 skipped), payment 367, order 560; kök `clean verify` yeşil.
+    İlk kök denemede kapsam dışı Cart concurrency testi bir kez 500 üretti; tekil tekrar ve ikinci kök koşu yeşil.
+  - Yerel E2E: yeni kullanıcı checkout 201 → paid; history 2, OrderPaid+CartCheckedOut yayımlanmış. Mock ret yolu ayrıca
+    failed+OrderFailed verdi. Geçici kuyruk `order.paid`, `order.failed`, `cart.checked-out` mesajlarını gördü ve silindi; Payment
+    results DLQ boş. Adım 4'ten olayı kayıp pending kalıntı hâlâ pending ve Adım 8'i bekliyor.
+
 ## Sonraki adımlar
 - PROJE KARARI (Ekim 2026, UI paralel): UI (Angular 13) Order ile PARALEL başlıyor — ayrı agent, ayrı worktree
   (`..\kitapSepeti-ui`, branch `ui`), yalnızca `frontend/` + `memory-bank/frontend.md` + `.cursor/rules/frontend-angular13.mdc`.
@@ -1303,7 +1337,8 @@
   - Önce kayıt sonra dış çağrı: sipariş satırı kendi TX'inde yazılır, sonra rezervasyon/ödeme çağrıları.
   - Stok commit/release Catalog internal HTTP ile (`/internal/stock/reservations/{orderId}/commit|release`).
 - Order planı: 0a common sertleştirme (YAPILDI) → 0b outbox → common (YAPILDI, push'landı) → 1 modül/db (YAPILDI, push'landı) → 2 domain (YAPILDI) → 3a Order istemcileri + CB (YAPILDI) → 3b Cart→Catalog CB (YAPILDI) → 4 checkout mutlu yol +
-  GET {id} (YAPILDI) → 5 hata yolları/telafi → 6 ödeme sonucu tüketicisi → 7 Cart CartCheckedOut tüketicisi → 8 timeout görevi → 9 liste →
+  GET {id} (YAPILDI) → 5 hata yolları/telafi (YAPILDI) → 6a Payment sonucu consumer+Order olayları (YAPILDI) → 6b stok
+  commit/release+StockSyncJob+V2 lost → 7 Cart CartCheckedOut tüketicisi → 8 timeout görevi → 9 liste →
   10 OpenAPI/olay belgeleri → 11 Docker.
 - order-service eklenirken: `RequestPathMasker` bean'i (`/api/orders/{orderId}` vb.) ve `InternalAuthConfig` (gerekirse) — common
   politika aynen geçerli.
@@ -1333,13 +1368,11 @@
 - Açık konu (catalog OpenAPI): `/v3/api-docs` her profilde açık (user-service ile aynı) → internal uçların şekli de herkese görünür
   (sır yok); prod'da `SPRINGDOC_ENABLED=false` düşünülmeli.
 - Yeni servisler eklendikçe kök POM kontrol listesini uygula (bkz. systemPatterns.md; [5] common, [6] Dockerfile).
-- Order Adım 3a YAPILDI (commit `41d202c`, push edildi). Order Adım 3b YAPILDI (commit `f651c07` + `8e3b037`). Order Adım 4 YAPILDI
-  (commit edilmedi; sözleşme — CheckoutRequest, OrderResponse, hata kodları — UI-7 için DONDURULDU, tablo yukarıda). Sıradaki: Adım 5
-  hata yolları/telafi (başarısız siparişte stok bırakma; Unknown reserve/payment netleştirme). Adım 5 telafisi systemPatterns "Order istemcileri" NotPerformed/Unknown kuralına dayanır (Unknown → idempotent tekrar ya
-  da GET ile netleştirme).
-- AÇIK RİSK (Order Adım 6/8): commit'te `AlreadyReleased` (rezervasyon süresi doldu, 15m + görev ≤30 sn) → ödenmiş + stok bırakılmış
-  sipariş (paid + released) DB'de temsil edilemez; Adım 6'da karar (iade telafisi / ayrı durum; Adım 4 ÖNERİSİ: V2 `stock_state
-  'lost'`), Adım 8'de pending zaman aşımı rezervasyon süresinden KISA olmalı → KARAR 10 dk (ödeme kurtarma ~40 sn'yi de kapsar).
+- Order Adım 3a–5 tamamlandı; Adım 6a Payment sonucu consumer+Order olayları tamamlandı (commit edilmedi). Sıradaki Adım 6b:
+  stok commit/release, StockSyncJob ve V2 `lost`. Adım 5 telafisi systemPatterns "Order istemcileri" NotPerformed/Unknown kuralına
+  dayanır (Unknown → idempotent tekrar ya da GET ile netleştirme).
+- KARAR (Order Adım 6b): commit'te `AlreadyReleased` (rezervasyon süresi doldu, 15m + görev ≤30 sn) → yalnız paid ile V2
+  `stock_state 'lost'`; tekrar commit yok, ERROR, DB'den admin listesi. Adım 8 pending zaman aşımı 10 dk.
 - Backlog (catalog OpenAPI): lookup/rezervasyon yanıtındaki `status` kodda "mixed" üretebilir (satır durumları farklıysa,
   `StockReservationTransactions`), OpenAPI enum'unda YOK (Order → Unknown).
 - Order Adım 2 YAPILDI (commit `51feb91`, push edildi). Adım 4'te `RequestPathMasker` deseni `/api/orders/{orderId}`
