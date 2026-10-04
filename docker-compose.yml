@@ -16,6 +16,9 @@ services:
       # infra/mysql/init/20-cart-db.sh okur (cart_db şeması + kullanıcısı).
       CART_DB_USER: ${CART_DB_USER}
       CART_DB_PASSWORD: ${CART_DB_PASSWORD}
+      # infra/mysql/init/30-payment-db.sh okur (payment_db şeması + kullanıcısı).
+      PAYMENT_DB_USER: ${PAYMENT_DB_USER:?PAYMENT_DB_USER .env içinde tanımlı olmalı}
+      PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD:?PAYMENT_DB_PASSWORD .env içinde tanımlı olmalı}
     volumes:
       - mysql_data:/var/lib/mysql
       # Yalnızca boş volume'da otomatik çalışır; mevcut volume'da script elle çalıştırılır.
