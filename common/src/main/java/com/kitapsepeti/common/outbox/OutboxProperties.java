@@ -1,4 +1,4 @@
-package com.kitapsepeti.payment.outbox;
+package com.kitapsepeti.common.outbox;
 
 import java.time.Duration;
 

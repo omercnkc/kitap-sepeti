@@ -14,8 +14,10 @@ import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Predicate;
 
+import com.kitapsepeti.common.outbox.OutboxEvent;
+import com.kitapsepeti.common.outbox.OutboxProperties;
+import com.kitapsepeti.common.outbox.OutboxPublishException;
 import com.kitapsepeti.user.ApiTestSupport;
-import com.kitapsepeti.user.entity.OutboxEvent;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

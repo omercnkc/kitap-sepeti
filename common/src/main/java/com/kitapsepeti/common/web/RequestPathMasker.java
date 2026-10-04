@@ -68,6 +68,29 @@ public final class RequestPathMasker {
 		return new RequestPathMasker(List.copyOf(templates));
 	}
 
+	/** Kayıt sırasıyla kalıplar (kapsama testleri için). */
+	public List<String> patterns() {
+		return this.templates.stream().map(template -> template.pattern).toList();
+	}
+
+	/**
+	 * Bir uç eşleme kalıbının ({@code @GetMapping("/api/books/{id}")} gibi; değişken adı ve regex kısıtı önemsiz)
+	 * aynı segment yapısında bir kayıtlı kalıpla karşılandığını söyler: segment sayısı eşit, değişkenler aynı yerde,
+	 * sabit segmentler birebir. Joker ({@code *}, {@code **}, {@code {*ad}}) içeren kalıp karşılanmaz.
+	 */
+	public boolean covers(String mappingPattern) {
+		if (mappingPattern == null || mappingPattern.contains("*")) {
+			return false;
+		}
+		String[] segments = mappingPattern.split("/", -1);
+		for (Template template : this.templates) {
+			if (template.hasShapeOf(segments)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	/** Context path korunur (maskelenmez), kalan yol {@link #mask(String)} ile maskelenir. */
 	public String mask(HttpServletRequest request) {
 		String uri = request.getRequestURI();
@@ -185,13 +208,16 @@ public final class RequestPathMasker {
 	/** Ayrıştırılmış kalıp: {@code literals[i]} sabit segment ya da null; {@code variables[i]} değişken adı ya da null. */
 	private static final class Template {
 
+		private final String pattern;
+
 		private final String[] literals;
 
 		private final String[] variables;
 
 		private final int variableCount;
 
-		private Template(String[] literals, String[] variables, int variableCount) {
+		private Template(String pattern, String[] literals, String[] variables, int variableCount) {
+			this.pattern = pattern;
 			this.literals = literals;
 			this.variables = variables;
 			this.variableCount = variableCount;
@@ -224,7 +250,25 @@ public final class RequestPathMasker {
 				}
 			}
 			literals[0] = "";
-			return new Template(literals, variables, variableCount);
+			return new Template(pattern, literals, variables, variableCount);
+		}
+
+		/** Eşleme kalıbı segmentleri: {@code {...}} değişken, diğerleri sabit. */
+		boolean hasShapeOf(String[] mappingSegments) {
+			if (mappingSegments.length != this.literals.length) {
+				return false;
+			}
+			for (int i = 1; i < mappingSegments.length; i++) {
+				String segment = mappingSegments[i];
+				boolean variable = segment.length() > 2 && segment.startsWith("{") && segment.endsWith("}");
+				if (variable != (this.variables[i] != null)) {
+					return false;
+				}
+				if (!variable && !this.literals[i].equals(segment)) {
+					return false;
+				}
+			}
+			return true;
 		}
 
 		boolean matches(String[] segments) {

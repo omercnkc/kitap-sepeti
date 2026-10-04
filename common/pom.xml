@@ -16,7 +16,7 @@
 	</parent>
 	<artifactId>kitap-sepeti-common</artifactId>
 	<name>KitapSepeti Common</name>
-	<description>Servislerin ortak hata modeli (ProblemDetail) ve güvenlik bileşenleri</description>
+	<description>Servislerin ortak hata modeli (ProblemDetail), güvenlik bileşenleri ve transactional outbox</description>
 
 	<dependencies>
 		<dependency>
@@ -37,6 +37,11 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security-oauth2-resource-server</artifactId>
+			<optional>true</optional>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-amqp</artifactId>
 			<optional>true</optional>
 		</dependency>
 

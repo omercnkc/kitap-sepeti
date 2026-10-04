@@ -5,9 +5,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.UUID;
 
+import com.kitapsepeti.common.outbox.OutboxEvent;
+import com.kitapsepeti.common.outbox.OutboxRepository;
 import com.kitapsepeti.user.TestcontainersConfiguration;
 import com.kitapsepeti.user.entity.Address;
-import com.kitapsepeti.user.entity.OutboxEvent;
 import com.kitapsepeti.user.entity.Role;
 import com.kitapsepeti.user.entity.User;
 import com.kitapsepeti.user.entity.UserStatus;

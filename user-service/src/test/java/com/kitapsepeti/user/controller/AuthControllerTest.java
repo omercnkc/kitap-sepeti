@@ -18,10 +18,10 @@ import java.util.UUID;
 
 import com.jayway.jsonpath.JsonPath;
 import com.kitapsepeti.common.error.DbConstraints;
+import com.kitapsepeti.common.outbox.OutboxService;
 import com.kitapsepeti.user.TestcontainersConfiguration;
 import com.kitapsepeti.user.entity.User;
 import com.kitapsepeti.user.repository.UserRepository;
-import com.kitapsepeti.user.service.OutboxService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

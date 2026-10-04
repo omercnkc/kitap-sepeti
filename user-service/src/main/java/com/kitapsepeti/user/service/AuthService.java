@@ -6,13 +6,14 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.kitapsepeti.common.error.DbConstraints;
+import com.kitapsepeti.common.outbox.OutboxService;
 import com.kitapsepeti.user.dto.request.LoginRequest;
 import com.kitapsepeti.user.dto.request.RefreshRequest;
 import com.kitapsepeti.user.dto.request.RegisterRequest;
 import com.kitapsepeti.user.dto.response.TokenResponse;
 import com.kitapsepeti.user.entity.User;
 import com.kitapsepeti.user.entity.UserStatus;
-import com.kitapsepeti.common.error.DbConstraints;
 import com.kitapsepeti.user.exception.AccountSuspendedException;
 import com.kitapsepeti.user.exception.EmailAlreadyExistsException;
 import com.kitapsepeti.user.exception.InvalidCredentialsException;

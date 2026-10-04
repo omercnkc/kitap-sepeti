@@ -51,6 +51,9 @@ class PaymentSchemaConstraintsTest {
 	private static final Path CATALOG_V1 = Path.of("..", "catalog-service", "src", "main", "resources", "db",
 			"migration", "V1__create_catalog_tables.sql");
 
+	private static final Path USER_V1 = Path.of("..", "user-service", "src", "main", "resources", "db", "migration",
+			"V1__create_user_tables.sql");
+
 	@Autowired
 	private JdbcTemplate jdbc;
 
@@ -418,6 +421,16 @@ class PaymentSchemaConstraintsTest {
 			.getContentAsString(StandardCharsets.UTF_8));
 
 		assertThat(payment).isEqualTo(catalog);
+	}
+
+	/** Üç servis aynı ortak {@code OutboxEvent} entity'sini eşler; tablo tanımı hepsinde aynı olmalı. */
+	@Test
+	void outboxDdlIsIdenticalToUsers() throws IOException {
+		String user = outboxDdl(Files.readString(USER_V1, StandardCharsets.UTF_8));
+		String payment = outboxDdl(new ClassPathResource("db/migration/V1__create_payment_tables.sql")
+			.getContentAsString(StandardCharsets.UTF_8));
+
+		assertThat(payment).isEqualTo(user);
 	}
 
 	@Test

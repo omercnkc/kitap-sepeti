@@ -1,15 +1,15 @@
-package com.kitapsepeti.user.repository;
+package com.kitapsepeti.common.outbox;
 
 import java.util.List;
 import java.util.UUID;
 
-import com.kitapsepeti.user.entity.OutboxEvent;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 /**
- * {@link OutboxEvent} kayıtlarına erişim.
+ * {@link OutboxEvent} kayıtlarına erişim. Servis repository taramasına bu paketi açıkça ekler
+ * ({@code @AutoConfigurationPackage(basePackageClasses = OutboxEvent.class)}).
  */
 public interface OutboxRepository extends JpaRepository<OutboxEvent, UUID> {
 

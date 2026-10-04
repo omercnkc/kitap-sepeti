@@ -10,9 +10,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import com.kitapsepeti.common.outbox.OutboxEvent;
+import com.kitapsepeti.common.outbox.OutboxRepository;
 import com.kitapsepeti.user.ApiTestSupport;
-import com.kitapsepeti.user.entity.OutboxEvent;
-import com.kitapsepeti.user.repository.OutboxRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.PlatformTransactionManager;

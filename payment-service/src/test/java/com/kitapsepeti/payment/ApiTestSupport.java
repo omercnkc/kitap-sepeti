@@ -1,9 +1,9 @@
 package com.kitapsepeti.payment;
 
+import com.kitapsepeti.common.outbox.OutboxService;
 import com.kitapsepeti.payment.provider.PaymentProvider;
 import com.kitapsepeti.payment.repository.PaymentRepository;
 import com.kitapsepeti.payment.repository.ProviderEventRepository;
-import com.kitapsepeti.payment.service.OutboxService;
 import com.kitapsepeti.payment.support.InternalTestKeys;
 import com.kitapsepeti.payment.support.WebhookTestSecrets;
 import org.junit.jupiter.api.BeforeEach;

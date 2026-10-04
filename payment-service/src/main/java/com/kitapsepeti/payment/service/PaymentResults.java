@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.util.UUID;
 
 import com.kitapsepeti.common.error.ResourceNotFoundException;
+import com.kitapsepeti.common.outbox.OutboxService;
 import com.kitapsepeti.payment.entity.Payment;
 import com.kitapsepeti.payment.entity.TransitionResult;
 import com.kitapsepeti.payment.repository.PaymentRepository;

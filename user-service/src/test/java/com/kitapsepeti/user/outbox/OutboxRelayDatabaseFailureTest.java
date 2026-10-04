@@ -12,7 +12,9 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
 
-import com.kitapsepeti.user.repository.OutboxRepository;
+import com.kitapsepeti.common.outbox.OutboxProperties;
+import com.kitapsepeti.common.outbox.OutboxRelay;
+import com.kitapsepeti.common.outbox.OutboxRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.system.CapturedOutput;

@@ -88,6 +88,8 @@ logging:
   level:
     # SQL hata mesajı kullanıcı verisi içerebilir; WARN satırları kapatılır.
     org.hibernate.orm.jdbc.error: ERROR
+    # INFO "Created new connection ... amqp://<kullanıcı>@host" RabbitMQ kullanıcı adını yazar.
+    org.springframework.amqp.rabbit.connection.CachingConnectionFactory: WARN
 
 server:
   port: 8082

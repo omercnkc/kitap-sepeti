@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kitapsepeti.catalog.ApiTestSupport;
 import com.kitapsepeti.catalog.config.SchedulingConfig;
+import com.kitapsepeti.common.outbox.OutboxRelay;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;

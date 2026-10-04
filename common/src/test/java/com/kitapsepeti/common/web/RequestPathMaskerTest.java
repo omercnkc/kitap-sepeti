@@ -38,6 +38,28 @@ class RequestPathMaskerTest {
 	}
 
 	@Test
+	void patternsAreReturnedInRegistrationOrder() {
+		assertThat(masker.patterns()).containsExactly("/api/cart/items/{bookId}", "/internal/stock/reservations/{orderId}",
+				"/internal/stock/reservations/{orderId}/commit", "/internal/stock/reservations/{orderId}/release",
+				"/api/books/{bookId}", "/api/books/lookup");
+		assertThat(RequestPathMasker.uuidOnly().patterns()).isEmpty();
+	}
+
+	@Test
+	void coversMappingsWithTheSameShapeRegardlessOfVariableNameOrRegex() {
+		assertThat(masker.covers("/api/books/{id}")).isTrue();
+		assertThat(masker.covers("/api/books/{id:[0-9a-f-]+}")).isTrue();
+		assertThat(masker.covers("/internal/stock/reservations/{x}/commit")).isTrue();
+
+		assertThat(masker.covers("/internal/stock/reservations/{x}/refund")).isFalse();
+		assertThat(masker.covers("/api/books/{id}/reviews")).isFalse();
+		assertThat(masker.covers("/api/authors/{id}")).isFalse();
+		assertThat(masker.covers("/api/books/{*rest}")).isFalse();
+		assertThat(masker.covers("/api/cart/items/fixed")).isFalse();
+		assertThat(RequestPathMasker.uuidOnly().covers("/api/books/{id}")).isFalse();
+	}
+
+	@Test
 	void moreSpecificTemplateWins() {
 		assertThat(masker.mask("/api/books/lookup")).isEqualTo("/api/books/lookup");
 		assertThat(masker.mask("/api/books/" + ID)).isEqualTo("/api/books/:bookId");

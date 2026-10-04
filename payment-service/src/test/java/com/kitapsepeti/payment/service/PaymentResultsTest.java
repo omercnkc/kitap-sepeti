@@ -23,6 +23,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import com.kitapsepeti.common.error.ResourceNotFoundException;
+import com.kitapsepeti.common.outbox.OutboxService;
 import com.kitapsepeti.payment.ApiTestSupport;
 import com.kitapsepeti.payment.entity.Payment;
 import com.kitapsepeti.payment.entity.PaymentProviderType;

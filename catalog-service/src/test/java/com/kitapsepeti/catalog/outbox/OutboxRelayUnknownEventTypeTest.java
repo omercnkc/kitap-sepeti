@@ -11,8 +11,10 @@ import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
-import com.kitapsepeti.catalog.entity.OutboxEvent;
-import com.kitapsepeti.catalog.repository.OutboxRepository;
+import com.kitapsepeti.common.outbox.OutboxEvent;
+import com.kitapsepeti.common.outbox.OutboxProperties;
+import com.kitapsepeti.common.outbox.OutboxRelay;
+import com.kitapsepeti.common.outbox.OutboxRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;

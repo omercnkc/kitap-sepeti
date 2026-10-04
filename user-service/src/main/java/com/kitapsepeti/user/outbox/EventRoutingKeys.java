@@ -2,6 +2,7 @@ package com.kitapsepeti.user.outbox;
 
 import java.util.Map;
 
+import com.kitapsepeti.common.outbox.OutboxRoutingKeys;
 import com.kitapsepeti.user.service.event.UserRegisteredEvent;
 
 /**
@@ -10,19 +11,15 @@ import com.kitapsepeti.user.service.event.UserRegisteredEvent;
  */
 public final class EventRoutingKeys {
 
-	private static final Map<String, String> ROUTING_KEYS = Map.of(
-			UserRegisteredEvent.TYPE, "user.registered");
+	private static final OutboxRoutingKeys ROUTING_KEYS = OutboxRoutingKeys.of(Map.of(
+			UserRegisteredEvent.TYPE, "user.registered"));
 
 	private EventRoutingKeys() {
 	}
 
 	/** @throws IllegalStateException olay tipi için routing key tanımlı değilse */
 	public static String forEventType(String eventType) {
-		String routingKey = ROUTING_KEYS.get(eventType);
-		if (routingKey == null) {
-			throw new IllegalStateException("No routing key for event type " + eventType);
-		}
-		return routingKey;
+		return ROUTING_KEYS.forEventType(eventType);
 	}
 
 }

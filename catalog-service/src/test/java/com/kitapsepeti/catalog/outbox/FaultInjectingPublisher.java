@@ -5,7 +5,9 @@ import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Predicate;
 
-import com.kitapsepeti.catalog.entity.OutboxEvent;
+import com.kitapsepeti.common.outbox.OutboxEvent;
+import com.kitapsepeti.common.outbox.OutboxProperties;
+import com.kitapsepeti.common.outbox.OutboxPublishException;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;

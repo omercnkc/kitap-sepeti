@@ -33,6 +33,7 @@ import com.kitapsepeti.catalog.repository.PublisherRepository;
 import com.kitapsepeti.catalog.service.event.BookRemovedEvent;
 import com.kitapsepeti.catalog.service.event.BookUpsertedEvent;
 import com.kitapsepeti.common.error.ResourceNotFoundException;
+import com.kitapsepeti.common.outbox.OutboxService;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;

@@ -32,7 +32,7 @@ class EventsExchangeCompatibilityTest extends ApiTestSupport {
 	@Autowired
 	private ConnectionFactory connectionFactory;
 
-	/** user-service {@code RabbitConfig.eventsExchange} tanımının birebir kopyası. */
+	/** Broker'da user-service'in declare ettiği tanımın birebir kopyası (ortak {@code OutboxConfiguration} öncesi). */
 	private static TopicExchange userServiceDefinition() {
 		return new TopicExchange(EXCHANGE, true, false);
 	}

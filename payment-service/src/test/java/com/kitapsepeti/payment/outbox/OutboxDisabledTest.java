@@ -2,6 +2,7 @@ package com.kitapsepeti.payment.outbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.kitapsepeti.common.outbox.OutboxRelay;
 import com.kitapsepeti.payment.ApiTestSupport;
 import com.kitapsepeti.payment.config.SchedulingConfig;
 import com.kitapsepeti.payment.provider.mock.MockRecoveryJob;

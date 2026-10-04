@@ -11,8 +11,8 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import com.kitapsepeti.catalog.ApiTestSupport;
-import com.kitapsepeti.catalog.entity.OutboxEvent;
-import com.kitapsepeti.catalog.repository.OutboxRepository;
+import com.kitapsepeti.common.outbox.OutboxEvent;
+import com.kitapsepeti.common.outbox.OutboxRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.PlatformTransactionManager;

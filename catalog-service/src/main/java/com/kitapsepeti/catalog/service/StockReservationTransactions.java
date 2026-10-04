@@ -28,6 +28,7 @@ import com.kitapsepeti.catalog.repository.BookRepository;
 import com.kitapsepeti.catalog.repository.StockReservationRepository;
 import com.kitapsepeti.catalog.service.event.BookUpsertedEvent;
 import com.kitapsepeti.common.error.ResourceNotFoundException;
+import com.kitapsepeti.common.outbox.OutboxService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
