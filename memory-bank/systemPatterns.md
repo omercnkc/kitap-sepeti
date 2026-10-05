@@ -737,7 +737,7 @@ Eskimiş `pending` siparişlerde:
 ### RabbitMQ consumer kalıbı + Payment sonucu (Order Adım 6a)
 - Consumer kendi durable kuyruğunu ve binding'lerini tanımlar; producer yalnızca ortak durable topic exchange'i tanımlar. Ortak saf
   kurucu `common.amqp.DeadLetterQueueTopology` = durable work queue (`x-dead-letter-exchange`, `x-dead-letter-routing-key`) + durable
-  direct DLX + durable DLQ + DLQ binding + kaynak topic binding'leri. Auto-config/@Configuration YOK; Order, ileride Cart ve
+  direct DLX + durable DLQ + DLQ binding + kaynak topic binding'leri. Auto-config/@Configuration YOK; Order, Cart ve ileride
   Notifications kendi config'inde `Declarables` bean'i yapar.
 - Order topolojisi: `order.payment-results` → `kitapsepeti.events` üzerinde `payment.succeeded`, `payment.failed`;
   `kitapsepeti.dlx` (direct) → `order.payment-results.dlq`, key `order.payment-results.dead`.
@@ -745,6 +745,11 @@ Eskimiş `pending` siparişlerde:
   exponential 1s/2s, 4s tavan; retry tükenince `PaymentResultDeadLetterRecoverer` requeue'suz reject (queue DLX'e yollar).
   `PoisonMessageException` cause zincirinde görülürse retry policy false: doğrudan recoverer/DLQ. Framework'ün stack trace'li varsayılan
   error logu kapalı; listener/recoverer yalnızca tip+sonuç/reason+süre içeren güvenli satırlar yazar.
+  DİKKAT: container error handler'ı FIRLATMAMALI (no-op). Fırlatırsa `AbstractMessageListenerContainer.invokeErrorHandler` ERROR +
+  stack trace yazar; container özgün istisnayı zaten yeniden fırlatır, `defaultRequeueRejected=false` + recoverer'ın
+  `AmqpRejectAndDontRequeueException`'ı ile mesaj requeue'suz DLX'e gider. Cart böyle; Order'ın handler'ı hâlâ fırlatıyor (backlog).
+- Cart topolojisi (Cart Adım 7): `cart.checkouts` ← `cart.checked-out`; `kitapsepeti.dlx` → `cart.checkouts.dlq`, key `cart.checkouts.dead`.
+  Ortak exchange tanımı common `amqp.EventsExchange.create(name)` (outbox ve consumer-only servisler aynı tanımı kullanır).
 - Poison: JSON parse, bilinmeyen AMQP type, eventVersion≠1, zorunlu/geçersiz alan, order yok, amount/currency uyuşmazlığı.
   Teknik DB/kilit hataları retry. Domain final-state çelişkileri poison DEĞİL: ERROR + ack, sipariş değişmez.
 - `OrderTransactions` ödeme sonucunu READ_COMMITTED + `findByIdForUpdate` ile uygular; amount `BigDecimal.compareTo`, currency birebir.
@@ -794,7 +799,9 @@ Eskimiş `pending` siparişlerde:
 - Yazma TX'leri `READ_COMMITTED` (catalog rezervasyonuyla aynı gerekçe): REPEATABLE READ'de olmayan satıra `FOR UPDATE` gap lock alır,
   eşzamanlı iki "ilk sepet" INSERT'i deadlock olur. RC'de ikinci INSERT `uk_carts_active_user`'da birincinin commit'ini bekler ve ihlalle
   düşer → `CartService` `DbConstraints.isViolated(ex, "uk_carts_active_user")` ise TX'i BİR KEZ yeniden çağırır (yeni TX, artık var olan
-  sepeti kilitler); ikinci ihlal ve diğer kısıtlar handler'a (409 CONFLICT, log `constraint=…`). Yeni sepet `saveAndFlush` ile hemen
+  sepeti kilitler); ikinci ihlal ve diğer kısıtlar handler'a (409 CONFLICT, log `constraint=…`). RC'de de aynı yarış InnoDB deadlock'u
+  (1213, `CannotAcquireLockException`) verebilir (unique duplicate kontrolü + delete-marked kayıtlar → supremum next-key S kilidi +
+  insert-intention X); bu da aynı tek yeniden denemeye girer (Cart Adım 7). 1205 lock wait timeout DENENMEZ. Yeni sepet `saveAndFlush` ile hemen
   yazılır (ihlal satırlar eklenmeden görülsün). Aynı kullanıcının diğer yazımları sepet satırının `FOR UPDATE`'inde sıraya girer → limit
   kontrolleri (satır sayısı, adet) kilit altında, yarışsız.
 - Ekleme sırası: (1) `CatalogGateway.requireAvailableBook` (TX dışı; 409/503'te sepet açılmaz/değişmez) → (2) TX: kilitle-ya-da-aç;
@@ -832,6 +839,14 @@ Eskimiş `pending` siparişlerde:
   unitPriceSnapshot (scale 2, sayı), currency, title}]}`; aktif sepet yoksa (kapanmış sepetler dahil) cartId/updatedAt null + items [];
   aktif sepet boşsa cartId dolu + items []. userId ve coverUrl yanıtta yok. Gövde okunamazsa (boş, bozuk JSON, UUID değil) 400
   MALFORMED_REQUEST, userId yok/null 400 VALIDATION_FAILED; gönderilen değer yanıtta yok.
+- Sepet kapatma (Cart Adım 7, `messaging/CartCheckedOutListener` + `CartTransactions.checkOut`): Order'ın `CartCheckedOut` v1 olayı
+  `cart.checkouts` kuyruğundan (Order 6a consumer kalıbı, aşağıdaki bölüm). TX: READ_COMMITTED, `findByIdForUpdate(cartId)` (id ile
+  `PESSIMISTIC_WRITE`). Kurallar: sepet yok → poison CART_NOT_FOUND; userId farklı → poison CART_OWNER_MISMATCH (ERROR); active →
+  checked_out (updated_at Clock); checked_out → ack DEBUG; abandoned → ack WARN, değişmez. `PermanentCheckoutException` (servis) →
+  listener'da `PoisonMessageException`. Satır silinmez; yeni ekleme yeni aktif sepet açar (ayrı TX → flush tuzağı yok).
+  Parser (`CartCheckedOutMessageParser`) Order parser'ının kopyası: AMQP type `CartCheckedOut`, eventVersion 1, zorunlu
+  eventId/cartId/userId/orderId/occurredAt, bilinmeyen alan yok sayılır. v1 sınırı: sipariş pending iken eklenen ürün sepetle birlikte kapanır.
+  Sözleşme testi Order'ın record kaynağını test anında derler (Order koduna bağımlılık/kopya yok).
 - Test: `support/FakeCatalog` (CatalogStub yanıtlayıcısı; harita = yayındaki kitaplar, `failWith` ile kesinti); yarış senaryoları
   `ApiTestSupport.carts` spy'ı (`@MockitoSpyBean`) ile deterministik; gerçek eşzamanlılık `runConcurrently` (MockMvc, gerçek thread'ler).
 

@@ -86,6 +86,10 @@
   `app.circuit-breaker.*` (application.yml; env yok). Gerçek Catalog'a karşı test:
   `.\mvnw.cmd -pl cart-service test "-Dtest=CatalogLiveTest" "-Dcatalog.live=true"` (catalog seed'li olmalı). Hikari `connection-init-sql` ile
   `innodb_lock_wait_timeout = 5` (oturum; GLOBAL 50). Uçlar: `GET /api/cart`, `POST /api/cart/items` (USER token).
+  Cart Adım 7'den beri RabbitMQ consumer'ı (`spring-boot-starter-amqp`; `RABBITMQ_HOST/PORT/USER/PASSWORD`, compose'da rabbitmq
+  `service_healthy`). Test profilinde consumer kapalı; `CartCheckedOutListenerIT` ayrı bağlamda açar. Testler RabbitMQ'yu
+  `RabbitTestcontainersConfiguration` (rabbitmq:4-management) ile alır (ApiTestSupport + kök health UP bekleyen iki Catalog testi).
+  Eşzamanlılık tekrarı: `.\mvnw.cmd -q -pl cart-service test "-Dtest=CartConcurrencyTest"` (common kurulu olmalı).
   Uçtan uca denemede seed 402 yayında ama stokta değil (409 BOOK_NOT_AVAILABLE); stokta yayındaki kitaplar 401, 404–411.
 - Bean Validation mesajları JVM dilinde (Windows'ta tr: `'99' değerinden küçük yada eşit olmalı`); tüm servislerde aynı, girilen değer yok.
 - Hibernate ORM 7.4.5.Final (Boot 4.1.1). MySQL kilit tuzağı: `jakarta.persistence.lock.timeout` pozitif değerde SQL'e yazılmaz,
@@ -151,3 +155,20 @@
 - Tek servis: `.\mvnw.cmd -pl user-service -am clean package`
 - Testler: `.\mvnw.cmd -pl user-service test` — Docker açık olmalı (Testcontainers kendi MySQL'ini açar,
   `user_db`'ye dokunmaz).
+
+## Hız kuralları (KULLANICI KURALI, Cart Adım 7'den itibaren kalıcı)
+- Geliştirme sırasında yalnızca değişen modülün testleri: `.\mvnw.cmd -pl <modül> -am verify`.
+- Kökten `.\mvnw.cmd clean verify` YALNIZCA: common değiştiyse, birden fazla modül değiştiyse ya da faz sonu adımında.
+- Testcontainers reuse: kişisel ayar `~/.testcontainers.properties` içinde `testcontainers.reuse.enable=true` (repo'ya COMMIT
+  EDİLMEZ; yoksa reuse kapalı, testler yine çalışır, her bağlam kendi konteynerini açar). Paylaşılan konteyner tanımlarında
+  `.withReuse(true)`; MySQL'de modüle özgü `withDatabaseName("<modül>_test")` ŞART (reuse hash'i ayarlardan hesaplanır; aynı ayarlı
+  iki modül aynı DB'yi ve Flyway geçmişini paylaşır). Boot 4.1.1 reuse'lu konteyneri bağlam kapanınca durdurmaz → tüm bağlamlar ve
+  koşular aynı konteyneri kullanır, veri/kuyruk içeriği kalır (testler önceki veriye dayanıklı olmalı). Temizlik:
+  `docker ps --filter "label=org.testcontainers.hash"` ile bulunur, `docker rm -f <id>`. Şu an yalnızca cart-service'te açık
+  (diğer modüller kendi adımlarında geçirilecek).
+- Spring test bağlamı sayısı az tutulur: farklı `@MockitoSpyBean` / `@DynamicPropertySource` / `@TestPropertySource` kombinasyonu
+  yeni bağlam açar; mümkünse ortak test tabanında toplanır. Cart ölçümü (Adım 7): 8 bağlam (CartServiceApplicationTests/ApiTestSupport,
+  CatalogConnectionRefusedTest, CatalogDownCircuitBreakerTest, RabbitDownReadinessTest, CartCheckedOutListenerIT, CartLockingTest,
+  CartSchemaConstraintsTest, JwksOutageTest). Reuse'suz 8 MySQL + 4 RabbitMQ başlatılıyordu; reuse ile 1 + 1.
+- E2E her adımda hafif (adımın tek ana senaryosu); geniş e2e Adım 8 ve 11'de.
+- Rapor sonunda süre dökümü: derleme+test, docker build, e2e (dk).

@@ -1323,6 +1323,40 @@
   - Admin listesi şablonu: `SELECT id, user_id, status, stock_state, total_amount, currency, created_at, updated_at FROM orders WHERE stock_state = 'lost' ORDER BY updated_at DESC;`.
   - Testler: `OrderTransitionsTest` (93), `OrderSchemaConstraintsTest` (117), `StockDispatcherIT` (9), `StockSyncJobIT` (8), `StartupLogHygieneTest` (V1+V2 2 migration doğrulama). Monorepo testleri tam yeşil: common 67, user 86, catalog 285, cart 321 (2 skipped), payment 367, order 599.
   - Yerel E2E: Docker servisleri + yerelde order-service açılışında V2 başarıyla uygulandı; 6a kalıntısı paid+held rezervasyon süresi dolduğu için Catalog 409 döndü -> lost + ERROR STOCK_COMMIT_LOST; failed+held -> released oldu; yeni kullanıcıyla checkout -> paid -> saniyeler içinde committed ve Catalog stoku düştü; ret yolu (.99 kuralı) mevcut veriyle kurulamadığı için atlandı; lost sorgusu 1 sonucunu verdi.
+- **Cart Adım 7 = Order planı Adım 7 (YAPILDI, COMMIT EDİLMEDİ): CartCheckedOut tüketicisi + CartConcurrencyTest 500 düzeltmesi.**
+  - RabbitMQ: cart'a `spring-boot-starter-amqp`; env adları diğerleriyle aynı (`RABBITMQ_HOST/PORT/USER/PASSWORD`), CachingConnectionFactory
+    WARN. Exchange tanımı common `amqp.EventsExchange.create(name)` (durable topic; `OutboxConfiguration` de artık bunu kullanır,
+    davranış aynı); cart `config/EventsExchangeConfig` + `app.events.exchange`. Compose cart-service: rabbitmq `service_healthy` +
+    RABBITMQ env, env_file yok. Readiness DEĞİŞMEDİ (readinessState + db, tüm servislerle aynı); `rabbit` göstergesi kök health'te
+    (broker kapalı → kök DOWN, readiness/liveness UP; `RabbitDownReadinessTest`).
+  - Topoloji (`config/CartCheckoutsConsumerConfig`, `DeadLetterQueueTopology`): durable `cart.checkouts` ← `kitapsepeti.events`
+    `cart.checked-out`; DLX `kitapsepeti.dlx` → `cart.checkouts.dlq` (key `cart.checkouts.dead`). Listener Order 6a kopyası: prefetch 10,
+    tek consumer, toplam 3 deneme (1s/2s, 4s tavan), poison retry'sız DLQ. Test profilinde consumer kapalı (`app.cart-checkouts.enabled=false`).
+  - FARK (Order'dan): container error handler'ı fırlatmıyor (no-op). Fırlatınca Spring AMQP her DLQ mesajında
+    "error handler threw an exception" ERROR + stack trace yazıyor; container özgün istisnayı zaten yeniden fırlattığı için reject
+    (requeue yok) aynı. Order'da bu gürültü hâlâ var (Order koduna dokunulmadı; backlog).
+  - İşleme (`CartTransactions.checkOut`, READ_COMMITTED, `findByIdForUpdate(cartId)`): sepet yok → poison CART_NOT_FOUND (WARN DLQ);
+    userId farklı → poison CART_OWNER_MISMATCH (ERROR DLQ); active → `checkout(clock)` (updated_at = Clock) INFO CHECKED_OUT;
+    checked_out → ack DEBUG; abandoned → ack WARN, durum değişmez. Satır silinmez; sonraki ekleme yeni aktif sepet açar
+    (`uk_carts_active_user` yalnız active'te değerli). Migration GEREKMEDİ. Log: mesaj başına tek satır (type, sonuç, durationMs), id yok.
+  - v1 SINIRI: sipariş pending iken sepete eklenen ürün, sepet kapanınca gider (olayda satır listesi yok).
+  - CartConcurrencyTest 500 kök nedeni: eşzamanlı "ilk sepet" INSERT'lerinde InnoDB deadlock (1213; unique index duplicate kontrolü +
+    delete-marked kayıtlar → supremum'da next-key S kilidi, ardından insert-intention X çakışması) → `CannotAcquireLockException`
+    (`ConcurrencyFailureException`), `CartService.addItem` yalnız `uk_carts_active_user` ihlalini yeniden deniyordu → 500. Düzeltme:
+    ilk sepet yarışında SQLState zincirinde 1213 de bir kez yeni TX'te yeniden denenir (1205 lock wait timeout HARİÇ; ikinci hata yukarı).
+    Önce 900 senaryoda 17 hata, sonra 0. API/hata kodları aynı. 30 ayrı koşu 30/30.
+  - Testler: `CartCheckedOutListenerIT` (15: mutlu yol + GET boş, tekrar teslim, kapanış sonrası ekleme, 6 poison, geçici→başarı,
+    kalıcı→DLQ, abandoned, broker topolojisi, log hijyeni), `CartCheckedOutMessageParserTest` (15), `CartCheckedOutContractTest` (3: Order'ın
+    `CartCheckedOutEvent` kaynağı test anında `javax.tools.JavaCompiler` ile derlenir, Boot JsonMapper ile serileştirilip Cart parser'ına
+    verilir; routing key `EventRoutingKeys.java` metninden), `RabbitDownReadinessTest`, CartLockingTest +1, CartServiceTest +3,
+    common `EventsExchangeTest` (2). Kök `clean verify`: common 69, user 86, catalog 285, cart 359 (2 skipped), payment 367, order 599.
+  - Testcontainers reuse cart'ta açık (`withReuse(true)`, MySQL DB adı `cart_test`); hız kuralları techContext'te.
+  - Docker: cart-service yeniden derlendi, healthy; `cart.checkouts` (1 consumer) / `cart.checkouts.dlq` / binding'ler doğru. Hafif e2e
+    (yeni kullanıcı, yerel order-service): checkout 201 → paid (<1 sn) → GET /api/cart boş (~2 sn), DLQ boş; order-service durduruldu.
+  - ADMIN KEŞFİ (yalnızca keşif, atama yapılmadı): user-service `Role {USER, ADMIN}`, `users.role` 'USER' varsayılan
+    (`ck_users_role`), JWT `role` claim'i = enum adı; common `JwtRoleConverters` → `ROLE_<role>`; catalog `/api/admin/**`
+    `hasRole("ADMIN")`. Admin atayan seed/env/uç YOK; tek yol DB'de `role='ADMIN'` güncellemesi (B3, kullanıcı onayıyla). Rol token'a
+    giriş/refresh'te yazılır → değişiklikten sonra yeniden giriş gerekir.
 
 ## Sonraki adımlar
 - PROJE KARARI (Ekim 2026, UI paralel): UI (Angular 13) Order ile PARALEL başlıyor — ayrı agent, ayrı worktree
@@ -1347,9 +1381,10 @@
   - Stok commit/release Catalog internal HTTP ile (`/internal/stock/reservations/{orderId}/commit|release`).
 - Order planı: 0a common sertleştirme (YAPILDI) → 0b outbox → common (YAPILDI, push'landı) → 1 modül/db (YAPILDI, push'landı) → 2 domain (YAPILDI) → 3a Order istemcileri + CB (YAPILDI) → 3b Cart→Catalog CB (YAPILDI) → 4 checkout mutlu yol +
   GET {id} (YAPILDI) → 5 hata yolları/telafi (YAPILDI) → 6a Payment sonucu consumer+Order olayları (YAPILDI) → 6b stok
-  commit/release+StockSyncJob+V2 lost (YAPILDI) → 7 Cart CartCheckedOut tüketicisi → 8 timeout görevi → 9 liste →
+  commit/release+StockSyncJob+V2 lost (YAPILDI) → 7 Cart CartCheckedOut tüketicisi (YAPILDI) → 8 timeout görevi → 9 liste →
   10 OpenAPI/olay belgeleri → 11 Docker.
-- Backlog (Order fazı sonunda incelenecek): CartConcurrencyTest twelveConcurrentAddsGiveExactlyTenSuccessesAndTwoQuantityConflicts flake (beklenen 409, 409 yerine 409, 500 dönmesi).
+- (KAPANDI, Cart Adım 7) CartConcurrencyTest 500 flake'i: ilk sepet INSERT deadlock'u (1213) artık bir kez yeniden deneniyor.
+- Backlog (Order): consumer error handler'ı fırlattığı için her DLQ mesajında Spring AMQP ERROR + stack trace (Cart'ta no-op ile giderildi).
 - Veri Değiştirme Kuralı: Catalog ve User verisi YALNIZCA ilgili servisin API'siyle değiştirilir; doğrudan SQL ile yazma KESİNLİKLE YOKTUR (root yalnızca okuma). Admin token yoksa DUR ve sor. Raporda id, başlık, token, tutar ASLA YAZILMAZ.
 - order-service eklenirken: `RequestPathMasker` bean'i (`/api/orders/{orderId}` vb.) ve `InternalAuthConfig` (gerekirse) — common
   politika aynen geçerli.
@@ -1358,8 +1393,8 @@
   `id=…, eventType=…`) kaldırılmalı/maskelenmeli.
 - Order istemcisi `.env` `ORDER_INTERNAL_API_KEY` ile `X-Internal-Api-Key` gönderir (payment özeti `PAYMENT_INTERNAL_KEY_ORDER_SHA256`);
   compose'da `http://payment-service:8087`, istemci `docs/api/payment-service.openapi.json`'dan.
-- Cart ertelenenler: (1) CartCheckedOut tüketimi Order Adım 7'de (checkout + yeni sepet aynı TX'te olursa arada `flush()` — flush
-  tuzağı); (2) Catalog OpenAPI'de nullable alanları `types = {"x","null"}` ile işaretleme (cart'taki gibi). (Yol maskeleme + özet
+- Cart ertelenenler: (1) CartCheckedOut tüketimi YAPILDI (Cart Adım 7; checkout ve yeni sepet ayrı TX'lerde, flush tuzağına girmez);
+  (2) Catalog OpenAPI'de nullable alanları `types = {"x","null"}` ile işaretleme (cart'taki gibi). (Yol maskeleme + özet
   politikası Order Adım 0a'da common'a taşındı.)
   Order'ın sepet istemcisi `docs/api/cart-service.openapi.json`'dan (internal snapshot dahil); compose'da `http://cart-service:8083`.
 - Gateway fazı: `/v3/api-docs` + Swagger UI dört serviste (user, catalog, cart, payment) permitAll; Gateway'de dışarıya kapatılacak (ya da `SPRINGDOC_ENABLED=false`).

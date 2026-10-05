@@ -127,6 +127,13 @@
   + denyAll varsayılan zincir, anonim 403 challenge'sız), `POST /internal/payments` (idempotent, 201/200/409/503) +
   `GET /internal/payments/{id}`, yol maskeleme (log dahil). payment-service 220 test. Yerelde V2 uygulandı, uçtan uca geçti.
 
+- Cart Adım 7 = Order planı Adım 7 (COMMIT EDİLMEDİ): CartCheckedOut tüketicisi (`cart.checkouts` + DLQ, Order 6a kalıbı; active →
+  checked_out, sonraki ekleme yeni sepet; poison CART_NOT_FOUND/CART_OWNER_MISMATCH), common `EventsExchange`, compose cart-service
+  rabbitmq bağımlılığı, CartConcurrencyTest 500 kök nedeni (ilk sepet INSERT deadlock 1213) düzeltildi (30/30). Testcontainers reuse
+  cart'ta açık. Testler: kök `clean verify` common 69, user 86, catalog 285, cart 359 (2 skipped), payment 367, order 599. Docker
+  cart-service healthy, kuyruk/binding doğru; hafif e2e (checkout → paid → sepet boş, DLQ boş) geçti. v1 sınırı: sipariş pending
+  iken eklenen ürün sepetle birlikte kapanır (olayda satır listesi yok).
+
 ## Yapılacaklar
 - UI (paralel, Ekim 2026): Order sürerken UI-0 → UI-6 ayrı worktree'de (`kitapSepeti-ui`, branch `ui`); durum
   `memory-bank/frontend.md`'de. UI için backend işleri: B1 catalog `q` araması, B2 Docker'da katalog örnek verisi, B3 ADMIN kullanıcı.
@@ -162,11 +169,11 @@
   hata, 4xx/stokta yok = başarı); açıkken istek gitmez, mevcut "Catalog yok" yanıtları aynen (ekleme 503, görünüm 200 UNAVAILABLE).
   Readiness etkilenmez. Testler: common 65, cart 321 (2 skipped); diğerleri aynı (user 86, catalog 285, payment 367, order 427).
   Docker: Catalog kapalıyken görünüm ~1030 ms → devre açıldıktan sonra ~24 ms; Catalog dönünce HALF_OPEN → CLOSED. Sıradaki: Adım 4.
-- Cart ertelenenler: CartCheckedOut tüketimi (Order Adım 7); Catalog OpenAPI nullable. (Yol maskeleme + özet politikası common'a
+- Cart ertelenenler: Catalog OpenAPI nullable. (CartCheckedOut tüketimi Cart Adım 7'de yapıldı.) (Yol maskeleme + özet politikası common'a
   taşındı → Order Adım 0a.)
 - Order planı (PROJE KARARI, Ekim 2026): 0a common sertleştirme (yapıldı) → 0b outbox → common (yapıldı) → 1 modül/db (yapıldı) → 2 domain (yapıldı) → 3a Order istemcileri + CB (yapıldı)
   → 3b Cart→Catalog CB (yapıldı) → 4 checkout mutlu yol + GET {id} (yapıldı) → 5 hata yolları/telafi (YAPILDI: satır içi stok release, yarıda kesilme senaryoları a-e, 541 test) → 6a ödeme sonucu tüketicisi (YAPILDI) → 6b stok commit/release +
-  StockSyncJob + V2 lost → 7 Cart CartCheckedOut tüketicisi → 8 timeout
+  StockSyncJob + V2 lost (YAPILDI) → 7 Cart CartCheckedOut tüketicisi (YAPILDI) → 8 timeout
   görevi → 9 liste → 10 OpenAPI/olay belgeleri → 11 Docker. Kararlar activeContext "Sonraki adımlar"da.
 - Order Adım 6a YAPILDI (COMMIT EDİLMEDİ): projenin ilk RabbitMQ consumer'ı. Durable `order.payment-results`, direct
   `kitapsepeti.dlx`, durable DLQ ve iki payment binding'i; ortak, auto-config olmayan `DeadLetterQueueTopology`. Prefetch 10 /
