@@ -1,4 +1,29 @@
 <section class="container py-4">
-  <h1 class="h4 mb-2">Kitap detayı</h1>
-  <p class="text-muted mb-0">Kitap kimliği: {{ bookId || '—' }}</p>
+  <ng-container *ngIf="state$ | async as state">
+    <app-spinner *ngIf="state.kind === 'loading'"></app-spinner>
+
+    <app-empty-state
+      *ngIf="state.kind === 'notFound'"
+      title="Kitap bulunamadı"
+      message="Bu kitap mevcut değil veya yayından kaldırılmış olabilir."
+      ctaLabel="Kitaplara dön"
+      ctaLink="/books"
+    ></app-empty-state>
+
+    <app-empty-state
+      *ngIf="state.kind === 'error'"
+      title="Detay yüklenemedi"
+      message="Kitap bilgisi alınamadı. Lütfen tekrar deneyin."
+      ctaLabel="Kitaplara dön"
+      ctaLink="/books"
+    ></app-empty-state>
+
+    <ng-container *ngIf="state.kind === 'ready'">
+      <h1 class="h4 mb-2">{{ state.book.title }}</h1>
+      <p class="text-muted mb-2">
+        {{ state.book.priceAmount | currency: 'TRY' : 'symbol' : '1.2-2' : 'tr-TR' }}
+      </p>
+      <p *ngIf="state.book.description" class="mb-0">{{ state.book.description }}</p>
+    </ng-container>
+  </ng-container>
 </section>

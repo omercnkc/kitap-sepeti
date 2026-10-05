@@ -1,0 +1,3 @@
+<ul *ngIf="visibleErrors.length > 0" class="app-field-errors list-unstyled mb-0 small text-danger">
+  <li *ngFor="let err of visibleErrors">{{ err.message }}</li>
+</ul>

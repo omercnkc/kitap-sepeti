@@ -1,0 +1,7 @@
+<section class="app-empty-state text-center py-5 px-3">
+  <h2 class="h5 mb-2">{{ title }}</h2>
+  <p *ngIf="message" class="text-muted mb-3">{{ message }}</p>
+  <a *ngIf="ctaLabel && ctaLink" class="btn btn-outline-primary btn-sm" [routerLink]="ctaLink">
+    {{ ctaLabel }}
+  </a>
+</section>

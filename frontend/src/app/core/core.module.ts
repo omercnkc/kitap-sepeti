@@ -5,7 +5,8 @@ import {
   SkipSelf,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { HttpClientModule } from '@angular/common/http';
+import { HTTP_INTERCEPTORS, HttpClientModule } from '@angular/common/http';
+import { ErrorInterceptor } from './interceptors/error.interceptor';
 
 export function throwIfAlreadyLoaded(parentModule: unknown, moduleName: string): void {
   if (parentModule) {
@@ -26,7 +27,10 @@ export class CoreModule {
   static forRoot(): ModuleWithProviders<CoreModule> {
     return {
       ngModule: CoreModule,
-      providers: [],
+      providers: [
+        // AuthInterceptor (UI-3) eklendiğinde bu satırın ÜSTÜNE konur.
+        { provide: HTTP_INTERCEPTORS, useClass: ErrorInterceptor, multi: true },
+      ],
     };
   }
 }

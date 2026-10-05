@@ -6,8 +6,8 @@
 - Lazy feature modülleri: catalog, auth (login/register), cart, checkout, orders, account, notifications, admin
 - Geliştirme proxy: `/api` → `http://localhost:8080` (API Gateway)
 - Locale: `tr-TR` (`LOCALE_ID` + `registerLocaleData`)
-- UI-2.1–3: `core/models` (OpenAPI), `CatalogApi` + `toHttpParams`, `ToastService` + Shell toast container
-- Sırada: UI-2 ErrorInterceptor / Spinner; UI-3 guard’lar
+- UI-2.1–5: models, CatalogApi, Toast, ErrorInterceptor, Spinner/EmptyState/FieldError; `/books` liste denemesi
+- Sırada: UI-3 guard’lar / auth
 
 ## Ortam
 

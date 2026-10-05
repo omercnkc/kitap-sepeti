@@ -1,16 +1,30 @@
 <section class="container py-4">
-  <h1 class="h4 mb-2">Kitaplar</h1>
-  <p class="text-muted mb-3">Katalog listesi yakında burada olacak.</p>
-  <p class="mb-3">
-    Örnek fiyat:
-    <strong>{{ 149.9 | currency: 'TRY' : 'symbol' : '1.2-2' : 'tr-TR' }}</strong>
-  </p>
-  <div class="d-flex flex-wrap gap-2">
-    <button type="button" class="btn btn-success btn-sm" (click)="showSuccessToast()">
-      Toast başarı
-    </button>
-    <button type="button" class="btn btn-danger btn-sm" (click)="showErrorToast()">
-      Toast hata
-    </button>
-  </div>
+  <h1 class="h4 mb-3">Kitaplar</h1>
+
+  <ng-container *ngIf="state$ | async as state">
+    <app-spinner *ngIf="state.kind === 'loading'"></app-spinner>
+
+    <app-empty-state
+      *ngIf="state.kind === 'empty'"
+      title="Kitap bulunamadı"
+      message="Henüz listelenecek yayınlanmış kitap yok."
+    ></app-empty-state>
+
+    <app-empty-state
+      *ngIf="state.kind === 'error'"
+      title="Liste yüklenemedi"
+      message="Katalog şu an görüntülenemiyor. Biraz sonra tekrar deneyin."
+    ></app-empty-state>
+
+    <ul *ngIf="state.kind === 'ready'" class="list-unstyled mb-0">
+      <li *ngFor="let book of state.books" class="border-bottom py-2">
+        <a [routerLink]="['/books', book.id]" class="text-decoration-none">
+          <span class="fw-semibold text-body">{{ book.title }}</span>
+        </a>
+        <span class="text-muted small ms-2">
+          {{ book.priceAmount | currency: 'TRY' : 'symbol' : '1.2-2' : 'tr-TR' }}
+        </span>
+      </li>
+    </ul>
+  </ng-container>
 </section>
