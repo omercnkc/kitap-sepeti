@@ -50,7 +50,7 @@ class StartupLogHygieneTest {
 			}
 
 			String startup = output.getAll().substring(from);
-			assertThat(startup).contains("Successfully applied 1 migration")
+			assertThat(startup).contains("Successfully applied 2 migrations")
 				.contains("Started OrderServiceApplication")
 				.doesNotContain(dbUser)
 				.doesNotContain(dbPassword)

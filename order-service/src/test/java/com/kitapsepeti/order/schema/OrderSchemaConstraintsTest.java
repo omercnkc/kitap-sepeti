@@ -61,7 +61,7 @@ class OrderSchemaConstraintsTest {
 	// --- yapı ---
 
 	@Test
-	void flywayAppliesV1AndCreatesOnlyOrderTables() {
+	void flywayAppliesV1AndV2AndCreatesOnlyOrderTables() {
 		List<String> applied = jdbc.queryForList(
 				"SELECT version FROM flyway_schema_history WHERE success = 1 ORDER BY installed_rank", String.class);
 		List<Map<String, Object>> tables = jdbc.queryForList("""
@@ -69,7 +69,7 @@ class OrderSchemaConstraintsTest {
 				WHERE table_schema = DATABASE() AND table_name <> 'flyway_schema_history'
 				""");
 
-		assertThat(applied).containsExactly("1");
+		assertThat(applied).containsExactly("1", "2");
 		// Takma adlar küçük harf: satır map'i anahtarı JVM locale'iyle küçültür (tr-TR'de "ENGINE" → "engıne").
 		assertThat(tables).extracting(t -> t.get("name"), t -> t.get("eng"), t -> t.get("collation"))
 			.containsExactlyInAnyOrder(tuple("orders", "InnoDB", "utf8mb4_0900_ai_ci"),
@@ -173,6 +173,7 @@ class OrderSchemaConstraintsTest {
 					tuple("orders", "ck_orders_pending_stock", "CHECK"),
 					tuple("orders", "ck_orders_paid_stock", "CHECK"),
 					tuple("orders", "ck_orders_committed_paid", "CHECK"),
+					tuple("orders", "ck_orders_lost_paid", "CHECK"),
 					tuple("order_items", "PRIMARY", "PRIMARY KEY"),
 					tuple("order_items", "uk_order_items_order_book", "UNIQUE"),
 					tuple("order_items", "fk_order_items_order", "FOREIGN KEY"),
@@ -369,10 +370,19 @@ class OrderSchemaConstraintsTest {
 	}
 
 	@ParameterizedTest
-	@CsvSource({ "pending, requested", "pending, held", "paid, held", "paid, committed", "failed, requested",
+	@CsvSource({ "pending, requested", "pending, held", "paid, held", "paid, committed", "paid, lost", "failed, requested",
 			"failed, held", "failed, released" })
 	void acceptsConsistentStatusAndStockState(String status, String stockState) {
 		settledOrder(status, stockState).insert();
+	}
+
+	@ParameterizedTest
+	@CsvSource({
+			"pending, lost",
+			"failed, lost"
+	})
+	void rejectsLostStockWhenNotPaid(String status, String stockState) {
+		assertCheckViolation(() -> settledOrder(status, stockState).insert(), "ck_orders_lost_paid", "ck_orders_pending_stock");
 	}
 
 	@Test

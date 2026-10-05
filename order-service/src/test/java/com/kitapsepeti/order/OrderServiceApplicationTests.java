@@ -40,10 +40,10 @@ class OrderServiceApplicationTests extends ApiTestSupport {
 	private EntityManagerFactory entityManagerFactory;
 
 	@Test
-	void contextLoadsAndFlywayAppliedV1() {
+	void contextLoadsAndFlywayAppliedV1AndV2() {
 		assertThat(jdbc.queryForList(
 				"SELECT version FROM flyway_schema_history WHERE success = 1 ORDER BY installed_rank", String.class))
-			.containsExactly("1");
+			.containsExactly("1", "2");
 	}
 
 	@Test

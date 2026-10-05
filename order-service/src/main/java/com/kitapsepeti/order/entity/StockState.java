@@ -14,7 +14,9 @@ public enum StockState implements DbEnum {
 	/** Ödeme sonrası ayrılan stok kesinleşti (yalnızca ödenmiş sipariş). */
 	COMMITTED("committed"),
 	/** Başarısız sipariş için ayrılan stok bırakıldı. */
-	RELEASED("released");
+	RELEASED("released"),
+	/** Ödeme başarılı ancak rezervasyon süresi dolduğu için stok kaybedildi (yalnızca ödenmiş sipariş). */
+	LOST("lost");
 
 	private final String dbValue;
 

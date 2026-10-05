@@ -36,6 +36,7 @@ class OrderTransitionsTest {
 		PENDING_HELD_WITH_PAYMENT(OrderStatus.PENDING, StockState.HELD, PAYMENT),
 		PAID_HELD(OrderStatus.PAID, StockState.HELD, PAYMENT),
 		PAID_COMMITTED(OrderStatus.PAID, StockState.COMMITTED, PAYMENT),
+		PAID_LOST(OrderStatus.PAID, StockState.LOST, PAYMENT),
 		FAILED_REQUESTED(OrderStatus.FAILED, StockState.REQUESTED, null),
 		FAILED_HELD(OrderStatus.FAILED, StockState.HELD, null),
 		FAILED_HELD_WITH_PAYMENT(OrderStatus.FAILED, StockState.HELD, PAYMENT),
@@ -66,6 +67,9 @@ class OrderTransitionsTest {
 				if (stock == StockState.COMMITTED) {
 					assertThat(order.markStockCommitted(T1)).isEqualTo(TransitionResult.APPLIED);
 				}
+				if (stock == StockState.LOST) {
+					assertThat(order.markStockLost(T1)).isEqualTo(TransitionResult.APPLIED);
+				}
 			}
 			if (status == OrderStatus.FAILED) {
 				assertThat(order.markFailed(OrderReasons.OUT_OF_STOCK, T1)).isEqualTo(TransitionResult.APPLIED);
@@ -85,8 +89,8 @@ class OrderTransitionsTest {
 
 	@ParameterizedTest(name = "{0} → {1}")
 	@CsvSource({ "PENDING_REQUESTED, APPLIED", "PENDING_HELD, ALREADY_IN_STATE", "PAID_HELD, ALREADY_IN_STATE",
-			"PAID_COMMITTED, CONFLICTING_FINAL", "FAILED_REQUESTED, APPLIED", "FAILED_HELD, ALREADY_IN_STATE",
-			"FAILED_RELEASED, CONFLICTING_FINAL" })
+			"PAID_COMMITTED, CONFLICTING_FINAL", "PAID_LOST, CONFLICTING_FINAL", "FAILED_REQUESTED, APPLIED",
+			"FAILED_HELD, ALREADY_IN_STATE", "FAILED_RELEASED, CONFLICTING_FINAL" })
 	void markStockHeld(Start start, TransitionResult expected) {
 		Order order = start.build();
 
@@ -103,7 +107,8 @@ class OrderTransitionsTest {
 	@CsvSource({ "PENDING_REQUESTED, APPLIED", "PENDING_HELD, APPLIED", "FAILED_REQUESTED, APPLIED",
 			"FAILED_HELD, APPLIED", "FAILED_RELEASED, APPLIED", "PENDING_REQUESTED_WITH_PAYMENT, ALREADY_IN_STATE",
 			"PENDING_HELD_WITH_PAYMENT, ALREADY_IN_STATE", "PAID_HELD, ALREADY_IN_STATE",
-			"PAID_COMMITTED, ALREADY_IN_STATE", "FAILED_HELD_WITH_PAYMENT, ALREADY_IN_STATE" })
+			"PAID_COMMITTED, ALREADY_IN_STATE", "PAID_LOST, ALREADY_IN_STATE",
+			"FAILED_HELD_WITH_PAYMENT, ALREADY_IN_STATE" })
 	void attachSamePayment(Start start, TransitionResult expected) {
 		Order order = start.build();
 
@@ -114,7 +119,7 @@ class OrderTransitionsTest {
 
 	@ParameterizedTest(name = "{0} → CONFLICTING_FINAL")
 	@ValueSource(strings = { "PENDING_REQUESTED_WITH_PAYMENT", "PENDING_HELD_WITH_PAYMENT", "PAID_HELD",
-			"PAID_COMMITTED", "FAILED_HELD_WITH_PAYMENT" })
+			"PAID_COMMITTED", "PAID_LOST", "FAILED_HELD_WITH_PAYMENT" })
 	void attachDifferentPaymentConflicts(Start start) {
 		Order order = start.build();
 
@@ -127,7 +132,7 @@ class OrderTransitionsTest {
 
 	@ParameterizedTest(name = "{0} → {1}")
 	@CsvSource({ "PENDING_HELD, APPLIED", "PENDING_HELD_WITH_PAYMENT, APPLIED", "PAID_HELD, ALREADY_IN_STATE",
-			"PAID_COMMITTED, ALREADY_IN_STATE", "FAILED_REQUESTED, CONFLICTING_FINAL",
+			"PAID_COMMITTED, ALREADY_IN_STATE", "PAID_LOST, ALREADY_IN_STATE", "FAILED_REQUESTED, CONFLICTING_FINAL",
 			"FAILED_HELD, CONFLICTING_FINAL", "FAILED_HELD_WITH_PAYMENT, CONFLICTING_FINAL",
 			"FAILED_RELEASED, CONFLICTING_FINAL" })
 	void markPaid(Start start, TransitionResult expected) {
@@ -143,7 +148,7 @@ class OrderTransitionsTest {
 	}
 
 	@ParameterizedTest(name = "{0} → CONFLICTING_FINAL")
-	@ValueSource(strings = { "PENDING_HELD_WITH_PAYMENT", "PAID_HELD", "PAID_COMMITTED" })
+	@ValueSource(strings = { "PENDING_HELD_WITH_PAYMENT", "PAID_HELD", "PAID_COMMITTED", "PAID_LOST" })
 	void markPaidWithDifferentPaymentConflicts(Start start) {
 		Order order = start.build();
 
@@ -165,7 +170,7 @@ class OrderTransitionsTest {
 	@ParameterizedTest(name = "{0} → {1}")
 	@CsvSource({ "PENDING_REQUESTED, APPLIED", "PENDING_REQUESTED_WITH_PAYMENT, APPLIED", "PENDING_HELD, APPLIED",
 			"PENDING_HELD_WITH_PAYMENT, APPLIED", "PAID_HELD, CONFLICTING_FINAL", "PAID_COMMITTED, CONFLICTING_FINAL",
-			"FAILED_REQUESTED, ALREADY_IN_STATE", "FAILED_HELD, ALREADY_IN_STATE",
+			"PAID_LOST, CONFLICTING_FINAL", "FAILED_REQUESTED, ALREADY_IN_STATE", "FAILED_HELD, ALREADY_IN_STATE",
 			"FAILED_HELD_WITH_PAYMENT, ALREADY_IN_STATE", "FAILED_RELEASED, ALREADY_IN_STATE" })
 	void markFailed(Start start, TransitionResult expected) {
 		Order order = start.build();
@@ -226,7 +231,7 @@ class OrderTransitionsTest {
 	@ParameterizedTest(name = "{0} → {1}")
 	@CsvSource({ "PENDING_REQUESTED, CONFLICTING_FINAL", "PENDING_HELD, CONFLICTING_FINAL",
 			"PENDING_HELD_WITH_PAYMENT, CONFLICTING_FINAL", "PAID_HELD, APPLIED", "PAID_COMMITTED, ALREADY_IN_STATE",
-			"FAILED_REQUESTED, CONFLICTING_FINAL", "FAILED_HELD, CONFLICTING_FINAL",
+			"PAID_LOST, CONFLICTING_FINAL", "FAILED_REQUESTED, CONFLICTING_FINAL", "FAILED_HELD, CONFLICTING_FINAL",
 			"FAILED_RELEASED, CONFLICTING_FINAL" })
 	void markStockCommitted(Start start, TransitionResult expected) {
 		Order order = start.build();
@@ -242,8 +247,9 @@ class OrderTransitionsTest {
 
 	@ParameterizedTest(name = "{0} → {1}")
 	@CsvSource({ "PENDING_REQUESTED, CONFLICTING_FINAL", "PENDING_HELD, CONFLICTING_FINAL",
-			"PAID_HELD, CONFLICTING_FINAL", "PAID_COMMITTED, CONFLICTING_FINAL", "FAILED_REQUESTED, APPLIED",
-			"FAILED_HELD, APPLIED", "FAILED_HELD_WITH_PAYMENT, APPLIED", "FAILED_RELEASED, ALREADY_IN_STATE" })
+			"PAID_HELD, CONFLICTING_FINAL", "PAID_COMMITTED, CONFLICTING_FINAL", "PAID_LOST, CONFLICTING_FINAL",
+			"FAILED_REQUESTED, APPLIED", "FAILED_HELD, APPLIED", "FAILED_HELD_WITH_PAYMENT, APPLIED",
+			"FAILED_RELEASED, ALREADY_IN_STATE" })
 	void markStockReleased(Start start, TransitionResult expected) {
 		Order order = start.build();
 
@@ -251,6 +257,24 @@ class OrderTransitionsTest {
 
 		if (expected == TransitionResult.APPLIED) {
 			assertThat(order.getStockState()).isEqualTo(StockState.RELEASED);
+		}
+	}
+
+	// --- markStockLost ---
+
+	@ParameterizedTest(name = "{0} → {1}")
+	@CsvSource({ "PENDING_REQUESTED, CONFLICTING_FINAL", "PENDING_REQUESTED_WITH_PAYMENT, CONFLICTING_FINAL",
+			"PENDING_HELD, CONFLICTING_FINAL", "PENDING_HELD_WITH_PAYMENT, CONFLICTING_FINAL", "PAID_HELD, APPLIED",
+			"PAID_COMMITTED, CONFLICTING_FINAL", "PAID_LOST, ALREADY_IN_STATE", "FAILED_REQUESTED, CONFLICTING_FINAL",
+			"FAILED_HELD, CONFLICTING_FINAL", "FAILED_HELD_WITH_PAYMENT, CONFLICTING_FINAL",
+			"FAILED_RELEASED, CONFLICTING_FINAL" })
+	void markStockLost(Start start, TransitionResult expected) {
+		Order order = start.build();
+
+		apply(order, o -> o.markStockLost(T3), expected, false);
+
+		if (expected == TransitionResult.APPLIED) {
+			assertThat(order.getStockState()).isEqualTo(StockState.LOST);
 		}
 	}
 

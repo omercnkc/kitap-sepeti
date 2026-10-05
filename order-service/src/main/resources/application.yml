@@ -106,6 +106,17 @@ app:
   # PaymentSucceeded/PaymentFailed consumer; kuyruk, retry ve DLQ ayarları kodda sözleşme olarak sabittir.
   payment-results:
     enabled: true
+  # Catalog stok senkronizasyon kurtarma görevi (paid+held -> commit, failed+requested/held -> release)
+  stock-sync:
+    enabled: true
+    interval: 30s
+    initial-delay: 10s
+    min-age: 10s
+    batch: 50
+    dispatcher:
+      core-pool-size: 1
+      max-pool-size: 2
+      queue-capacity: 50
   clients:
     # Cart/Catalog/Payment /internal/** uçlarına giden ham anahtar; yok/boşsa uygulama açılmaz.
     internal-api-key: ${ORDER_INTERNAL_API_KEY:}

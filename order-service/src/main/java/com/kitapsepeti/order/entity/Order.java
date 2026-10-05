@@ -214,7 +214,7 @@ public class Order {
 				yield TransitionResult.APPLIED;
 			}
 			case HELD -> TransitionResult.ALREADY_IN_STATE;
-			case COMMITTED, RELEASED -> TransitionResult.CONFLICTING_FINAL;
+			case COMMITTED, RELEASED, LOST -> TransitionResult.CONFLICTING_FINAL;
 		};
 	}
 
@@ -275,7 +275,7 @@ public class Order {
 		};
 	}
 
-	/** Ödenmiş siparişin stoğu kesinleşti: {@code held → committed}. Sipariş ödenmemişse ya da stok bırakılmışsa çelişki. */
+	/** Ödenmiş siparişin stoğu kesinleşti: {@code held → committed}. Sipariş ödenmemişse ya da stok bırakılmışsa/kaybedilmişse çelişki. */
 	public TransitionResult markStockCommitted(Clock clock) {
 		if (status != OrderStatus.PAID) {
 			return TransitionResult.CONFLICTING_FINAL;
@@ -287,14 +287,14 @@ public class Order {
 				yield TransitionResult.APPLIED;
 			}
 			case COMMITTED -> TransitionResult.ALREADY_IN_STATE;
-			case RELEASED -> TransitionResult.CONFLICTING_FINAL;
+			case RELEASED, LOST -> TransitionResult.CONFLICTING_FINAL;
 			case REQUESTED -> throw impossibleState();
 		};
 	}
 
 	/**
 	 * Başarısız siparişin stoğu bırakıldı: {@code requested|held → released}. Sipariş başarısız değilse (bekliyor ya da
-	 * ödenmiş) ya da stok kesinleşmişse çelişki.
+	 * ödenmiş) ya da stok kesinleşmişse/kaybedilmişse çelişki.
 	 */
 	public TransitionResult markStockReleased(Clock clock) {
 		if (status != OrderStatus.FAILED) {
@@ -307,8 +307,27 @@ public class Order {
 				yield TransitionResult.APPLIED;
 			}
 			case RELEASED -> TransitionResult.ALREADY_IN_STATE;
-			case COMMITTED -> TransitionResult.CONFLICTING_FINAL;
+			case COMMITTED, LOST -> TransitionResult.CONFLICTING_FINAL;
 		};
+	}
+
+	/**
+	 * Ödenmiş siparişin rezervasyonu serbest kaldığı için stok kaybedildi: {@code held → lost}.
+	 * Yalnızca {@code paid + held} iken uygulanır; zaten {@code lost} ise no-op; diğerleri çelişki.
+	 */
+	public TransitionResult markStockLost(Clock clock) {
+		if (stockState == StockState.LOST) {
+			return TransitionResult.ALREADY_IN_STATE;
+		}
+		if (status != OrderStatus.PAID) {
+			return TransitionResult.CONFLICTING_FINAL;
+		}
+		if (stockState == StockState.HELD) {
+			stockState = StockState.LOST;
+			touch(clock);
+			return TransitionResult.APPLIED;
+		}
+		return TransitionResult.CONFLICTING_FINAL;
 	}
 
 	private void changeStatus(OrderStatus target, String reason, Clock clock) {

@@ -43,4 +43,34 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
 
 	Optional<Order> findByUserIdAndStatus(UUID userId, OrderStatus status);
 
+	/**
+	 * StockSyncJob için kurtarılacak aday siparişleri getirir:
+	 * (status='paid' AND stock_state='held') OR (status='failed' AND stock_state IN ('requested','held')),
+	 * updated_at < :cutoff, updated_at sırası, LIMIT batch.
+	 * (stock_state, updated_at) indeksini kullanır.
+	 */
+	@Query("""
+			select new com.kitapsepeti.order.repository.StockSyncCandidate(o.id, o.status, o.stockState)
+			from Order o
+			where ((o.status = :paid and o.stockState = :held)
+			    or (o.status = :failed and o.stockState in (:requested, :held)))
+			  and o.updatedAt < :cutoff
+			order by o.updatedAt asc
+			""")
+	java.util.List<StockSyncCandidate> findStockSyncCandidates(
+			@Param("paid") com.kitapsepeti.order.entity.OrderStatus paid,
+			@Param("held") com.kitapsepeti.order.entity.StockState held,
+			@Param("failed") com.kitapsepeti.order.entity.OrderStatus failed,
+			@Param("requested") com.kitapsepeti.order.entity.StockState requested,
+			@Param("cutoff") java.time.Instant cutoff,
+			org.springframework.data.domain.Pageable pageable);
+
+	default java.util.List<StockSyncCandidate> findStockSyncCandidates(java.time.Instant cutoff, org.springframework.data.domain.Pageable pageable) {
+		return findStockSyncCandidates(com.kitapsepeti.order.entity.OrderStatus.PAID,
+				com.kitapsepeti.order.entity.StockState.HELD,
+				com.kitapsepeti.order.entity.OrderStatus.FAILED,
+				com.kitapsepeti.order.entity.StockState.REQUESTED,
+				cutoff, pageable);
+	}
+
 }

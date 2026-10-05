@@ -40,11 +40,20 @@ public class OrderTransactions {
 
 	private final Clock clock;
 
+	private final org.springframework.context.ApplicationEventPublisher eventPublisher;
+
 	public OrderTransactions(OrderRepository orders, OutboxService outbox, OrderEventFactory events, Clock clock) {
+		this(orders, outbox, events, clock, null);
+	}
+
+	@org.springframework.beans.factory.annotation.Autowired
+	public OrderTransactions(OrderRepository orders, OutboxService outbox, OrderEventFactory events, Clock clock,
+			org.springframework.context.ApplicationEventPublisher eventPublisher) {
 		this.orders = orders;
 		this.outbox = outbox;
 		this.events = events;
 		this.clock = clock;
+		this.eventPublisher = eventPublisher;
 	}
 
 	/** Geçişin sonucu ve siparişin geçişten sonraki (uygulanmadıysa mevcut) hali. */
@@ -94,6 +103,21 @@ public class OrderTransactions {
 	@Transactional(isolation = Isolation.READ_COMMITTED)
 	public Transition markStockHeld(UUID orderId) {
 		return transition(orderId, order -> order.markStockHeld(this.clock));
+	}
+
+	/** Catalog rezervasyonu kesinleşti: {@code held → committed}. Yalnızca sipariş paid ise uygulanır. */
+	@Transactional(isolation = Isolation.READ_COMMITTED)
+	public Transition markStockCommitted(UUID orderId) {
+		return transition(orderId, order -> order.markStockCommitted(this.clock));
+	}
+
+	/**
+	 * Catalog rezervasyonu bırakılmış veya bulunamayan siparişin stoğu kaybedildi: {@code held → lost}.
+	 * Yalnızca sipariş paid ise uygulanır; tekrar deneme yok, ERROR STOCK_COMMIT_LOST loglanır.
+	 */
+	@Transactional(isolation = Isolation.READ_COMMITTED)
+	public Transition markStockLost(UUID orderId) {
+		return transition(orderId, order -> order.markStockLost(this.clock));
 	}
 
 	/** Catalog rezervasyonu bırakıldı: {@code requested/held → released}. Yalnızca sipariş failed ise uygulanır. */
@@ -148,6 +172,7 @@ public class OrderTransactions {
 					eventId -> this.events.paid(eventId, order));
 			this.outbox.append(OrderEventFactory.ORDER_AGGREGATE, order.getId(), CartCheckedOutEvent.TYPE,
 					eventId -> this.events.cartCheckedOut(eventId, order));
+			publishEvent(new com.kitapsepeti.order.service.event.StockCommitReadyEvent(order.getId()));
 		}
 		this.orders.flush();
 		return paymentTransition(outcome, order);
@@ -173,9 +198,16 @@ public class OrderTransactions {
 		};
 		if (result == TransitionResult.APPLIED) {
 			appendFailed(order);
+			publishEvent(new com.kitapsepeti.order.service.event.StockReleaseReadyEvent(order.getId()));
 		}
 		this.orders.flush();
 		return paymentTransition(outcome, order);
+	}
+
+	private void publishEvent(Object event) {
+		if (this.eventPublisher != null) {
+			this.eventPublisher.publishEvent(event);
+		}
 	}
 
 	private Transition transition(UUID orderId, Function<Order, TransitionResult> change) {
