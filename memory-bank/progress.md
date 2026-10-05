@@ -140,6 +140,14 @@
   gürültüsü giderildi, Order Testcontainers reuse (`order_test`). Testler: common 69, order 643. Yerel E2E: V3 uygulandı, Adım 4
   kalıntısı ilk turda paid oldu (sepeti kapandı), rezervasyonu dolduğu için stok lost; yeni checkout → paid → committed → sepet kapandı.
 
+- Order Adım 9 (COMMIT EDİLMEDİ): GET /api/orders?page=0&size=20 (Bearer) kullanıcının kendi siparişlerinin sayfalı özeti.
+  Catalog ile birebir aynı sayfalama kuralları (varsayılan page 0, size 20; page >= 0, size 1..50; geçersiz değerlerde 400 VALIDATION_FAILED;
+  sayfa zarfı items, page, size, 	otalElements, 	otalPages). Sıralama sabit created_at DESC, id DESC.
+  Öğe OrderSummaryResponse (id, status, failureCode, currency, totalAmount, itemCount, createdAt, updatedAt). Yasaklı alanlar
+  (address, items, stockState, paymentId, latePaymentAt) yok. N+1 yok (tek JPQL constructor projection + alt sorgu itemCount, sayım sorgusu
+  userId ile sınırlı). ix_orders_user_created (user_id, created_at, id) indeksi Backward index scan ile kullanılır (filesort yok).
+  1 ve 20 öğeli sayfalarda SQL sorgu sayısı sabit 2. Testler: common 69, order 657 (+14 test).
+
 ## Yapılacaklar
 - UI (paralel, Ekim 2026): Order sürerken UI-0 → UI-6 ayrı worktree'de (`kitapSepeti-ui`, branch `ui`); durum
   `memory-bank/frontend.md`'de. UI için backend işleri: B1 catalog `q` araması, B2 Docker'da katalog örnek verisi, B3 ADMIN kullanıcı.

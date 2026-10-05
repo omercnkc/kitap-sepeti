@@ -1413,10 +1413,18 @@
   - v1 kuponsuz.
   - Önce kayıt sonra dış çağrı: sipariş satırı kendi TX'inde yazılır, sonra rezervasyon/ödeme çağrıları.
   - Stok commit/release Catalog internal HTTP ile (`/internal/stock/reservations/{orderId}/commit|release`).
+- **Order Adım 9 (YAPILDI, COMMIT EDİLMEDİ): GET /api/orders kullanıcının kendi siparişleri sayfalı özeti.**
+  - Uç: `GET /api/orders?page=0&size=20` (Bearer). Yalnızca token sahibinin siparişleri (`@CurrentUserId`).
+  - Sayfalama sözleşmesi: Catalog `BookSearchRequest` / `PageResponse` ile birebir aynı: `page >= 0` (varsayılan 0), `size 1..50` (varsayılan 20). Geçersiz değerlerde aynı 400 `VALIDATION_FAILED` (`errors[{field, message}]`). Sıralama sabit: `created_at DESC, id DESC`; sort ve filtre parametresi yok.
+  - Yanıt zarfı: `PageResponse<OrderSummaryResponse>` (`items`, `page`, `size`, `totalElements`, `totalPages`). Aralık dışı sayfada boş `items`, doğru toplamlar.
+  - Öğe DTO'su: `OrderSummaryResponse(id, status, failureCode, currency, totalAmount, itemCount, createdAt, updatedAt)`. Para alanı detay uçla aynı (scale 2). Yasak alanlar (`address`, `items`, `stockState`, `paymentId`, `latePaymentAt`, `userId`, `cartId`, `subtotal`, `discountAmount`, `history`) JSON'da yok.
+  - Sorgu mimarisi: `OrderRepository.findSummariesByUserId` JPQL constructor projection + skaler alt sorgu `(select count(i) from OrderItem i where i.order = o)`. Tek SQL'de `itemCount` çekilir, N+1 yok. MySQL 8.4 `ix_orders_user_created (user_id, created_at, id)` bileşik indeksini backward index scan ile kullanır, filesort yok. Sayım sorgusu da `user_id` ile sınırlı ve aynı indeksi kullanır. 1 ve 20 öğeli sayfalarda SQL sorgu sayısı aynı (2 sorgu).
+  - Güvenlik ve yol maskeleme: `RequestPathMasker`'da yeni yol değişkeni yok (`/api/orders`), coverage testi yeşil. `SecurityRulesTest`'te daha önce henüz olmayan yol olarak varsayılan `/api/orders` beklentileri güncellendi (artık geçerli token'la 200).
+  - Testler: `OrderListTest` (14 test: boş liste 200/sayfa bilgileri, createdAt DESC + id DESC sıralama, sayfa sınırları/son sayfa/aralık dışı sayfa, kullanıcı izolasyonu ve totalElements, geçersiz page/size parametreleri 400, tokensız 401, öğe alanları/yasak alanlar, 1 ve 20 öğeli sayfalarda 2 SQL sorgusu / N+1 yokluğu, EXPLAIN indeks ve filesortsüzlük doğrulaması), `SecurityRulesTest` (26 test). `.\mvnw -pl order-service -am verify`: common 69, order 657 (önceki 643, +14).
 - Order planı: 0a common sertleştirme (YAPILDI) → 0b outbox → common (YAPILDI, push'landı) → 1 modül/db (YAPILDI, push'landı) → 2 domain (YAPILDI) → 3a Order istemcileri + CB (YAPILDI) → 3b Cart→Catalog CB (YAPILDI) → 4 checkout mutlu yol +
   GET {id} (YAPILDI) → 5 hata yolları/telafi (YAPILDI) → 6a Payment sonucu consumer+Order olayları (YAPILDI) → 6b stok
   commit/release+StockSyncJob+V2 lost (YAPILDI) → 7 Cart CartCheckedOut tüketicisi (YAPILDI) → 8 timeout görevi
-  (PendingReconciliationJob + late_payment, YAPILDI) → 9 liste → 10 OpenAPI/olay belgeleri → 11 Docker.
+  (PendingReconciliationJob + late_payment, YAPILDI) → 9 liste (YAPILDI) → 10 OpenAPI/olay belgeleri → 11 Docker.
 - (KAPANDI, Cart Adım 7) CartConcurrencyTest 500 flake'i: ilk sepet INSERT deadlock'u (1213) artık bir kez yeniden deneniyor.
 - (KAPANDI, Order Adım 8) Order consumer DLQ gürültüsü: error handler no-op, DLQ'da stack trace yok.
 - Veri Değiştirme Kuralı: Catalog ve User verisi YALNIZCA ilgili servisin API'siyle değiştirilir; doğrudan SQL ile yazma KESİNLİKLE YOKTUR (root yalnızca okuma). Admin token yoksa DUR ve sor. Raporda id, başlık, token, tutar ASLA YAZILMAZ.
