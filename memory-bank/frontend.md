@@ -1,10 +1,10 @@
 # Frontend (Kitap Sepeti UI)
 
-## Durum (UI-6 Adım 1–2)
+## Durum (UI-6 tamam)
 
 - Angular 13 NgModule; lazy features; proxy `/api` → Gateway 8080
-- UI-3…5 tamam; UI-6.1–2: profil PATCH + AddressForm
-- Sırada: AddressListPage (modal CRUD); UI-7 checkout; `q` arama (B1)
+- UI-3…6: auth, katalog, sepet, hesap (profil + adres CRUD)
+- Sırada: UI-7 checkout; `q` arama (B1)
 
 ## Hesap
 
@@ -14,6 +14,8 @@
 | AccountApi | `core/api/account.api.ts` | PATCH `/api/me`; addresses CRUD; setDefault=PATCH isDefault |
 | ProfilePage | `features/account/profile-page/` | Reactive Forms; phone `""` = sil |
 | AddressForm | `shared/components/address-form/` | sunum; checkout yeniden kullanır |
+| AddressListPage | `features/account/addresses-page/` | modal CRUD; `/addresses/:id` 404 EmptyState |
+| Header | `layout/header/` | Profil → `/account/profile`; Adreslerim → `/account/addresses` |
 
 ## Sepet
 

@@ -6,6 +6,7 @@ import { AddressesPageComponent } from './addresses-page/addresses-page.componen
 const routes: Routes = [
   { path: 'profile', component: ProfilePageComponent },
   { path: 'addresses', component: AddressesPageComponent },
+  { path: 'addresses/:id', component: AddressesPageComponent },
   { path: '', pathMatch: 'full', redirectTo: 'profile' },
 ];
 

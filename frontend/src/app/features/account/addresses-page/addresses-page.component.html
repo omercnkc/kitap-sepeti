@@ -1,4 +1,112 @@
-<section class="container py-4">
-  <h1 class="h4 mb-2">Adreslerim</h1>
-  <p class="text-muted mb-0">Adres yönetimi yakında burada olacak.</p>
+<section class="container py-4 addresses-page">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <h1 class="h4 mb-0">Adreslerim</h1>
+    <a routerLink="/account/profile" class="small text-decoration-none">Profile dön</a>
+  </div>
+
+  <app-spinner *ngIf="state === 'loading'"></app-spinner>
+
+  <app-empty-state
+    *ngIf="state === 'notFound'"
+    title="Adres bulunamadı"
+    message="Bu adres silinmiş olabilir veya size ait değil."
+    ctaLabel="Adreslerime dön"
+    ctaLink="/account/addresses"
+  ></app-empty-state>
+
+  <app-empty-state
+    *ngIf="state === 'error'"
+    title="Adresler yüklenemedi"
+    message="Liste alınamadı. Lütfen tekrar deneyin."
+    ctaLabel="Profile dön"
+    ctaLink="/account/profile"
+  ></app-empty-state>
+
+  <ng-container *ngIf="state === 'ready'">
+    <div class="d-flex justify-content-end mb-3" *ngIf="addresses.length > 0">
+      <button type="button" class="btn btn-primary btn-sm" (click)="openCreate()">
+        Adres ekle
+      </button>
+    </div>
+
+    <div *ngIf="addresses.length === 0" class="text-center py-4">
+      <h2 class="h5 mb-2">Henüz adres yok</h2>
+      <p class="text-muted mb-3">Teslimat için bir adres ekleyebilirsiniz.</p>
+      <button type="button" class="btn btn-primary btn-sm" (click)="openCreate()">
+        Adres ekle
+      </button>
+    </div>
+
+    <ul *ngIf="addresses.length > 0" class="list-unstyled addresses-page__list mb-0">
+      <li
+        *ngFor="let address of addresses; trackBy: trackById"
+        class="addresses-page__item border rounded p-3 mb-3"
+      >
+        <div class="d-flex flex-wrap align-items-start justify-content-between gap-2">
+          <div class="min-w-0">
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+              <span class="fw-semibold">
+                {{ address.label || address.recipientName }}
+              </span>
+              <span *ngIf="address.isDefault" class="badge bg-primary">Varsayılan</span>
+            </div>
+            <p class="small text-muted mb-1">{{ address.recipientName }} · {{ address.phone }}</p>
+            <p class="mb-0">{{ summaryLine(address) }}</p>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2">
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-secondary"
+              [disabled]="busyId === address.id"
+              (click)="openEdit(address)"
+            >
+              Düzenle
+            </button>
+            <button
+              *ngIf="!address.isDefault"
+              type="button"
+              class="btn btn-sm btn-outline-primary"
+              [disabled]="busyId === address.id"
+              (click)="onSetDefault(address)"
+            >
+              Varsayılan yap
+            </button>
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-danger"
+              [disabled]="busyId === address.id"
+              (click)="onDelete(address)"
+            >
+              Sil
+            </button>
+          </div>
+        </div>
+      </li>
+    </ul>
+  </ng-container>
 </section>
+
+<ng-template #addressModal let-modal>
+  <div class="modal-header">
+    <h2 class="modal-title h5 mb-0">
+      {{ editingAddress ? 'Adresi düzenle' : 'Yeni adres' }}
+    </h2>
+    <button
+      type="button"
+      class="btn-close"
+      aria-label="Kapat"
+      [disabled]="saving"
+      (click)="modal.dismiss()"
+    ></button>
+  </div>
+  <div class="modal-body">
+    <app-address-form
+      [address]="editingAddress"
+      [fieldErrors]="fieldErrors"
+      [submitting]="saving"
+      (save)="onFormSave($event)"
+      (cancel)="onFormCancel()"
+    ></app-address-form>
+  </div>
+</ng-template>

@@ -71,7 +71,8 @@ describe('HeaderComponent', () => {
 
     const el = fixture.nativeElement as HTMLElement;
     expect(el.textContent).toContain('Ali Veli');
-    expect(el.querySelector('a[routerLink="/account"]')).toBeTruthy();
+    expect(el.querySelector('a[routerLink="/account/profile"]')).toBeTruthy();
+    expect(el.querySelector('a[routerLink="/account/addresses"]')).toBeTruthy();
     expect(el.querySelector('a[routerLink="/orders"]')).toBeTruthy();
     expect(el.querySelector('a[routerLink="/admin"]')).toBeFalsy();
     expect(el.querySelector('a[routerLink="/login"]')).toBeFalsy();

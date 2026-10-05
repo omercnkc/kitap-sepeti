@@ -33,7 +33,10 @@
 
         <ng-container *ngIf="currentUser$ | async as user; else guestLinks">
           <li class="nav-item">
-            <a class="nav-link" routerLink="/account" routerLinkActive="active">Profil</a>
+            <a class="nav-link" routerLink="/account/profile" routerLinkActive="active">Profil</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" routerLink="/account/addresses" routerLinkActive="active">Adreslerim</a>
           </li>
           <li class="nav-item">
             <a class="nav-link" routerLink="/orders" routerLinkActive="active">Siparişler</a>
@@ -102,11 +105,19 @@
       <ng-container *ngIf="currentUser$ | async as user; else mobileGuest">
         <a
           class="nav-link px-0"
-          routerLink="/account"
+          routerLink="/account/profile"
           routerLinkActive="active"
           (click)="offcanvas.dismiss()"
         >
           Profil
+        </a>
+        <a
+          class="nav-link px-0"
+          routerLink="/account/addresses"
+          routerLinkActive="active"
+          (click)="offcanvas.dismiss()"
+        >
+          Adreslerim
         </a>
         <a
           class="nav-link px-0"
