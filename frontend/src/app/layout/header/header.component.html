@@ -1,0 +1,70 @@
+<header class="app-header border-bottom bg-white">
+  <nav class="navbar navbar-expand-lg navbar-light container py-2">
+    <a class="navbar-brand fw-semibold text-primary mb-0" routerLink="/books">
+      Kitap Sepeti
+    </a>
+
+    <button
+      type="button"
+      class="navbar-toggler d-lg-none"
+      aria-label="Menüyü aç"
+      (click)="openMenu(mobileMenu)"
+    >
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse d-none d-lg-flex">
+      <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
+        <li class="nav-item">
+          <a class="nav-link" routerLink="/books" routerLinkActive="active">Kitaplar</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" routerLink="/cart" routerLinkActive="active">Sepet</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" routerLink="/login" routerLinkActive="active">Giriş</a>
+        </li>
+      </ul>
+    </div>
+  </nav>
+</header>
+
+<ng-template #mobileMenu let-offcanvas>
+  <div class="offcanvas-header border-bottom">
+    <h2 class="offcanvas-title h5 mb-0">Menü</h2>
+    <button
+      type="button"
+      class="btn-close"
+      aria-label="Kapat"
+      (click)="offcanvas.dismiss()"
+    ></button>
+  </div>
+  <div class="offcanvas-body">
+    <nav class="nav flex-column gap-1">
+      <a
+        class="nav-link px-0"
+        routerLink="/books"
+        routerLinkActive="active"
+        (click)="offcanvas.dismiss()"
+      >
+        Kitaplar
+      </a>
+      <a
+        class="nav-link px-0"
+        routerLink="/cart"
+        routerLinkActive="active"
+        (click)="offcanvas.dismiss()"
+      >
+        Sepet
+      </a>
+      <a
+        class="nav-link px-0"
+        routerLink="/login"
+        routerLinkActive="active"
+        (click)="offcanvas.dismiss()"
+      >
+        Giriş
+      </a>
+    </nav>
+  </div>
+</ng-template>

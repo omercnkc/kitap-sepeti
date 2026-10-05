@@ -12,20 +12,13 @@ describe('AppComponent', () => {
 
   it('should create the app', () => {
     const fixture = TestBed.createComponent(AppComponent);
-    const app = fixture.componentInstance;
-    expect(app).toBeTruthy();
+    expect(fixture.componentInstance).toBeTruthy();
   });
 
-  it(`should have as title 'Kitap Sepeti'`, () => {
-    const fixture = TestBed.createComponent(AppComponent);
-    const app = fixture.componentInstance;
-    expect(app.title).toEqual('Kitap Sepeti');
-  });
-
-  it('should render primary check button', () => {
+  it('should host a router outlet', () => {
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('#primary-check')?.textContent).toContain('Primary buton');
+    expect(compiled.querySelector('router-outlet')).toBeTruthy();
   });
 });

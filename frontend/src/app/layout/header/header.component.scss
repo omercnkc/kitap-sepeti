@@ -1,0 +1,17 @@
+@import 'styles/variables';
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 1030;
+}
+
+.navbar-brand {
+  font-size: 1.15rem;
+  letter-spacing: 0.01em;
+}
+
+.nav-link.active {
+  color: $primary !important;
+  font-weight: 600;
+}
