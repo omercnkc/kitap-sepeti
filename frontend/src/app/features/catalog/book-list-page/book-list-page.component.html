@@ -1,38 +1,84 @@
 <section class="container py-4">
-  <h1 class="h4 mb-3">Kitaplar</h1>
+  <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+    <h1 class="h4 mb-0">Kitaplar</h1>
+    <button
+      type="button"
+      class="btn btn-outline-secondary btn-sm d-lg-none"
+      (click)="openFilters(filtersOffcanvas)"
+    >
+      Filtreler
+    </button>
+  </div>
 
-  <ng-container *ngIf="state$ | async as state">
-    <app-spinner *ngIf="state.kind === 'loading'"></app-spinner>
+  <div class="row g-4">
+    <aside class="col-lg-3 d-none d-lg-block">
+      <app-book-filters
+        *ngIf="(categories$ | async) as categories"
+        [categories]="categories"
+        [filter]="(filter$ | async) || {}"
+        [priceRangeError]="(priceRangeError$ | async) || null"
+        (filterChange)="onFilterChange($event)"
+        (clear)="onClearFilters()"
+      ></app-book-filters>
+    </aside>
 
-    <app-empty-state
-      *ngIf="state.kind === 'empty'"
-      title="Kitap bulunamadı"
-      message="Bu filtrelere uyan yayınlanmış kitap yok."
-    ></app-empty-state>
+    <div class="col-lg-9">
+      <ng-container *ngIf="state$ | async as state">
+        <app-spinner *ngIf="state.kind === 'loading'"></app-spinner>
 
-    <app-empty-state
-      *ngIf="state.kind === 'error'"
-      title="Liste yüklenemedi"
-      message="Katalog şu an görüntülenemiyor. Biraz sonra tekrar deneyin."
-    ></app-empty-state>
+        <app-empty-state
+          *ngIf="state.kind === 'empty'"
+          title="Kitap bulunamadı"
+          message="Bu filtrelere uyan yayınlanmış kitap yok."
+        ></app-empty-state>
 
-    <div *ngIf="state.kind === 'ready'" class="row g-3">
-      <div
-        *ngFor="let book of state.page.items"
-        class="col-6 col-sm-4 col-md-3 col-lg-3 col-xl-2"
-      >
-        <app-book-card [book]="book" (addToCart)="onAddToCart($event)"></app-book-card>
-      </div>
+        <app-empty-state
+          *ngIf="state.kind === 'error'"
+          title="Liste yüklenemedi"
+          message="Katalog şu an görüntülenemiyor. Biraz sonra tekrar deneyin."
+        ></app-empty-state>
+
+        <div *ngIf="state.kind === 'ready'" class="row g-3">
+          <div
+            *ngFor="let book of state.page.items"
+            class="col-6 col-sm-4 col-md-3 col-xl-3"
+          >
+            <app-book-card [book]="book" (addToCart)="onAddToCart($event)"></app-book-card>
+          </div>
+        </div>
+
+        <app-pagination
+          *ngIf="state.kind === 'ready' || state.kind === 'empty'"
+          class="mt-4"
+          [pageIndex]="state.page.page"
+          [pageSize]="state.page.size"
+          [totalElements]="state.page.totalElements"
+          [totalPages]="state.page.totalPages"
+          (pageIndexChange)="onPageIndexChange($event)"
+        ></app-pagination>
+      </ng-container>
     </div>
-
-    <app-pagination
-      *ngIf="state.kind === 'ready' || state.kind === 'empty'"
-      class="mt-4"
-      [pageIndex]="state.page.page"
-      [pageSize]="state.page.size"
-      [totalElements]="state.page.totalElements"
-      [totalPages]="state.page.totalPages"
-      (pageIndexChange)="onPageIndexChange($event)"
-    ></app-pagination>
-  </ng-container>
+  </div>
 </section>
+
+<ng-template #filtersOffcanvas let-offcanvas>
+  <div class="offcanvas-header border-bottom">
+    <h2 class="offcanvas-title h5 mb-0">Filtreler</h2>
+    <button
+      type="button"
+      class="btn-close"
+      aria-label="Kapat"
+      (click)="offcanvas.dismiss()"
+    ></button>
+  </div>
+  <div class="offcanvas-body">
+    <app-book-filters
+      *ngIf="(categories$ | async) as categories"
+      [categories]="categories"
+      [filter]="(filter$ | async) || {}"
+      [priceRangeError]="(priceRangeError$ | async) || null"
+      (filterChange)="onFilterChange($event); offcanvas.dismiss()"
+      (clear)="onClearFilters(); offcanvas.dismiss()"
+    ></app-book-filters>
+  </div>
+</ng-template>

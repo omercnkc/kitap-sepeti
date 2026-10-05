@@ -1,8 +1,10 @@
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { convertToParamMap } from '@angular/router';
+import { convertToParamMap, Router } from '@angular/router';
 import { RouterTestingModule } from '@angular/router/testing';
+import { NgbModule } from '@ng-bootstrap/ng-bootstrap';
 import { SharedModule } from '../../../shared/shared.module';
+import { BookFiltersComponent } from '../book-filters/book-filters.component';
 import { bookFilterFromParams, BookListPageComponent } from './book-list-page.component';
 
 describe('bookFilterFromParams', () => {
@@ -25,6 +27,7 @@ describe('bookFilterFromParams', () => {
 describe('BookListPageComponent', () => {
   let fixture: ComponentFixture<BookListPageComponent>;
   let httpMock: HttpTestingController;
+  let router: Router;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -32,12 +35,15 @@ describe('BookListPageComponent', () => {
         HttpClientTestingModule,
         RouterTestingModule.withRoutes([{ path: 'books', component: BookListPageComponent }]),
         SharedModule,
+        NgbModule,
       ],
-      declarations: [BookListPageComponent],
+      declarations: [BookListPageComponent, BookFiltersComponent],
     }).compileComponents();
 
     fixture = TestBed.createComponent(BookListPageComponent);
     httpMock = TestBed.inject(HttpTestingController);
+    router = TestBed.inject(Router);
+    spyOn(router, 'navigate').and.resolveTo(true);
     fixture.detectChanges();
   });
 
@@ -45,11 +51,9 @@ describe('BookListPageComponent', () => {
     httpMock.verify();
   });
 
-  it('loads books from CatalogApi with default page/size', () => {
-    const req = httpMock.expectOne((r) => r.url === '/api/books');
-    expect(req.request.params.get('page')).toBe('0');
-    expect(req.request.params.get('size')).toBe('20');
-    req.flush({
+  function flushInitial(): void {
+    httpMock.expectOne('/api/categories').flush([]);
+    httpMock.expectOne((r) => r.url === '/api/books').flush({
       items: [
         {
           id: 'b1',
@@ -67,8 +71,30 @@ describe('BookListPageComponent', () => {
       totalPages: 1,
     });
     fixture.detectChanges();
+  }
 
+  it('loads books from CatalogApi with default page/size', () => {
+    flushInitial();
     const el = fixture.nativeElement as HTMLElement;
     expect(el.textContent).toContain('Deneme');
+  });
+
+  it('writes categoryId and resets page on filter change', () => {
+    flushInitial();
+    fixture.componentInstance.onFilterChange({ categoryId: 'cat-1' });
+    expect(router.navigate).toHaveBeenCalledWith(
+      [],
+      jasmine.objectContaining({
+        queryParams: { page: 0, categoryId: 'cat-1' },
+        queryParamsHandling: 'merge',
+      }),
+    );
+  });
+
+  it('blocks invalid price range without navigating', () => {
+    flushInitial();
+    (router.navigate as jasmine.Spy).calls.reset();
+    fixture.componentInstance.onFilterChange({ minPrice: 100, maxPrice: 10 });
+    expect(router.navigate).not.toHaveBeenCalled();
   });
 });

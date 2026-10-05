@@ -1,0 +1,90 @@
+<div class="book-filters">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h2 class="h6 mb-0">Filtreler</h2>
+    <button type="button" class="btn btn-link btn-sm px-0" (click)="onClear()">Temizle</button>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label small mb-1" for="book-sort">Sıralama</label>
+    <select
+      id="book-sort"
+      class="form-select form-select-sm"
+      [value]="filter.sort || 'newest'"
+      (change)="onSortChange($any($event.target).value)"
+    >
+      <option *ngFor="let opt of sortOptions" [value]="opt.value">{{ opt.label }}</option>
+    </select>
+  </div>
+
+  <div class="mb-3">
+    <span class="form-label small d-block mb-1">Fiyat (₺)</span>
+    <div class="row g-2 align-items-end">
+      <div class="col-6">
+        <label class="visually-hidden" for="book-min-price">Min</label>
+        <input
+          id="book-min-price"
+          type="number"
+          min="0"
+          step="0.01"
+          class="form-control form-control-sm"
+          placeholder="Min"
+          [value]="draftMinPrice"
+          (input)="draftMinPrice = $any($event.target).value"
+        />
+      </div>
+      <div class="col-6">
+        <label class="visually-hidden" for="book-max-price">Max</label>
+        <input
+          id="book-max-price"
+          type="number"
+          min="0"
+          step="0.01"
+          class="form-control form-control-sm"
+          placeholder="Max"
+          [value]="draftMaxPrice"
+          (input)="draftMaxPrice = $any($event.target).value"
+        />
+      </div>
+    </div>
+    <div *ngIf="priceRangeError" class="text-danger small mt-1">{{ priceRangeError }}</div>
+    <button type="button" class="btn btn-outline-secondary btn-sm w-100 mt-2" (click)="onApplyPrice()">
+      Fiyatı uygula
+    </button>
+  </div>
+
+  <div class="mb-1">
+    <span class="form-label small d-block mb-2">Kategori</span>
+    <button
+      type="button"
+      class="btn btn-sm w-100 text-start mb-1"
+      [class.btn-primary]="!filter.categoryId"
+      [class.btn-outline-secondary]="!!filter.categoryId"
+      (click)="onCategorySelect(null)"
+    >
+      Tümü
+    </button>
+    <ng-container *ngFor="let cat of categories">
+      <ng-container
+        *ngTemplateOutlet="catNode; context: { $implicit: cat, depth: 0 }"
+      ></ng-container>
+    </ng-container>
+  </div>
+</div>
+
+<ng-template #catNode let-cat let-depth="depth">
+  <button
+    type="button"
+    class="btn btn-sm w-100 text-start mb-1"
+    [style.paddingLeft.rem]="0.75 + depth * 0.75"
+    [class.btn-primary]="isCategorySelected(cat.id)"
+    [class.btn-outline-secondary]="!isCategorySelected(cat.id)"
+    (click)="onCategorySelect(cat.id)"
+  >
+    {{ cat.name }}
+  </button>
+  <ng-container *ngFor="let child of cat.children">
+    <ng-container
+      *ngTemplateOutlet="catNode; context: { $implicit: child, depth: depth + 1 }"
+    ></ng-container>
+  </ng-container>
+</ng-template>

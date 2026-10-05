@@ -18,12 +18,74 @@
       ctaLink="/books"
     ></app-empty-state>
 
-    <ng-container *ngIf="state.kind === 'ready'">
-      <h1 class="h4 mb-2">{{ state.book.title }}</h1>
-      <p class="text-muted mb-2">
-        {{ state.book.priceAmount | currency: 'TRY' : 'symbol' : '1.2-2' : 'tr-TR' }}
-      </p>
-      <p *ngIf="state.book.description" class="mb-0">{{ state.book.description }}</p>
-    </ng-container>
+    <article *ngIf="state.kind === 'ready'" class="book-detail row g-4">
+      <div class="col-md-4 col-lg-3">
+        <img
+          *ngIf="state.book.coverUrl; else noCover"
+          [src]="state.book.coverUrl"
+          [alt]="state.book.title"
+          class="book-detail__cover img-fluid rounded"
+        />
+        <ng-template #noCover>
+          <div class="book-detail__cover book-detail__cover--placeholder rounded" aria-hidden="true"></div>
+        </ng-template>
+      </div>
+
+      <div class="col-md-8 col-lg-9">
+        <p class="mb-2">
+          <a routerLink="/books" class="small text-decoration-none">&larr; Kitaplara dön</a>
+        </p>
+        <h1 class="h3 mb-2">{{ state.book.title }}</h1>
+
+        <p *ngIf="authorsLabel(state.book)" class="text-muted mb-1">
+          {{ authorsLabel(state.book) }}
+        </p>
+        <p *ngIf="state.book.publisher" class="text-muted small mb-2">
+          {{ state.book.publisher.name }}
+        </p>
+
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+          <span class="fs-5 fw-semibold">
+            {{
+              state.book.priceAmount
+                | currency: (state.book.currency || 'TRY') : 'symbol' : '1.2-2' : 'tr-TR'
+            }}
+          </span>
+          <span *ngIf="state.book.inStock" class="badge bg-success">Stokta</span>
+          <span *ngIf="!state.book.inStock" class="badge bg-secondary">Tükendi</span>
+        </div>
+
+        <ul class="list-unstyled small text-muted mb-3">
+          <li *ngIf="categoriesLabel(state.book)">
+            <span class="text-body">Kategori:</span> {{ categoriesLabel(state.book) }}
+          </li>
+          <li *ngIf="state.book.isbn">
+            <span class="text-body">ISBN:</span> {{ state.book.isbn }}
+          </li>
+          <li *ngIf="state.book.pageCount">
+            <span class="text-body">Sayfa:</span> {{ state.book.pageCount }}
+          </li>
+          <li *ngIf="state.book.publishedAt">
+            <span class="text-body">Yayın:</span>
+            {{ state.book.publishedAt | date: 'mediumDate' : undefined : 'tr-TR' }}
+          </li>
+        </ul>
+
+        <button
+          type="button"
+          class="btn btn-primary"
+          [disabled]="!state.book.inStock"
+          (click)="onAddToCart(state.book)"
+        >
+          {{ state.book.inStock ? 'Sepete ekle' : 'Tükendi' }}
+        </button>
+        <!-- TODO(UI-5): gerçek sepete ekleme -->
+
+        <div *ngIf="state.book.description" class="mt-4">
+          <h2 class="h6">Açıklama</h2>
+          <p class="mb-0 text-body" style="white-space: pre-line">{{ state.book.description }}</p>
+        </div>
+      </div>
+    </article>
   </ng-container>
 </section>

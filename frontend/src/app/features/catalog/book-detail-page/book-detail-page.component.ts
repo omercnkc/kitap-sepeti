@@ -1,8 +1,9 @@
 import { ChangeDetectionStrategy, Component, OnDestroy, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
-import { BehaviorSubject, Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { BehaviorSubject, EMPTY, Subject } from 'rxjs';
+import { catchError, switchMap, takeUntil, tap } from 'rxjs/operators';
 import { CatalogApi } from '../../../core/api/catalog.api';
+import { toProblemDetail } from '../../../core/interceptors/error.interceptor';
 import { BookDetail } from '../../../core/models';
 
 type DetailState =
@@ -22,39 +23,60 @@ export class BookDetailPageComponent implements OnInit, OnDestroy {
   private readonly stateSubject = new BehaviorSubject<DetailState>({ kind: 'loading' });
 
   readonly state$ = this.stateSubject.asObservable();
-  readonly bookId: string | null;
 
   constructor(
     private readonly route: ActivatedRoute,
     private readonly catalogApi: CatalogApi,
-  ) {
-    this.bookId = this.route.snapshot.paramMap.get('id');
-  }
+  ) {}
 
   ngOnInit(): void {
-    if (!this.bookId) {
-      this.stateSubject.next({ kind: 'notFound' });
-      return;
-    }
-
-    this.catalogApi
-      .getById(this.bookId)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (book) => this.stateSubject.next({ kind: 'ready', book }),
-        error: (err: { status?: number }) => {
-          if (err && err.status === 404) {
+    this.route.paramMap
+      .pipe(
+        takeUntil(this.destroy$),
+        tap(() => this.stateSubject.next({ kind: 'loading' })),
+        switchMap((params) => {
+          const id = params.get('id');
+          if (!id) {
             this.stateSubject.next({ kind: 'notFound' });
-          } else {
-            this.stateSubject.next({ kind: 'error' });
+            return EMPTY;
           }
-        },
-      });
+          return this.catalogApi.getById(id).pipe(
+            catchError((err: unknown) => {
+              const problem = toProblemDetail(err);
+              if (problem.status === 404) {
+                this.stateSubject.next({ kind: 'notFound' });
+              } else {
+                this.stateSubject.next({ kind: 'error' });
+              }
+              return EMPTY;
+            }),
+          );
+        }),
+      )
+      .subscribe((book) => this.stateSubject.next({ kind: 'ready', book }));
   }
 
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
     this.stateSubject.complete();
+  }
+
+  authorsLabel(book: BookDetail): string {
+    if (!book.authors || book.authors.length === 0) {
+      return '';
+    }
+    return book.authors.map((a) => a.name).join(', ');
+  }
+
+  categoriesLabel(book: BookDetail): string {
+    if (!book.categories || book.categories.length === 0) {
+      return '';
+    }
+    return book.categories.map((c) => c.name).join(', ');
+  }
+
+  onAddToCart(_book: BookDetail): void {
+    // TODO(UI-5): CartStore / CartApi
   }
 }

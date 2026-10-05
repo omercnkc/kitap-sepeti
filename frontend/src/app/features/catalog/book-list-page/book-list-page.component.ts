@@ -1,9 +1,11 @@
-import { ChangeDetectionStrategy, Component, OnDestroy, OnInit } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, TemplateRef } from '@angular/core';
 import { ActivatedRoute, ParamMap, Router } from '@angular/router';
-import { BehaviorSubject, EMPTY, Subject } from 'rxjs';
-import { catchError, switchMap, takeUntil, tap } from 'rxjs/operators';
+import { NgbOffcanvas } from '@ng-bootstrap/ng-bootstrap';
+import { BehaviorSubject, EMPTY, Observable, Subject, of } from 'rxjs';
+import { catchError, map, switchMap, takeUntil, tap } from 'rxjs/operators';
 import { CatalogApi } from '../../../core/api/catalog.api';
-import { BookFilter, BookSummary, PageResponse } from '../../../core/models';
+import { BookFilter, BookSummary, CategoryTree, PageResponse } from '../../../core/models';
+import { BookFilterChange } from '../book-filters/book-filters.component';
 
 type ListState =
   | { kind: 'loading' }
@@ -14,6 +16,16 @@ type ListState =
 const DEFAULT_PAGE = 0;
 const DEFAULT_SIZE = 20;
 
+const CLEARABLE_PARAMS = [
+  'categoryId',
+  'publisherId',
+  'authorId',
+  'minPrice',
+  'maxPrice',
+  'sort',
+  'page',
+] as const;
+
 @Component({
   selector: 'app-book-list-page',
   templateUrl: './book-list-page.component.html',
@@ -23,20 +35,39 @@ const DEFAULT_SIZE = 20;
 export class BookListPageComponent implements OnInit, OnDestroy {
   private readonly destroy$ = new Subject<void>();
   private readonly stateSubject = new BehaviorSubject<ListState>({ kind: 'loading' });
+  private readonly categoriesSubject = new BehaviorSubject<CategoryTree[]>([]);
+  private readonly priceErrorSubject = new BehaviorSubject<string | null>(null);
 
   readonly state$ = this.stateSubject.asObservable();
+  readonly categories$ = this.categoriesSubject.asObservable();
+  readonly priceRangeError$ = this.priceErrorSubject.asObservable();
+  readonly filter$: Observable<BookFilter> = this.route.queryParamMap.pipe(
+    map((params) => bookFilterFromParams(params)),
+  );
 
   constructor(
     private readonly catalogApi: CatalogApi,
     private readonly route: ActivatedRoute,
     private readonly router: Router,
+    private readonly offcanvas: NgbOffcanvas,
   ) {}
 
   ngOnInit(): void {
+    this.catalogApi
+      .categories()
+      .pipe(
+        takeUntil(this.destroy$),
+        catchError(() => of([] as CategoryTree[])),
+      )
+      .subscribe((cats) => this.categoriesSubject.next(cats));
+
     this.route.queryParamMap
       .pipe(
         takeUntil(this.destroy$),
-        tap(() => this.stateSubject.next({ kind: 'loading' })),
+        tap(() => {
+          this.priceErrorSubject.next(null);
+          this.stateSubject.next({ kind: 'loading' });
+        }),
         switchMap((params) => {
           const filter = bookFilterFromParams(params);
           return this.catalogApi.list(filter).pipe(
@@ -60,6 +91,63 @@ export class BookListPageComponent implements OnInit, OnDestroy {
     this.destroy$.next();
     this.destroy$.complete();
     this.stateSubject.complete();
+    this.categoriesSubject.complete();
+    this.priceErrorSubject.complete();
+  }
+
+  openFilters(content: TemplateRef<unknown>): void {
+    this.offcanvas.open(content, {
+      position: 'start',
+      panelClass: 'book-filters-offcanvas',
+    });
+  }
+
+  onFilterChange(change: BookFilterChange): void {
+    if (
+      change.minPrice !== undefined &&
+      change.maxPrice !== undefined &&
+      change.minPrice !== null &&
+      change.maxPrice !== null &&
+      change.minPrice > change.maxPrice
+    ) {
+      this.priceErrorSubject.next('Minimum fiyat, maksimum fiyattan büyük olamaz.');
+      return;
+    }
+
+    this.priceErrorSubject.next(null);
+    const queryParams: Record<string, string | number | null> = { page: 0 };
+
+    if (change.categoryId !== undefined) {
+      queryParams['categoryId'] = change.categoryId;
+    }
+    if (change.sort !== undefined) {
+      queryParams['sort'] = change.sort;
+    }
+    if (change.minPrice !== undefined) {
+      queryParams['minPrice'] = change.minPrice;
+    }
+    if (change.maxPrice !== undefined) {
+      queryParams['maxPrice'] = change.maxPrice;
+    }
+
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams,
+      queryParamsHandling: 'merge',
+    });
+  }
+
+  onClearFilters(): void {
+    this.priceErrorSubject.next(null);
+    const queryParams: Record<string, null> = {};
+    CLEARABLE_PARAMS.forEach((key) => {
+      queryParams[key] = null;
+    });
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams,
+      queryParamsHandling: 'merge',
+    });
   }
 
   onPageIndexChange(pageIndex: number): void {
