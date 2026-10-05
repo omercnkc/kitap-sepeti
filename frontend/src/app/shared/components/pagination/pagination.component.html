@@ -1,0 +1,12 @@
+<nav *ngIf="visible" class="app-pagination d-flex justify-content-center" aria-label="Sayfalama">
+  <ngb-pagination
+    [collectionSize]="collectionSize"
+    [pageSize]="pageSize"
+    [page]="uiPage"
+    [maxSize]="maxSize"
+    [rotate]="true"
+    [boundaryLinks]="true"
+    [directionLinks]="true"
+    (pageChange)="onPageChange($event)"
+  ></ngb-pagination>
+</nav>

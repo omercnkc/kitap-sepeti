@@ -1,0 +1,42 @@
+<article class="book-card h-100 d-flex flex-column">
+  <a [routerLink]="['/books', book.id]" class="book-card__media text-decoration-none">
+    <img
+      *ngIf="book.coverUrl; else noCover"
+      [src]="book.coverUrl"
+      [alt]="book.title"
+      class="book-card__cover"
+      loading="lazy"
+    />
+    <ng-template #noCover>
+      <div class="book-card__cover book-card__cover--placeholder" aria-hidden="true"></div>
+    </ng-template>
+  </a>
+
+  <div class="book-card__body d-flex flex-column flex-grow-1">
+    <a
+      [routerLink]="['/books', book.id]"
+      class="book-card__title text-decoration-none text-body fw-semibold"
+    >
+      {{ book.title }}
+    </a>
+    <p *ngIf="authorsLabel(book)" class="book-card__authors text-muted small mb-2">
+      {{ authorsLabel(book) }}
+    </p>
+
+    <div class="mt-auto d-flex align-items-center justify-content-between gap-2">
+      <span class="book-card__price fw-semibold">
+        {{ book.priceAmount | currency: (book.currency || 'TRY') : 'symbol' : '1.2-2' : 'tr-TR' }}
+      </span>
+      <span *ngIf="!book.inStock" class="badge bg-secondary">Tükendi</span>
+    </div>
+
+    <button
+      type="button"
+      class="btn btn-sm btn-outline-primary w-100 mt-2"
+      [disabled]="!book.inStock"
+      (click)="onAddToCart($event)"
+    >
+      Sepete ekle
+    </button>
+  </div>
+</article>

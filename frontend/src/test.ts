@@ -1,11 +1,15 @@
 // This file is required by karma.conf.js and loads recursively all the .spec and framework files
 
 import 'zone.js/testing';
+import { registerLocaleData } from '@angular/common';
+import localeTr from '@angular/common/locales/tr';
 import { getTestBed } from '@angular/core/testing';
 import {
   BrowserDynamicTestingModule,
   platformBrowserDynamicTesting
 } from '@angular/platform-browser-dynamic/testing';
+
+registerLocaleData(localeTr);
 
 declare const require: {
   context(path: string, deep?: boolean, filter?: RegExp): {

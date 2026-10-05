@@ -1,14 +1,19 @@
 # Frontend (Kitap Sepeti UI)
 
-## Durum (UI-3 tamam)
+## Durum (UI-4 Adım 1–3)
 
-- Angular 13 NgModule iskeleti, global SCSS (Bootstrap kaynak), layout (Shell/Header/Footer/NotFound)
-- Lazy feature modülleri: catalog, auth (login/register), cart, checkout, orders, account, notifications, admin
-- Geliştirme proxy: `/api` → `http://localhost:8080` (API Gateway)
-- Locale: `tr-TR` (`LOCALE_ID` + `registerLocaleData`)
-- UI-2: models, CatalogApi, Toast, ErrorInterceptor, Spinner/EmptyState/FieldError; `/books` liste denemesi
-- UI-3: AuthApi/TokenStorage/AuthService, Login/Register, APP_INITIALIZER, AuthInterceptor, Auth/Guest/AdminGuard, Header menü
-- Sırada: UI-4 Katalog UI
+- Angular 13 NgModule; lazy features; proxy `/api` → Gateway 8080
+- UI-3 auth katmanı tamam (interceptor, guard, login/register)
+- UI-4.1–3: BookCard, BookListPage (queryParams → CatalogApi), Pagination (0↔1 tabanlı)
+- Sırada: filtre paneli / kitap detay (UI-4 sonraki)
+
+## Katalog UI
+
+| Parça | Yol | Not |
+| --- | --- | --- |
+| BookCard | `shared/components/book-card/` | max 280px; Tükendi; addToCart emit (Cart UI-5) |
+| Pagination | `shared/components/pagination/` | NgbPagination; backend page 0-tabanlı |
+| BookListPage | `features/catalog/book-list-page/` | sort/page/size/… queryParams; switchMap iptal |
 
 ## Auth katmanı
 

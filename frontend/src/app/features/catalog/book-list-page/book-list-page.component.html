@@ -7,7 +7,7 @@
     <app-empty-state
       *ngIf="state.kind === 'empty'"
       title="Kitap bulunamadı"
-      message="Henüz listelenecek yayınlanmış kitap yok."
+      message="Bu filtrelere uyan yayınlanmış kitap yok."
     ></app-empty-state>
 
     <app-empty-state
@@ -16,15 +16,23 @@
       message="Katalog şu an görüntülenemiyor. Biraz sonra tekrar deneyin."
     ></app-empty-state>
 
-    <ul *ngIf="state.kind === 'ready'" class="list-unstyled mb-0">
-      <li *ngFor="let book of state.books" class="border-bottom py-2">
-        <a [routerLink]="['/books', book.id]" class="text-decoration-none">
-          <span class="fw-semibold text-body">{{ book.title }}</span>
-        </a>
-        <span class="text-muted small ms-2">
-          {{ book.priceAmount | currency: 'TRY' : 'symbol' : '1.2-2' : 'tr-TR' }}
-        </span>
-      </li>
-    </ul>
+    <div *ngIf="state.kind === 'ready'" class="row g-3">
+      <div
+        *ngFor="let book of state.page.items"
+        class="col-6 col-sm-4 col-md-3 col-lg-3 col-xl-2"
+      >
+        <app-book-card [book]="book" (addToCart)="onAddToCart($event)"></app-book-card>
+      </div>
+    </div>
+
+    <app-pagination
+      *ngIf="state.kind === 'ready' || state.kind === 'empty'"
+      class="mt-4"
+      [pageIndex]="state.page.page"
+      [pageSize]="state.page.size"
+      [totalElements]="state.page.totalElements"
+      [totalPages]="state.page.totalPages"
+      (pageIndexChange)="onPageIndexChange($event)"
+    ></app-pagination>
   </ng-container>
 </section>

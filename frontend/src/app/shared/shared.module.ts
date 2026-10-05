@@ -6,6 +6,8 @@ import { ToastContainerComponent } from './components/toast-container/toast-cont
 import { SpinnerComponent } from './components/spinner/spinner.component';
 import { EmptyStateComponent } from './components/empty-state/empty-state.component';
 import { FieldErrorComponent } from './components/field-error/field-error.component';
+import { BookCardComponent } from './components/book-card/book-card.component';
+import { PaginationComponent } from './components/pagination/pagination.component';
 
 /**
  * Ortak sunum parçaları (pipe, presentational component) burada export edilir.
@@ -17,6 +19,8 @@ import { FieldErrorComponent } from './components/field-error/field-error.compon
     SpinnerComponent,
     EmptyStateComponent,
     FieldErrorComponent,
+    BookCardComponent,
+    PaginationComponent,
   ],
   imports: [CommonModule, RouterModule, NgbModule],
   exports: [
@@ -27,6 +31,8 @@ import { FieldErrorComponent } from './components/field-error/field-error.compon
     SpinnerComponent,
     EmptyStateComponent,
     FieldErrorComponent,
+    BookCardComponent,
+    PaginationComponent,
   ],
 })
 export class SharedModule {}
