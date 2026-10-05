@@ -1,0 +1,141 @@
+<section class="admin-books">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <h2 class="h4 mb-0">Kitaplar</h2>
+    <button type="button" class="btn btn-primary btn-sm" (click)="openCreate()">
+      Yeni kitap
+    </button>
+  </div>
+
+  <div class="row g-2 align-items-end mb-3">
+    <div class="col-sm-6 col-md-4 col-lg-3">
+      <label class="form-label small mb-1" for="book-status-filter">Durum</label>
+      <select
+        id="book-status-filter"
+        class="form-select form-select-sm"
+        [value]="statusFilter"
+        (change)="onStatusChange($any($event.target).value)"
+      >
+        <option *ngFor="let opt of statusOptions" [value]="opt.value">
+          {{ opt.label }}
+        </option>
+      </select>
+    </div>
+  </div>
+
+  <app-spinner *ngIf="pageState === 'loading'" label="Kitaplar yükleniyor…"></app-spinner>
+
+  <app-empty-state
+    *ngIf="pageState === 'empty'"
+    [title]="statusFilter ? 'Bu filtrede kitap yok' : 'Henüz kitap yok'"
+    [message]="
+      statusFilter
+        ? 'Başka bir durum seçin veya yeni kitap ekleyin.'
+        : 'İlk kitabı taslak olarak oluşturabilirsiniz.'
+    "
+  ></app-empty-state>
+
+  <div *ngIf="pageState === 'empty'" class="text-center mb-3">
+    <button type="button" class="btn btn-primary btn-sm" (click)="openCreate()">
+      Yeni kitap
+    </button>
+  </div>
+
+  <app-empty-state
+    *ngIf="pageState === 'error'"
+    title="Kitaplar yüklenemedi"
+    message="Liste alınamadı. Lütfen biraz sonra tekrar deneyin."
+  ></app-empty-state>
+
+  <ng-container *ngIf="pageState === 'ready'">
+    <div class="table-responsive d-none d-lg-block">
+      <table class="table table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th scope="col">Başlık</th>
+            <th scope="col">Yayınevi</th>
+            <th scope="col">Durum</th>
+            <th scope="col" class="text-end">Fiyat</th>
+            <th scope="col" class="text-end">Stok</th>
+            <th scope="col" class="text-end">Rezerve</th>
+            <th scope="col" class="text-end">Uygun</th>
+            <th scope="col" class="text-end">İşlem</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            *ngFor="let item of items; trackBy: trackById"
+            class="admin-books__row"
+            role="link"
+            tabindex="0"
+            (click)="openEdit(item)"
+            (keydown.enter)="openEdit(item)"
+          >
+            <td class="fw-semibold">{{ item.title }}</td>
+            <td>{{ item.publisher.name }}</td>
+            <td>
+              <span class="badge" [ngClass]="statusBadgeClass(item.status)">
+                {{ statusLabel(item.status) }}
+              </span>
+            </td>
+            <td class="text-end text-nowrap">
+              {{
+                item.priceAmount
+                  | currency: (item.currency || 'TRY') : 'symbol' : '1.2-2' : 'tr-TR'
+              }}
+            </td>
+            <td class="text-end">{{ item.stockQuantity }}</td>
+            <td class="text-end">{{ item.reservedQuantity }}</td>
+            <td class="text-end">{{ item.availableQuantity }}</td>
+            <td class="text-end" (click)="$event.stopPropagation()">
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-secondary"
+                (click)="openEdit(item)"
+              >
+                Düzenle
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <ul class="list-unstyled d-lg-none mb-0">
+      <li *ngFor="let item of items; trackBy: trackById" class="mb-2">
+        <button
+          type="button"
+          class="admin-books__card border rounded p-3 w-100 text-start bg-white"
+          (click)="openEdit(item)"
+        >
+          <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+            <span class="fw-semibold">{{ item.title }}</span>
+            <span class="badge" [ngClass]="statusBadgeClass(item.status)">
+              {{ statusLabel(item.status) }}
+            </span>
+          </div>
+          <div class="small text-muted mb-2">{{ item.publisher.name }}</div>
+          <div class="d-flex flex-wrap gap-3 small">
+            <span>
+              {{
+                item.priceAmount
+                  | currency: (item.currency || 'TRY') : 'symbol' : '1.2-2' : 'tr-TR'
+              }}
+            </span>
+            <span>Stok {{ item.stockQuantity }}</span>
+            <span>Rez. {{ item.reservedQuantity }}</span>
+            <span>Uygun {{ item.availableQuantity }}</span>
+          </div>
+        </button>
+      </li>
+    </ul>
+
+    <app-pagination
+      class="d-block mt-3"
+      [pageIndex]="pageIndex"
+      [pageSize]="pageSize"
+      [totalElements]="totalElements"
+      [totalPages]="totalPages"
+      (pageIndexChange)="onPageIndexChange($event)"
+    ></app-pagination>
+  </ng-container>
+</section>

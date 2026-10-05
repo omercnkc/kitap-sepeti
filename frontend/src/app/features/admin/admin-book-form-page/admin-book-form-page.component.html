@@ -1,0 +1,209 @@
+<section class="admin-book-form">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <h2 class="h4 mb-0">{{ pageTitle }}</h2>
+    <a routerLink="/admin/books" class="small text-decoration-none">Listeye dön</a>
+  </div>
+
+  <app-spinner *ngIf="pageState === 'loading'" label="Kitap yükleniyor…"></app-spinner>
+
+  <app-empty-state
+    *ngIf="pageState === 'notFound'"
+    title="Kitap bulunamadı"
+    message="Bu kitap silinmiş olabilir."
+    ctaLabel="Kitaplara dön"
+    ctaLink="/admin/books"
+  ></app-empty-state>
+
+  <app-empty-state
+    *ngIf="pageState === 'error'"
+    title="Kitap yüklenemedi"
+    message="Kayıt alınamadı. Lütfen biraz sonra tekrar deneyin."
+    ctaLabel="Kitaplara dön"
+    ctaLink="/admin/books"
+  ></app-empty-state>
+
+  <ng-container *ngIf="pageState === 'ready'">
+    <div *ngIf="concurrentConflict" class="alert alert-warning" role="alert">
+      Kayıt başka biri tarafından değiştirildi.
+      <button type="button" class="btn btn-sm btn-outline-dark ms-2" (click)="reloadBook()">
+        Yeniden yükle
+      </button>
+    </div>
+
+    <div
+      *ngIf="!isCreate && book"
+      class="d-flex flex-wrap gap-3 small text-muted mb-3"
+    >
+      <span>
+        Durum:
+        <strong class="text-body">{{ book.status }}</strong>
+      </span>
+      <span>Stok {{ book.stockQuantity }}</span>
+      <span>Rezerve {{ book.reservedQuantity }}</span>
+      <span>Uygun {{ book.availableQuantity }}</span>
+      <span>Sürüm {{ book.version }}</span>
+    </div>
+
+    <form [formGroup]="form" (ngSubmit)="onSubmit()" novalidate class="admin-book-form__form">
+      <input type="hidden" formControlName="version" />
+
+      <div class="mb-3">
+        <label class="form-label" for="book-title">Başlık</label>
+        <input
+          id="book-title"
+          type="text"
+          class="form-control"
+          formControlName="title"
+          autocomplete="off"
+          [class.is-invalid]="form.get('title')?.invalid && form.get('title')?.touched"
+        />
+        <app-field-error [errors]="fieldErrors" field="title"></app-field-error>
+      </div>
+
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label" for="book-publisher">Yayınevi</label>
+          <select
+            id="book-publisher"
+            class="form-select"
+            formControlName="publisherId"
+            [class.is-invalid]="form.get('publisherId')?.invalid && form.get('publisherId')?.touched"
+          >
+            <option value="" disabled>Seçin</option>
+            <option *ngFor="let p of publishers" [value]="p.id">{{ p.name }}</option>
+          </select>
+          <app-field-error [errors]="fieldErrors" field="publisherId"></app-field-error>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="book-price">Fiyat (₺)</label>
+          <input
+            id="book-price"
+            type="number"
+            min="0"
+            step="0.01"
+            class="form-control"
+            formControlName="priceAmount"
+            [class.is-invalid]="form.get('priceAmount')?.invalid && form.get('priceAmount')?.touched"
+          />
+          <app-field-error [errors]="fieldErrors" field="priceAmount"></app-field-error>
+        </div>
+        <div class="col-md-3" *ngIf="isCreate">
+          <label class="form-label" for="book-stock">Başlangıç stok</label>
+          <input
+            id="book-stock"
+            type="number"
+            min="0"
+            step="1"
+            class="form-control"
+            formControlName="initialStock"
+          />
+          <app-field-error [errors]="fieldErrors" field="initialStock"></app-field-error>
+        </div>
+      </div>
+
+      <div class="row g-3 mt-1">
+        <div class="col-md-6">
+          <label class="form-label" for="book-isbn">ISBN</label>
+          <input id="book-isbn" type="text" class="form-control" formControlName="isbn" />
+          <app-field-error [errors]="fieldErrors" field="isbn"></app-field-error>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="book-pages">Sayfa</label>
+          <input
+            id="book-pages"
+            type="number"
+            min="1"
+            step="1"
+            class="form-control"
+            formControlName="pageCount"
+          />
+          <app-field-error [errors]="fieldErrors" field="pageCount"></app-field-error>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="book-cover">Kapak URL</label>
+          <input id="book-cover" type="url" class="form-control" formControlName="coverUrl" />
+          <app-field-error [errors]="fieldErrors" field="coverUrl"></app-field-error>
+        </div>
+      </div>
+
+      <div class="mb-3 mt-3">
+        <label class="form-label" for="book-description">Açıklama</label>
+        <textarea
+          id="book-description"
+          class="form-control"
+          rows="4"
+          formControlName="description"
+        ></textarea>
+        <app-field-error [errors]="fieldErrors" field="description"></app-field-error>
+      </div>
+
+      <div class="row g-3 mb-3">
+        <div class="col-md-6">
+          <fieldset class="admin-book-form__multi">
+            <legend class="form-label fs-6 mb-2">Yazarlar</legend>
+            <div class="admin-book-form__checks border rounded p-2">
+              <p *ngIf="authors.length === 0" class="small text-muted mb-0">
+                Önce yazar ekleyin.
+              </p>
+              <div *ngFor="let author of authors" class="form-check">
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  [id]="'author-' + author.id"
+                  [checked]="isAuthorSelected(author.id)"
+                  (change)="toggleAuthor(author.id, $any($event.target).checked)"
+                />
+                <label class="form-check-label" [for]="'author-' + author.id">
+                  {{ author.name }}
+                </label>
+              </div>
+            </div>
+            <app-field-error [errors]="fieldErrors" field="authorIds"></app-field-error>
+          </fieldset>
+        </div>
+        <div class="col-md-6">
+          <fieldset class="admin-book-form__multi">
+            <legend class="form-label fs-6 mb-2">Kategoriler</legend>
+            <div class="admin-book-form__checks border rounded p-2">
+              <p *ngIf="categories.length === 0" class="small text-muted mb-0">
+                Önce kategori ekleyin.
+              </p>
+              <div *ngFor="let category of categories" class="form-check">
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  [id]="'category-' + category.id"
+                  [checked]="isCategorySelected(category.id)"
+                  (change)="toggleCategory(category.id, $any($event.target).checked)"
+                />
+                <label class="form-check-label" [for]="'category-' + category.id">
+                  {{ category.name }}
+                </label>
+              </div>
+            </div>
+            <app-field-error [errors]="fieldErrors" field="categoryIds"></app-field-error>
+          </fieldset>
+        </div>
+      </div>
+
+      <div class="d-flex flex-wrap justify-content-end gap-2">
+        <button
+          type="button"
+          class="btn btn-outline-secondary"
+          (click)="onCancel()"
+          [disabled]="saving"
+        >
+          Vazgeç
+        </button>
+        <button type="submit" class="btn btn-primary" [disabled]="!canSave">
+          <span
+            *ngIf="saving"
+            class="spinner-border spinner-border-sm me-1"
+            role="status"
+          ></span>
+          {{ isCreate ? 'Oluştur' : 'Kaydet' }}
+        </button>
+      </div>
+    </form>
+  </ng-container>
+</section>

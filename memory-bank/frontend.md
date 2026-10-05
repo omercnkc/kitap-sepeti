@@ -1,10 +1,10 @@
 # Frontend (Kitap Sepeti UI)
 
-## Durum (UI-9 adım 3–4)
+## Durum (UI-9 adım 5–6)
 
 - Angular 13 NgModule; lazy features; proxy `/api` → Gateway 8080
-- UI-9.3–4: Admin yayınevi / yazar / kategori CRUD
-- Sırada: Admin kitap listesi/form; `q` arama (B1); Notifications
+- UI-9.5–6: Admin kitap listesi + form (create/edit)
+- Sırada: publish/archive/stock-adjust; `q` arama (B1); Notifications
 
 ## Admin
 
@@ -14,11 +14,12 @@
 | Publishers | `features/admin/admin-publishers-page/` | sayfalı liste; modal CRUD; ConfirmDialog sil |
 | Authors | `features/admin/admin-authors-page/` | publishers ile aynı kalıp |
 | Categories | `features/admin/admin-categories-page/` | ağaç; parent taşıma PUT; sil |
+| Books list | `features/admin/admin-books-page/` | status queryParam; stok/reserved/available |
+| Book form | `features/admin/admin-book-form-page/` | `/books/new`, `/books/:id`; version PATCH |
 | NameSlugForm | `features/admin/admin-name-slug-form/` | name + opsiyonel slug modal formu |
-| Placeholder | `features/admin/admin-placeholder-page/` | yalnız books (sonraki) |
 | Modeller | `core/models/admin-catalog.ts` | OpenAPI admin create/update/list |
 | AdminCatalogApi | `core/api/admin-catalog.api.ts` | `/api/admin/**` CRUD + publish/archive/stock |
-| Hata mesajları | `core/interceptors/error-messages.ts` | RESOURCE_IN_USE, CATEGORY_CYCLE → toast |
+| Hata mesajları | `core/interceptors/error-messages.ts` | RESOURCE_IN_USE, CATEGORY_CYCLE, CONCURRENT_MODIFICATION |
 | Guard | `core/guards/admin.guard.ts` | canActivate + canLoad → `/books` |
 | Header | `layout/header/` | Admin linki yalnız `ADMIN` |
 

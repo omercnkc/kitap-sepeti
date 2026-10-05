@@ -167,6 +167,22 @@ describe('ErrorInterceptor', () => {
     );
   });
 
+  it('409 CONCURRENT_MODIFICATION should toast reload message', () => {
+    http.patch('/api/admin/books/b1', { version: 1 }).subscribe({
+      next: () => fail('expected error'),
+      error: () => undefined,
+    });
+
+    httpMock.expectOne('/api/admin/books/b1').flush(
+      { title: 'Conflict', status: 409, code: 'CONCURRENT_MODIFICATION' },
+      { status: 409, statusText: 'Conflict' },
+    );
+
+    expect(toast.error).toHaveBeenCalledWith(
+      'Kayıt başka biri tarafından değiştirildi. Formu yeniden yükleyin ve tekrar deneyin.',
+    );
+  });
+
   it('401 should not toast (auth deferred) and rethrow', () => {
     let caught: ProblemDetail | undefined;
     http.get('/api/me').subscribe({

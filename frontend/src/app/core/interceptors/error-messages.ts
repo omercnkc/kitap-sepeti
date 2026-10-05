@@ -14,7 +14,8 @@ export const ERROR_CODE_MESSAGES: Readonly<Record<string, string>> = {
   SLUG_ALREADY_EXISTS: 'Bu kısa ad zaten kullanılıyor.',
   ISBN_ALREADY_EXISTS: 'Bu ISBN zaten kayıtlı.',
   RESOURCE_IN_USE: 'Bu kayıt kullanımda olduğu için silinemez.',
-  CONCURRENT_MODIFICATION: 'Kayıt başka biri tarafından değiştirildi; yenileyip tekrar deneyin.',
+  CONCURRENT_MODIFICATION:
+    'Kayıt başka biri tarafından değiştirildi. Formu yeniden yükleyin ve tekrar deneyin.',
   CATEGORY_CYCLE: 'Bir kategoriyi kendi altına veya alt kategorisine taşıyamazsınız.',
   BOOK_NOT_PUBLISHABLE: 'Kitap yayınlanabilir durumda değil.',
   STOCK_BELOW_RESERVED: 'Stok rezervasyonun altına düşürülemez.',
