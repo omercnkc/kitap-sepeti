@@ -7,7 +7,6 @@ import com.kitapsepeti.common.amqp.DeadLetterQueueTopology;
 import com.kitapsepeti.order.messaging.PaymentResultDeadLetterRecoverer;
 import com.kitapsepeti.order.messaging.PoisonMessageException;
 import org.aopalliance.intercept.MethodInterceptor;
-import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.amqp.core.Declarables;
 import org.springframework.amqp.core.TopicExchange;
 import org.springframework.amqp.rabbit.annotation.EnableRabbit;
@@ -52,8 +51,9 @@ public class PaymentResultsConsumerConfig {
 		factory.setMaxConcurrentConsumers(1);
 		factory.setDefaultRequeueRejected(false);
 		factory.setAdviceChain(paymentResultRetryInterceptor());
-		// Default ConditionalRejectingErrorHandler stack trace yazar; consumer zaten tek satır güvenli özetini yazdı.
-		factory.setErrorHandler(PaymentResultsConsumerConfig::rejectWithoutFrameworkLog);
+		// Error handler fırlatırsa container ERROR + stack trace yazar. Container istisnayı zaten yeniden fırlatır;
+		// recoverer'ın AmqpRejectAndDontRequeueException'ı ile mesaj requeue edilmeden DLX'e gider.
+		factory.setErrorHandler(PaymentResultsConsumerConfig::ignoreAlreadyLogged);
 		return factory;
 	}
 
@@ -79,8 +79,8 @@ public class PaymentResultsConsumerConfig {
 		return true;
 	}
 
-	private static void rejectWithoutFrameworkLog(Throwable throwable) {
-		throw new AmqpRejectAndDontRequeueException("Payment result rejected");
+	private static void ignoreAlreadyLogged(Throwable throwable) {
+		// Consumer/recoverer tek satırlık güvenli özeti zaten yazdı.
 	}
 
 }

@@ -73,4 +73,24 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
 				cutoff, pageable);
 	}
 
+	/**
+	 * PendingReconciliationJob adayları: {@code status='pending' AND created_at < :cutoff}, {@code created_at} sırası,
+	 * LIMIT batch. {@code ix_orders_status_created (status, created_at)} indeksini kullanır (sıralama için filesort yok).
+	 * Kilitsiz.
+	 */
+	@Query("""
+			select new com.kitapsepeti.order.repository.PendingReconcileCandidate(
+			    o.id, o.userId, o.stockState, o.totalAmount, o.currency, o.paymentId, o.createdAt)
+			from Order o
+			where o.status = :pending and o.createdAt < :cutoff
+			order by o.createdAt asc
+			""")
+	java.util.List<PendingReconcileCandidate> findPendingReconcileCandidates(@Param("pending") OrderStatus pending,
+			@Param("cutoff") java.time.Instant cutoff, org.springframework.data.domain.Pageable pageable);
+
+	default java.util.List<PendingReconcileCandidate> findPendingReconcileCandidates(java.time.Instant cutoff,
+			org.springframework.data.domain.Pageable pageable) {
+		return findPendingReconcileCandidates(OrderStatus.PENDING, cutoff, pageable);
+	}
+
 }

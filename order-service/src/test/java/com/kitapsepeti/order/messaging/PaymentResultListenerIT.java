@@ -288,20 +288,73 @@ class PaymentResultListenerIT extends ApiTestSupport {
 	}
 
 	@Test
-	void succeededForFailedOrderIsAckedAsConflictWithoutDlqOrNewOutbox(CapturedOutput output) {
+	void succeededForFailedOrderRecordsLatePaymentOnceWithoutDlqOrNewOutbox(CapturedOutput output) {
+		Fixture fixture = pendingHeldOrder();
+		this.transactions.markFailed(fixture.orderId(), "CARD_DECLINED");
+		this.jdbc.update("DELETE FROM outbox WHERE aggregate_id = UUID_TO_BIN(?)", fixture.orderId().toString());
+		clearInvocations(this.transactions);
+		Message message = succeeded(fixture, fixture.paymentId(), "10.00", "TRY");
+
+		publish("payment.succeeded", message);
+
+		await().atMost(TIMEOUT).untilAsserted(() ->
+			verify(this.transactions).applyPaymentSucceeded(any(), any(), any(), any()));
+		assertThat(status(fixture.orderId())).isEqualTo("failed");
+		assertThat(failureCode(fixture.orderId())).isEqualTo("CARD_DECLINED");
+		Object firstRecord = latePaymentAt(fixture.orderId());
+		assertThat(firstRecord).isNotNull();
+		assertThat(outboxCount(fixture.orderId())).isZero();
+		assertThat(historyCount(fixture.orderId())).isEqualTo(2);
+		assertThat(messageCount(PaymentResultsConsumerConfig.DEAD_LETTER_QUEUE)).isZero();
+		assertThat(output.getOut().lines())
+			.anySatisfy(line -> assertThat(line).contains("ERROR").contains("Payment result conflict -> LATE_PAYMENT_SUCCESS"))
+			.anySatisfy(line -> assertThat(line).contains("Payment result -> LATE_PAYMENT_SUCCESS"));
+
+		publish("payment.succeeded", message);
+
+		await().atMost(TIMEOUT).untilAsserted(() ->
+			verify(this.transactions, times(2)).applyPaymentSucceeded(any(), any(), any(), any()));
+		await().atMost(TIMEOUT).untilAsserted(() ->
+			assertThat(output.getOut()).contains("Payment result -> ALREADY_IN_STATE"));
+		assertThat(latePaymentAt(fixture.orderId())).isEqualTo(firstRecord);
+		assertThat(status(fixture.orderId())).isEqualTo("failed");
+		assertThat(outboxCount(fixture.orderId())).isZero();
+		assertThat(messageCount(PaymentResultsConsumerConfig.DEAD_LETTER_QUEUE)).isZero();
+	}
+
+	/** Failed siparişe başka bir ödemenin başarısı: geç ödeme yine kaydedilir, bağlı ödeme değişmez. */
+	@Test
+	void succeededWithDifferentPaymentForFailedOrderRecordsLatePaymentWithoutReplacingPayment(CapturedOutput output) {
 		Fixture fixture = pendingHeldOrder();
 		this.transactions.markFailed(fixture.orderId(), "CARD_DECLINED");
 		this.jdbc.update("DELETE FROM outbox WHERE aggregate_id = UUID_TO_BIN(?)", fixture.orderId().toString());
 		clearInvocations(this.transactions);
 
-		publish("payment.succeeded", succeeded(fixture, fixture.paymentId(), "10.00", "TRY"));
+		publish("payment.succeeded", succeeded(fixture, UUID.randomUUID(), "10.00", "TRY"));
 
-		await().atMost(TIMEOUT).untilAsserted(() ->
-			verify(this.transactions).applyPaymentSucceeded(any(), any(), any(), any()));
+		await().atMost(TIMEOUT).untilAsserted(() -> assertThat(latePaymentAt(fixture.orderId())).isNotNull());
+		assertThat(paymentId(fixture.orderId())).isEqualTo(fixture.paymentId());
 		assertThat(status(fixture.orderId())).isEqualTo("failed");
 		assertThat(outboxCount(fixture.orderId())).isZero();
-		assertThat(messageCount(PaymentResultsConsumerConfig.DEAD_LETTER_QUEUE)).isZero();
-		assertThat(output).contains("LATE_PAYMENT_SUCCESS");
+		await().atMost(TIMEOUT).untilAsserted(() -> assertThat(output.getOut().lines())
+			.anySatisfy(line -> assertThat(line).contains("ERROR").contains("Payment result conflict -> LATE_PAYMENT_SUCCESS"))
+			.anySatisfy(line -> assertThat(line).contains("ERROR").contains("Payment result conflict -> PAYMENT_ID_CONFLICT")));
+	}
+
+	/** Zehirli mesaj DLQ'ya gider; container'ın hata işleyicisi ERROR + stack trace yazmaz (tek satırlık özet yeter). */
+	@Test
+	void poisonMessageIsDeadLetteredWithoutStackTrace(CapturedOutput output) {
+		int from = output.getAll().length();
+
+		publish("payment.succeeded", message("PaymentSucceeded", "{"));
+
+		await().atMost(TIMEOUT).untilAsserted(() ->
+			assertThat(messageCount(PaymentResultsConsumerConfig.DEAD_LETTER_QUEUE)).isEqualTo(1));
+		await().atMost(TIMEOUT).untilAsserted(() ->
+			assertThat(output.getAll().substring(from)).contains("Payment result -> DLQ_MALFORMED"));
+		assertThat(output.getAll().substring(from)).doesNotContain("\tat ")
+			.doesNotContain("Caused by")
+			.doesNotContain("Execution of Rabbit message listener failed");
 	}
 
 	@Test
@@ -329,6 +382,7 @@ class PaymentResultListenerIT extends ApiTestSupport {
 		assertThat(output.getAll()).doesNotContain(fixture.orderId().toString())
 			.doesNotContain(fixture.paymentId().toString())
 			.doesNotContain("10.01")
+			.doesNotContain("\tat ")
 			.contains("AMOUNT_MISMATCH");
 	}
 
@@ -403,6 +457,16 @@ class PaymentResultListenerIT extends ApiTestSupport {
 	private String failureCode(UUID orderId) {
 		return this.jdbc.queryForObject("SELECT failure_code FROM orders WHERE id = UUID_TO_BIN(?)", String.class,
 				orderId.toString());
+	}
+
+	private Object latePaymentAt(UUID orderId) {
+		return this.jdbc.queryForObject("SELECT late_payment_at FROM orders WHERE id = UUID_TO_BIN(?)", Object.class,
+				orderId.toString());
+	}
+
+	private UUID paymentId(UUID orderId) {
+		return UUID.fromString(this.jdbc.queryForObject(
+				"SELECT BIN_TO_UUID(payment_id) FROM orders WHERE id = UUID_TO_BIN(?)", String.class, orderId.toString()));
 	}
 
 	private int historyCount(UUID orderId) {

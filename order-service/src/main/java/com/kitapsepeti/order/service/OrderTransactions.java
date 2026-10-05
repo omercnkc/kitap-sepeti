@@ -10,12 +10,15 @@ import com.kitapsepeti.common.outbox.OutboxService;
 import com.kitapsepeti.order.dto.response.OrderResponse;
 import com.kitapsepeti.order.entity.Order;
 import com.kitapsepeti.order.entity.OrderStatus;
+import com.kitapsepeti.order.entity.StockState;
 import com.kitapsepeti.order.entity.TransitionResult;
 import com.kitapsepeti.order.repository.OrderRepository;
 import com.kitapsepeti.order.service.PermanentPaymentResultException.Reason;
 import com.kitapsepeti.order.service.event.CartCheckedOutEvent;
 import com.kitapsepeti.order.service.event.OrderFailedEvent;
 import com.kitapsepeti.order.service.event.OrderPaidEvent;
+import com.kitapsepeti.order.service.event.StockCommitReadyEvent;
+import com.kitapsepeti.order.service.event.StockReleaseReadyEvent;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -68,7 +71,10 @@ public class OrderTransactions {
 	public enum PaymentOutcome {
 		APPLIED,
 		ALREADY_IN_STATE,
+		/** Failed siparişe başarılı ödeme: {@code late_payment_at} yazıldı, sipariş failed kaldı. */
 		LATE_PAYMENT_SUCCESS,
+		/** {@link #LATE_PAYMENT_SUCCESS} ama siparişte başka bir ödeme bağlı (bağlı ödeme değişmedi). */
+		LATE_PAYMENT_ID_CONFLICT,
 		PAYMENT_ID_CONFLICT,
 		CONFLICTING_FINAL
 	}
@@ -156,26 +162,16 @@ public class OrderTransactions {
 	public PaymentTransition applyPaymentSucceeded(UUID orderId, UUID paymentId, BigDecimal amount, String currency) {
 		Order order = lockPaymentResult(orderId);
 		validatePayment(order, amount, currency);
-		if (order.getPaymentId() != null && !order.getPaymentId().equals(paymentId)) {
-			return paymentTransition(PaymentOutcome.PAYMENT_ID_CONFLICT, order);
-		}
-		OrderStatus before = order.getStatus();
-		TransitionResult result = order.markPaid(paymentId, this.clock);
-		PaymentOutcome outcome = switch (result) {
-			case APPLIED -> PaymentOutcome.APPLIED;
-			case ALREADY_IN_STATE -> PaymentOutcome.ALREADY_IN_STATE;
-			case CONFLICTING_FINAL -> before == OrderStatus.FAILED ? PaymentOutcome.LATE_PAYMENT_SUCCESS
-					: PaymentOutcome.CONFLICTING_FINAL;
-		};
-		if (result == TransitionResult.APPLIED) {
-			this.outbox.append(OrderEventFactory.ORDER_AGGREGATE, order.getId(), OrderPaidEvent.TYPE,
-					eventId -> this.events.paid(eventId, order));
-			this.outbox.append(OrderEventFactory.ORDER_AGGREGATE, order.getId(), CartCheckedOutEvent.TYPE,
-					eventId -> this.events.cartCheckedOut(eventId, order));
-			publishEvent(new com.kitapsepeti.order.service.event.StockCommitReadyEvent(order.getId()));
-		}
-		this.orders.flush();
-		return paymentTransition(outcome, order);
+		return succeed(order, paymentId);
+	}
+
+	/**
+	 * Uzlaştırma görevinde Payment'ın "succeeded" yanıtı: {@link #applyPaymentSucceeded} ile aynı geçiş ve olaylar. Tutar
+	 * doğrulaması yok (Payment ödemeyi siparişin kendi tutarıyla, orderId'ye idempotent oluşturur).
+	 */
+	@Transactional(isolation = Isolation.READ_COMMITTED)
+	public PaymentTransition reconcilePaymentSucceeded(UUID orderId, UUID paymentId) {
+		return succeed(lock(orderId), paymentId);
 	}
 
 	/**
@@ -187,6 +183,73 @@ public class OrderTransactions {
 			String failureCode) {
 		Order order = lockPaymentResult(orderId);
 		validatePayment(order, amount, currency);
+		return fail(order, paymentId, failureCode);
+	}
+
+	/** Uzlaştırma görevinde Payment'ın "failed" yanıtı: {@link #applyPaymentFailed} ile aynı geçiş ve olaylar. */
+	@Transactional(isolation = Isolation.READ_COMMITTED)
+	public PaymentTransition reconcilePaymentFailed(UUID orderId, UUID paymentId, String failureCode) {
+		return fail(lock(orderId), paymentId, failureCode);
+	}
+
+	/**
+	 * Uzlaştırma görevi: bekleyen siparişi {@code failed} yapar ({@code OrderFailed} aynı TX'te) ve commit'ten sonra stok
+	 * release'i dispatcher'a bırakır. Kilit altında sipariş hâlâ pending ama stok durumu seçimdekinden farklıysa (checkout
+	 * arada ilerledi) dokunulmaz: {@link TransitionResult#CONFLICTING_FINAL}, sonraki tur yeniden değerlendirir.
+	 */
+	@Transactional(isolation = Isolation.READ_COMMITTED)
+	public Transition failPendingAndReleaseStock(UUID orderId, StockState expectedStock, String failureCode) {
+		Order order = lock(orderId);
+		if (order.getStatus() == OrderStatus.PENDING && order.getStockState() != expectedStock) {
+			return new Transition(TransitionResult.CONFLICTING_FINAL, OrderResponse.of(order));
+		}
+		TransitionResult result = order.markFailed(failureCode, this.clock);
+		if (result == TransitionResult.APPLIED) {
+			appendFailed(order);
+			publishEvent(new StockReleaseReadyEvent(order.getId()));
+		}
+		this.orders.flush();
+		return new Transition(result, OrderResponse.of(order));
+	}
+
+	/**
+	 * Başarılı ödeme: pending → paid + {@code OrderPaid} + {@code CartCheckedOut} + commit sonrası stok commit. Failed
+	 * siparişte geç ödeme kaydı ({@link Order#recordLatePayment}); diğer sipariş başka bir ödemeye bağlıysa çelişki.
+	 */
+	private PaymentTransition succeed(Order order, UUID paymentId) {
+		OrderStatus before = order.getStatus();
+		if (before != OrderStatus.FAILED && order.getPaymentId() != null && !order.getPaymentId().equals(paymentId)) {
+			return paymentTransition(PaymentOutcome.PAYMENT_ID_CONFLICT, order);
+		}
+		TransitionResult result = order.markPaid(paymentId, this.clock);
+		PaymentOutcome outcome = switch (result) {
+			case APPLIED -> PaymentOutcome.APPLIED;
+			case ALREADY_IN_STATE -> PaymentOutcome.ALREADY_IN_STATE;
+			case CONFLICTING_FINAL -> before == OrderStatus.FAILED ? recordLatePayment(order, paymentId)
+					: PaymentOutcome.CONFLICTING_FINAL;
+		};
+		if (result == TransitionResult.APPLIED) {
+			this.outbox.append(OrderEventFactory.ORDER_AGGREGATE, order.getId(), OrderPaidEvent.TYPE,
+					eventId -> this.events.paid(eventId, order));
+			this.outbox.append(OrderEventFactory.ORDER_AGGREGATE, order.getId(), CartCheckedOutEvent.TYPE,
+					eventId -> this.events.cartCheckedOut(eventId, order));
+			publishEvent(new StockCommitReadyEvent(order.getId()));
+		}
+		this.orders.flush();
+		return paymentTransition(outcome, order);
+	}
+
+	private PaymentOutcome recordLatePayment(Order order, UUID paymentId) {
+		boolean otherPayment = order.getPaymentId() != null && !order.getPaymentId().equals(paymentId);
+		return switch (order.recordLatePayment(paymentId, this.clock)) {
+			case APPLIED -> otherPayment ? PaymentOutcome.LATE_PAYMENT_ID_CONFLICT : PaymentOutcome.LATE_PAYMENT_SUCCESS;
+			case ALREADY_IN_STATE -> PaymentOutcome.ALREADY_IN_STATE;
+			case CONFLICTING_FINAL -> PaymentOutcome.CONFLICTING_FINAL;
+		};
+	}
+
+	/** Başarısız ödeme: pending → failed + {@code OrderFailed} + commit sonrası stok release. */
+	private PaymentTransition fail(Order order, UUID paymentId, String failureCode) {
 		if (order.getPaymentId() != null && !order.getPaymentId().equals(paymentId)) {
 			return paymentTransition(PaymentOutcome.PAYMENT_ID_CONFLICT, order);
 		}
@@ -198,7 +261,7 @@ public class OrderTransactions {
 		};
 		if (result == TransitionResult.APPLIED) {
 			appendFailed(order);
-			publishEvent(new com.kitapsepeti.order.service.event.StockReleaseReadyEvent(order.getId()));
+			publishEvent(new StockReleaseReadyEvent(order.getId()));
 		}
 		this.orders.flush();
 		return paymentTransition(outcome, order);

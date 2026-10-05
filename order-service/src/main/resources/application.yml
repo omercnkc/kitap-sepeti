@@ -117,6 +117,14 @@ app:
       core-pool-size: 1
       max-pool-size: 2
       queue-capacity: 50
+  # Bekleyen sipariş uzlaştırma: requested -> CHECKOUT_INTERRUPTED; held -> Payment'a sor, sonuçsuzsa expire-after'da ORDER_EXPIRED
+  pending-reconcile:
+    enabled: true
+    interval: 30s
+    initial-delay: 15s
+    min-age: 60s
+    expire-after: 10m
+    batch: 50
   clients:
     # Cart/Catalog/Payment /internal/** uçlarına giden ham anahtar; yok/boşsa uygulama açılmaz.
     internal-api-key: ${ORDER_INTERNAL_API_KEY:}

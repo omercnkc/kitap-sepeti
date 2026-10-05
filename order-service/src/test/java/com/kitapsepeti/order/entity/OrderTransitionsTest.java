@@ -226,6 +226,52 @@ class OrderTransitionsTest {
 		assertThatThrownBy(() -> order.markFailed("bad", T3)).isInstanceOf(IllegalArgumentException.class);
 	}
 
+	// --- recordLatePayment ---
+
+	@ParameterizedTest(name = "{0} → {1}")
+	@CsvSource({ "PENDING_REQUESTED, CONFLICTING_FINAL", "PENDING_REQUESTED_WITH_PAYMENT, CONFLICTING_FINAL",
+			"PENDING_HELD, CONFLICTING_FINAL", "PENDING_HELD_WITH_PAYMENT, CONFLICTING_FINAL",
+			"PAID_HELD, CONFLICTING_FINAL", "PAID_COMMITTED, CONFLICTING_FINAL", "PAID_LOST, CONFLICTING_FINAL",
+			"FAILED_REQUESTED, APPLIED", "FAILED_HELD, APPLIED", "FAILED_HELD_WITH_PAYMENT, APPLIED",
+			"FAILED_RELEASED, APPLIED" })
+	void recordLatePayment(Start start, TransitionResult expected) {
+		Order order = start.build();
+
+		apply(order, o -> o.recordLatePayment(PAYMENT, T3), expected, false);
+
+		if (expected == TransitionResult.APPLIED) {
+			assertThat(order.getStatus()).isEqualTo(OrderStatus.FAILED);
+			assertThat(order.getLatePaymentAt()).isEqualTo(T3.instant());
+			assertThat(order.getPaymentId()).isEqualTo(PAYMENT);
+			assertThat(order.getStockState()).isEqualTo(start.stock);
+		}
+		else {
+			assertThat(order.getLatePaymentAt()).isNull();
+		}
+	}
+
+	@Test
+	void repeatedLatePaymentKeepsTheFirstRecord() {
+		Order order = Start.FAILED_RELEASED.build();
+		assertThat(order.recordLatePayment(PAYMENT, OrderFixtures.T2)).isEqualTo(TransitionResult.APPLIED);
+
+		apply(order, o -> o.recordLatePayment(PAYMENT, T3), TransitionResult.ALREADY_IN_STATE, false);
+		apply(order, o -> o.recordLatePayment(OTHER_PAYMENT, T3), TransitionResult.ALREADY_IN_STATE, false);
+
+		assertThat(order.getLatePaymentAt()).isEqualTo(OrderFixtures.T2.instant());
+	}
+
+	/** Başka ödeme bağlıysa geç ödeme yine kaydedilir ama bağlı ödeme değişmez (çelişkiyi çağıran loglar). */
+	@Test
+	void latePaymentWithDifferentPaymentIsRecordedWithoutReplacingIt() {
+		Order order = Start.FAILED_HELD_WITH_PAYMENT.build();
+
+		apply(order, o -> o.recordLatePayment(OTHER_PAYMENT, T3), TransitionResult.APPLIED, false);
+
+		assertThat(order.getLatePaymentAt()).isEqualTo(T3.instant());
+		assertThat(order.getPaymentId()).isEqualTo(PAYMENT);
+	}
+
 	// --- markStockCommitted ---
 
 	@ParameterizedTest(name = "{0} → {1}")
@@ -327,11 +373,11 @@ class OrderTransitionsTest {
 	}
 
 	private record Snapshot(OrderStatus status, StockState stock, UUID paymentId, String failureCode,
-			Instant updatedAt, int historySize) {
+			Instant latePaymentAt, Instant updatedAt, int historySize) {
 
 		static Snapshot of(Order order) {
 			return new Snapshot(order.getStatus(), order.getStockState(), order.getPaymentId(), order.getFailureCode(),
-					order.getUpdatedAt(), order.getHistory().size());
+					order.getLatePaymentAt(), order.getUpdatedAt(), order.getHistory().size());
 		}
 
 	}

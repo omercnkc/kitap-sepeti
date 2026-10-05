@@ -1,7 +1,6 @@
 package com.kitapsepeti.order.messaging;
 
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Pattern;
 
 import com.kitapsepeti.order.config.PaymentResultsConsumerConfig;
 import com.kitapsepeti.order.entity.OrderReasons;
@@ -24,8 +23,6 @@ public class PaymentResultListener {
 
 	private static final Logger log = LoggerFactory.getLogger(PaymentResultListener.class);
 
-	private static final Pattern FAILURE_CODE = Pattern.compile("^[A-Z][A-Z0-9_]{0,63}$");
-
 	private final PaymentResultMessageParser parser;
 
 	private final OrderTransactions transactions;
@@ -47,7 +44,7 @@ public class PaymentResultListener {
 				case PaymentResultMessage.Succeeded succeeded -> this.transactions.applyPaymentSucceeded(
 						succeeded.orderId(), succeeded.paymentId(), succeeded.amount(), succeeded.currency());
 				case PaymentResultMessage.Failed failed -> this.transactions.applyPaymentFailed(failed.orderId(),
-						failed.paymentId(), failed.amount(), failed.currency(), failureCode(failed.failureCode()));
+						failed.paymentId(), failed.amount(), failed.currency(), OrderReasons.paymentFailureCode(failed.failureCode()));
 			};
 			outcome = transition.outcome().name();
 			logConflict(type, transition.outcome());
@@ -70,10 +67,6 @@ public class PaymentResultListener {
 		}
 	}
 
-	private static String failureCode(String value) {
-		return value != null && FAILURE_CODE.matcher(value).matches() ? value : OrderReasons.PAYMENT_FAILED;
-	}
-
 	private static String safeType(Message message) {
 		String type = message.getMessageProperties().getType();
 		if (PaymentResultMessageParser.SUCCEEDED.equals(type) || PaymentResultMessageParser.FAILED.equals(type)) {
@@ -86,6 +79,10 @@ public class PaymentResultListener {
 		switch (outcome) {
 			case LATE_PAYMENT_SUCCESS ->
 				log.error("Payment result conflict -> LATE_PAYMENT_SUCCESS (type={})", type);
+			case LATE_PAYMENT_ID_CONFLICT -> {
+				log.error("Payment result conflict -> LATE_PAYMENT_SUCCESS (type={})", type);
+				log.error("Payment result conflict -> PAYMENT_ID_CONFLICT (type={})", type);
+			}
 			case PAYMENT_ID_CONFLICT ->
 				log.error("Payment result conflict -> PAYMENT_ID_CONFLICT (type={})", type);
 			case CONFLICTING_FINAL ->

@@ -91,7 +91,7 @@ class ClientLoggingTest extends ClientTestSupport {
 				.willReturn(problem(500, "INTERNAL_ERROR")));
 		PAYMENT.server()
 			.stubFor(post(anyUrl()).willReturn(json(201, """
-					{"paymentId":"%s","orderId":"%s","status":"initiated","amount":987.65}""".formatted(paymentId, orderId))));
+					{"paymentId":"%s","orderId":"%s","status":"initiated","failureCode":null,"amount":987.65}""".formatted(paymentId, orderId))));
 		int from = output.getAll().length();
 
 		this.cartGateway.snapshot(userId);

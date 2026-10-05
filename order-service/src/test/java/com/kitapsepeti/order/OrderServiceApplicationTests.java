@@ -28,7 +28,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.util.ClassUtils;
 
 /**
- * Bağlam açılır, Flyway V1 uygulanır, sipariş entity'leriyle ddl validate geçer. Uçlar {@code controller} test
+ * Bağlam açılır, Flyway migration'ları uygulanır, sipariş entity'leriyle ddl validate geçer. Uçlar {@code controller} test
  * paketinde, actuator yüzeyi {@code config.ActuatorHealthTest}'te, istemciler {@code client} test paketinde.
  */
 class OrderServiceApplicationTests extends ApiTestSupport {
@@ -40,10 +40,10 @@ class OrderServiceApplicationTests extends ApiTestSupport {
 	private EntityManagerFactory entityManagerFactory;
 
 	@Test
-	void contextLoadsAndFlywayAppliedV1AndV2() {
+	void contextLoadsAndFlywayAppliedAllMigrations() {
 		assertThat(jdbc.queryForList(
 				"SELECT version FROM flyway_schema_history WHERE success = 1 ORDER BY installed_rank", String.class))
-			.containsExactly("1", "2");
+			.containsExactly("1", "2", "3");
 	}
 
 	@Test

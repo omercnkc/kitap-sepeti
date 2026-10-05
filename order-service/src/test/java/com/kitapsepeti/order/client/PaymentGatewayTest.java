@@ -71,6 +71,14 @@ class PaymentGatewayTest extends ClientTestSupport {
 		assertThat(initiate()).isEqualTo(new PaymentInitiationResult.Initiated(this.paymentId, state));
 	}
 
+	@Test
+	void failedPaymentCarriesItsFailureCode() {
+		respond(json(200, payment(this.orderId, "failed").replace("\"failureCode\":null", "\"failureCode\":\"CARD_DECLINED\"")));
+
+		assertThat(initiate())
+			.isEqualTo(new PaymentInitiationResult.Initiated(this.paymentId, PaymentState.FAILED, "CARD_DECLINED"));
+	}
+
 	@ParameterizedTest
 	@CsvSource({ "409, PAYMENT_ORDER_MISMATCH", "409, CONFLICT", "400, VALIDATION_FAILED", "400, MALFORMED_REQUEST",
 			"401, UNAUTHORIZED" })
@@ -104,8 +112,10 @@ class PaymentGatewayTest extends ClientTestSupport {
 
 	@ParameterizedTest
 	@ValueSource(strings = { "{not json", "{\"orderId\":\"%2$s\",\"status\":\"initiated\"}",
-			"{\"paymentId\":\"%1$s\",\"orderId\":\"%2$s\"}", "{\"paymentId\":\"%1$s\",\"orderId\":\"%2$s\",\"status\":\"refunded\"}",
-			"{\"paymentId\":\"%1$s\",\"orderId\":\"%3$s\",\"status\":\"initiated\"}" })
+			"{\"paymentId\":\"%1$s\",\"orderId\":\"%2$s\"}",
+			"{\"paymentId\":\"%1$s\",\"orderId\":\"%2$s\",\"status\":\"refunded\",\"failureCode\":null}",
+			"{\"paymentId\":\"%1$s\",\"orderId\":\"%3$s\",\"status\":\"initiated\",\"failureCode\":null}",
+			"{\"paymentId\":\"%1$s\",\"orderId\":\"%2$s\",\"status\":\"initiated\"}" })
 	void malformedForeignOrUnknownStatusIsUnknown(String body) {
 		respond(json(201, body.formatted(this.paymentId, this.orderId, UUID.randomUUID())));
 

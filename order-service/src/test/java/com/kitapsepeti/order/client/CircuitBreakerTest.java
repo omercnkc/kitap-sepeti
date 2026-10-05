@@ -186,7 +186,7 @@ class CircuitBreakerTest extends ClientTestSupport {
 				.willReturn(json(200, "{\"cartId\":null,\"updatedAt\":null,\"items\":[]}")));
 		PAYMENT.server()
 			.stubFor(post(urlEqualTo("/internal/payments")).willReturn(json(201, """
-					{"paymentId":"%s","orderId":"%s","status":"initiated"}""".formatted(UUID.randomUUID(), this.orderId))));
+					{"paymentId":"%s","orderId":"%s","status":"initiated","failureCode":null}""".formatted(UUID.randomUUID(), this.orderId))));
 
 		assertThat(this.cartGateway.snapshot(UUID.randomUUID())).isEqualTo(new CartSnapshotResult.Empty());
 		assertThat(this.paymentGateway.initiate(this.orderId, UUID.randomUUID(), BigDecimal.TEN, "TRY"))

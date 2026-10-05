@@ -18,6 +18,8 @@ app:
   # Kurtarma görevi testler sırasında arka planda koşmasın.
   stock-sync:
     enabled: false
+  pending-reconcile:
+    enabled: false
   clients:
     # Sahte; .env'deki gerçek anahtar testlere girmez. Adresler ApiTestSupport'taki stub sunuculardan gelir.
     internal-api-key: order-test-internal-key-not-a-secret

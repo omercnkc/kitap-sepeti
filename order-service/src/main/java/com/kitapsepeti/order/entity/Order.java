@@ -121,6 +121,10 @@ public class Order {
 	@Column(name = "failure_code", length = 64)
 	private String failureCode;
 
+	/** Başarısız siparişe geç gelen başarılı ödemenin ilk kaydı; yalnızca failed'da dolu ({@code ck_orders_late_payment_failed}). */
+	@Column(name = "late_payment_at")
+	private Instant latePaymentAt;
+
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
 
@@ -231,7 +235,7 @@ public class Order {
 
 	/**
 	 * Ödeme başarılı: {@code pending → paid} (stok {@code held} olmalı). Ödeme henüz bağlı değilse bağlanır; başka bir
-	 * ödeme bağlıysa çelişki. Başarısız siparişe geç gelen başarı çelişkidir (telafi Adım 8).
+	 * ödeme bağlıysa çelişki. Başarısız siparişe geç gelen başarı çelişkidir; kaydı {@link #recordLatePayment}.
 	 *
 	 * @throws IllegalStateException sipariş bekliyor ama stok henüz tutulmamışsa (ödeme rezervasyonsuz başlatılmaz)
 	 */
@@ -273,6 +277,27 @@ public class Order {
 			case FAILED -> TransitionResult.ALREADY_IN_STATE;
 			case PAID -> TransitionResult.CONFLICTING_FINAL;
 		};
+	}
+
+	/**
+	 * Başarısız siparişe başarılı ödeme geldi: sipariş failed kalır, ilk an {@code latePaymentAt}'e yazılır (iade listesi).
+	 * Ödeme bağlı değilse bağlanır; başka bir ödeme bağlıysa {@code paymentId} DEĞİŞMEZ (çelişkiyi çağıran loglar). Zaten
+	 * kayıtlıysa no-op; sipariş failed değilse çelişki.
+	 */
+	public TransitionResult recordLatePayment(UUID paymentId, Clock clock) {
+		Objects.requireNonNull(paymentId, "paymentId");
+		if (status != OrderStatus.FAILED) {
+			return TransitionResult.CONFLICTING_FINAL;
+		}
+		if (latePaymentAt != null) {
+			return TransitionResult.ALREADY_IN_STATE;
+		}
+		if (this.paymentId == null) {
+			this.paymentId = paymentId;
+		}
+		touch(clock);
+		latePaymentAt = updatedAt;
+		return TransitionResult.APPLIED;
 	}
 
 	/** Ödenmiş siparişin stoğu kesinleşti: {@code held → committed}. Sipariş ödenmemişse ya da stok bırakılmışsa/kaybedilmişse çelişki. */

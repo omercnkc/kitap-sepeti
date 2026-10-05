@@ -61,7 +61,7 @@ class OrderSchemaConstraintsTest {
 	// --- yapı ---
 
 	@Test
-	void flywayAppliesV1AndV2AndCreatesOnlyOrderTables() {
+	void flywayAppliesAllMigrationsAndCreatesOnlyOrderTables() {
 		List<String> applied = jdbc.queryForList(
 				"SELECT version FROM flyway_schema_history WHERE success = 1 ORDER BY installed_rank", String.class);
 		List<Map<String, Object>> tables = jdbc.queryForList("""
@@ -69,7 +69,7 @@ class OrderSchemaConstraintsTest {
 				WHERE table_schema = DATABASE() AND table_name <> 'flyway_schema_history'
 				""");
 
-		assertThat(applied).containsExactly("1", "2");
+		assertThat(applied).containsExactly("1", "2", "3");
 		// Takma adlar küçük harf: satır map'i anahtarı JVM locale'iyle küçültür (tr-TR'de "ENGINE" → "engıne").
 		assertThat(tables).extracting(t -> t.get("name"), t -> t.get("eng"), t -> t.get("collation"))
 			.containsExactlyInAnyOrder(tuple("orders", "InnoDB", "utf8mb4_0900_ai_ci"),
@@ -94,6 +94,7 @@ class OrderSchemaConstraintsTest {
 				tuple("address_snapshot", "json", "NO", null, ""),
 				tuple("payment_id", "binary(16)", "YES", null, ""),
 				tuple("failure_code", "varchar(64)", "YES", null, ""),
+				tuple("late_payment_at", "datetime(6)", "YES", null, ""),
 				tuple("active_pending_user_id", "binary(16)", "YES", null, "VIRTUAL GENERATED"),
 				tuple("created_at", "datetime(6)", "NO", null, ""),
 				tuple("updated_at", "datetime(6)", "NO", null, ""));
@@ -174,6 +175,7 @@ class OrderSchemaConstraintsTest {
 					tuple("orders", "ck_orders_paid_stock", "CHECK"),
 					tuple("orders", "ck_orders_committed_paid", "CHECK"),
 					tuple("orders", "ck_orders_lost_paid", "CHECK"),
+					tuple("orders", "ck_orders_late_payment_failed", "CHECK"),
 					tuple("order_items", "PRIMARY", "PRIMARY KEY"),
 					tuple("order_items", "uk_order_items_order_book", "UNIQUE"),
 					tuple("order_items", "fk_order_items_order", "FOREIGN KEY"),
@@ -392,6 +394,35 @@ class OrderSchemaConstraintsTest {
 		assertCheckViolation(() -> jdbc.update("UPDATE orders SET stock_state = 'committed' WHERE id = ?", (Object) id),
 				"ck_orders_committed_paid");
 		jdbc.update("UPDATE orders SET stock_state = 'released' WHERE id = ?", (Object) id);
+	}
+
+	// --- orders: geç ödeme (V3) ---
+
+	@Test
+	void failedOrderWithLatePaymentIsAccepted() {
+		byte[] id = order().status("failed").stock("released").failure("ORDER_EXPIRED").payment(newId())
+			.latePayment(NOW)
+			.insert();
+
+		assertThat(jdbc.queryForObject("SELECT late_payment_at IS NOT NULL FROM orders WHERE id = ?", Boolean.class,
+				(Object) id))
+			.isTrue();
+	}
+
+	@ParameterizedTest
+	@CsvSource({ "pending, held", "paid, held", "paid, committed" })
+	void latePaymentIsRejectedUnlessFailed(String status, String stockState) {
+		assertCheckViolation(() -> settledOrder(status, stockState).latePayment(NOW).insert(),
+				"ck_orders_late_payment_failed");
+	}
+
+	@Test
+	void latePaymentCannotSurviveLeavingFailed() {
+		byte[] id = order().status("failed").stock("held").failure("ORDER_EXPIRED").latePayment(NOW).insert();
+
+		assertCheckViolation(() -> jdbc.update(
+				"UPDATE orders SET status = 'paid', failure_code = NULL, payment_id = ? WHERE id = ?", newId(), id),
+				"ck_orders_late_payment_failed");
 	}
 
 	// --- orders: tutarlar ---
@@ -772,6 +803,8 @@ class OrderSchemaConstraintsTest {
 
 		private String failureCode;
 
+		private String latePaymentAt;
+
 		OrderRow user(byte[] value) {
 			this.userId = value;
 			return this;
@@ -814,14 +847,20 @@ class OrderSchemaConstraintsTest {
 			return this;
 		}
 
+		OrderRow latePayment(String value) {
+			this.latePaymentAt = value;
+			return this;
+		}
+
 		byte[] insert() {
 			jdbc.update("""
 					INSERT INTO orders (id, user_id, cart_id, status, stock_state, currency, subtotal, discount_amount,
-						total_amount, address_snapshot, payment_id, failure_code, created_at, updated_at)
-					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+						total_amount, address_snapshot, payment_id, failure_code, late_payment_at, created_at,
+						updated_at)
+					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 					""", this.id, this.userId, newId(), this.status, this.stockState, this.currency,
 					new BigDecimal(this.subtotal), new BigDecimal(this.discount), new BigDecimal(this.total),
-					this.address, this.paymentId, this.failureCode, NOW, NOW);
+					this.address, this.paymentId, this.failureCode, this.latePaymentAt, NOW, NOW);
 			return this.id;
 		}
 

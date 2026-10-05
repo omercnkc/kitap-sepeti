@@ -1,5 +1,7 @@
 package com.kitapsepeti.order.entity;
 
+import java.util.regex.Pattern;
+
 /**
  * Durum geçmişi {@code reason} ve sipariş {@code failure_code} makine kodları ({@code ^[A-Z][A-Z0-9_]*$}, en fazla 64).
  * Başarısız siparişte geçmiş satırının reason'ı failure code'un kendisidir. Kodlar API ve olay sözleşmesinin parçası
@@ -42,7 +44,14 @@ public final class OrderReasons {
 	/** Checkout sırasında DB veya iç hata nedeniyle süreç yarıda kesildi. */
 	public static final String CHECKOUT_INTERRUPTED = "CHECKOUT_INTERRUPTED";
 
+	private static final Pattern CODE = Pattern.compile("^[A-Z][A-Z0-9_]{0,63}$");
+
 	private OrderReasons() {
+	}
+
+	/** Payment'ın ret kodu geçerli bir makine koduysa kendisi, değilse (yok/bozuk) {@link #PAYMENT_FAILED}. */
+	public static String paymentFailureCode(String value) {
+		return value != null && CODE.matcher(value).matches() ? value : PAYMENT_FAILED;
 	}
 
 }

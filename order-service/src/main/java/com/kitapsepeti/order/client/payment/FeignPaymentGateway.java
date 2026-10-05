@@ -53,7 +53,8 @@ public class FeignPaymentGateway implements PaymentGateway {
 	private static PaymentInitiationResult toResult(CallOutcome<PaymentResponse> outcome) {
 		return switch (outcome) {
 			case CallOutcome.Success<PaymentResponse> success -> new PaymentInitiationResult.Initiated(
-					success.body().paymentId(), state(success.body(), success.body().orderId()));
+					success.body().paymentId(), state(success.body(), success.body().orderId()),
+					success.body().failureCode());
 			case CallOutcome.Problem<PaymentResponse> problem -> new Rejected(problem.status(), problem.code());
 			case CallOutcome.NotSent<PaymentResponse> notSent -> new NotPerformed();
 			case CallOutcome.Failed<PaymentResponse> failed -> new Unknown();
