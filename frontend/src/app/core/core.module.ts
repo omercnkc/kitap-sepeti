@@ -5,6 +5,7 @@ import {
   SkipSelf,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { HttpClientModule } from '@angular/common/http';
 
 export function throwIfAlreadyLoaded(parentModule: unknown, moduleName: string): void {
   if (parentModule) {
@@ -15,7 +16,7 @@ export function throwIfAlreadyLoaded(parentModule: unknown, moduleName: string):
 }
 
 @NgModule({
-  imports: [CommonModule],
+  imports: [CommonModule, HttpClientModule],
 })
 export class CoreModule {
   constructor(@Optional() @SkipSelf() parentModule: CoreModule) {

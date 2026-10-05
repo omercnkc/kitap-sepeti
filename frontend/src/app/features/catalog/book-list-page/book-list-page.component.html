@@ -1,8 +1,16 @@
 <section class="container py-4">
   <h1 class="h4 mb-2">Kitaplar</h1>
   <p class="text-muted mb-3">Katalog listesi yakında burada olacak.</p>
-  <p class="mb-0">
+  <p class="mb-3">
     Örnek fiyat:
     <strong>{{ 149.9 | currency: 'TRY' : 'symbol' : '1.2-2' : 'tr-TR' }}</strong>
   </p>
+  <div class="d-flex flex-wrap gap-2">
+    <button type="button" class="btn btn-success btn-sm" (click)="showSuccessToast()">
+      Toast başarı
+    </button>
+    <button type="button" class="btn btn-danger btn-sm" (click)="showErrorToast()">
+      Toast hata
+    </button>
+  </div>
 </section>

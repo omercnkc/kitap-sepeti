@@ -1,12 +1,13 @@
 # Frontend (Kitap Sepeti UI)
 
-## Durum (UI-1 tamamlandı)
+## Durum (UI-1 tamam; UI-2 Adım 1–3)
 
 - Angular 13 NgModule iskeleti, global SCSS (Bootstrap kaynak), layout (Shell/Header/Footer/NotFound)
 - Lazy feature modülleri: catalog, auth (login/register), cart, checkout, orders, account, notifications, admin
 - Geliştirme proxy: `/api` → `http://localhost:8080` (API Gateway)
 - Locale: `tr-TR` (`LOCALE_ID` + `registerLocaleData`)
-- Sırada: UI-2 HTTP çekirdeği, UI-3 guard’lar
+- UI-2.1–3: `core/models` (OpenAPI), `CatalogApi` + `toHttpParams`, `ToastService` + Shell toast container
+- Sırada: UI-2 ErrorInterceptor / Spinner; UI-3 guard’lar
 
 ## Ortam
 
