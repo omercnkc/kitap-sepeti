@@ -1470,7 +1470,24 @@
     - `application.yml` route listesine `payment-webhook` (`/webhooks/**`, `/api/webhooks/**` -> `${PAYMENT_SERVICE_URL:http://localhost:8085}`) eklendi.
     - Webhook rotası harici ödeme sağlayıcıları için JWT filtresinden tamamen muaf (bypass) tutuldu.
   - Testler: `PublicAndProtectedPathsTest` (9 test), `InternalPathBlockingTest` (3 test), `WebhookRouteTest` (2 test).
-  - api-gateway modülü toplam 8 test sınıfında 37 test yeşil. **Faz 10 (API Gateway) tamamlandı.**
+  - api-gateway modülü toplam 8 test sınıfında 37 test yeşil.
+- **Gateway Adım 9 & 10 (YAPILDI, COMMIT EDİLMEDİ): Dockerfile, Docker Compose Entegrasyonu & Uçtan Uca (E2E) Doğrulama (Faz 10).**
+  - **Adım 10 (Dockerfile):**
+    - `api-gateway/Dockerfile`: Multi-stage build (`eclipse-temurin:21-jdk` build + offline cache -> `eclipse-temurin:21-jre` runtime).
+    - Non-root kullanıcı (`app:app`, UID/GID 10001), layered jar extraction (`dependencies`, `spring-boot-loader`, `snapshot-dependencies`, `application`).
+    - `JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75.0 -XX:+UseG1GC"`, `SERVER_PORT=8080`, `EXPOSE 8080`. Entrypoint `JarLauncher`.
+  - **Adım 9 (Docker Compose & E2E):**
+    - `docker-compose.yml` güncellendi: `api-gateway` servisi eklendi (port `"8080:8080"`, tüm mikroservis URL'leri ve JWKS_URL env tanımları, healthcheck `/actuator/health`).
+    - İmaj derlendi (`kitapsepeti/api-gateway:local`), container ayağa kalktı ve `healthy` oldu.
+    - E2E Doğrulama Senaryoları (port 8080 üzerinden):
+      1. Public Akış: `GET /api/books` -> 200 OK (11 kitap).
+      2. Kayıt: `POST /api/auth/register` -> 201 Created ve JWT AccessToken temini.
+      3. Korumalı Akış: `GET /api/cart` (Bearer token ile) -> 200 OK; `GET /api/orders` (Bearer token ile) -> 200 OK.
+      4. Güvenlik Bariyeri: Tokensız `GET /api/cart` -> 401 Unauthorized (`AUTHENTICATION_REQUIRED`, RFC 7807 `ProblemDetail`).
+      5. İç Servis İzolasyonu: `GET /internal/stock/check` ve `GET /api/cart/internal/snapshot` -> 404 Not Found (`NOT_FOUND`, RFC 7807 `ProblemDetail`).
+      6. İstek İzlenebilirliği: Tüm yanıtlarda `X-Request-Id` başlığı doğrulandı.
+      7. Webhook Yönlendirmesi: Tokensız `POST /webhooks/mock` doğrudan payment-service'e iletildi.
+  - **TÜM BACKEND MİKROSERVİS MİMARİSİ VE GATEWAY TAMAMLANDI.**
 - Order planı: 0a common sertleştirme (YAPILDI) → 0b outbox → common (YAPILDI, push'landı) → 1 modül/db (YAPILDI, push'landı) → 2 domain (YAPILDI) → 3a Order istemcileri + CB (YAPILDI) → 3b Cart→Catalog CB (YAPILDI) → 4 checkout mutlu yol +
   GET {id} (YAPILDI) → 5 hata yolları/telafi (YAPILDI) → 6a Payment sonucu consumer+Order olayları (YAPILDI) → 6b stok
   commit/release+StockSyncJob+V2 lost (YAPILDI) → 7 Cart CartCheckedOut tüketicisi (YAPILDI) → 8 timeout görevi

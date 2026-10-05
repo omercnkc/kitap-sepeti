@@ -4,9 +4,9 @@ Tüm komutlar repo kökünden. Değerler kökteki `.env`'den okunur (şablon: `.
 Compose `env_file` kullanmaz; her servise yalnızca gereken değişkenler `${VAR}` ile verilir.
 
 ```powershell
-docker compose build user-service catalog-service cart-service payment-service order-service
+docker compose build user-service catalog-service cart-service payment-service order-service api-gateway
 docker compose up -d
-docker compose ps        # mysql, rabbitmq, user-service, catalog-service, cart-service, payment-service, order-service → healthy
+docker compose ps        # mysql, rabbitmq, user-service, catalog-service, cart-service, payment-service, order-service, api-gateway → healthy
 ```
 
 Volume'ları silen `docker compose down -v` veritabanını ve kuyrukları da siler; durdurmak için `docker compose stop`.
@@ -182,3 +182,31 @@ docker compose build order-service
 docker compose up -d order-service
 docker compose logs -f order-service
 ```
+
+## api-gateway
+
+| | |
+|---|---|
+| İmaj | `kitapsepeti/api-gateway:local` (`api-gateway/Dockerfile`, build context = repo kökü) |
+| Container | `kitapsepeti-api-gateway`, port `8080` |
+| Health | `/actuator/health` (yalnızca `status`) |
+| Rol | İstemcinin tüm mikroservislere erişeceği tek giriş kapısı |
+
+Compose'da sabit verilenler: `SERVER_PORT=8080`, `USER_SERVICE_URL=http://user-service:8081`, `CATALOG_SERVICE_URL=http://catalog-service:8082`, `CART_SERVICE_URL=http://cart-service:8083`, `ORDER_SERVICE_URL=http://order-service:8088`, `SEARCH_SERVICE_URL=http://search-service:8084`, `PAYMENT_SERVICE_URL=http://payment-service:8087`, `NOTIFICATION_SERVICE_URL=http://notification-service:8087`, `JWKS_URL=http://user-service:8081/.well-known/jwks.json`.
+
+Bağımlılıklar:
+- `user-service`, `catalog-service`, `cart-service`, `payment-service` ve `order-service` healthy olduktan sonra başlar.
+- Her gelen isteğe correlation tracing için `X-Request-Id` ekler (yoksa üretir, yanıta da yansıtır).
+- Angular UI (`http://localhost:4200`) için tam CORS desteği sunar.
+- Reaktif JWT doğrulaması ve JWKS cache mekanizması barındırır.
+- `/internal/**` gibi iç mikroservis uçlarını dış dünyadan gelen isteklere kapatarak 404 döner.
+- Harici ödeme webhook'larını (`/webhooks/**`) tokensız olarak payment-service'e yönlendirir.
+
+Yeniden üretme ve başlatma:
+
+```powershell
+docker compose build api-gateway
+docker compose up -d api-gateway
+docker compose logs -f api-gateway
+```
+

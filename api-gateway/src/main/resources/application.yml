@@ -34,7 +34,7 @@ spring:
               predicates:
                 - Path=/api/notifications/**, /api/preferences/**
             - id: payment-webhook
-              uri: ${PAYMENT_SERVICE_URL:http://localhost:8085}
+              uri: ${PAYMENT_SERVICE_URL:http://localhost:8087}
               predicates:
                 - Path=/webhooks/**, /api/webhooks/**
       routes: *gateway_routes
