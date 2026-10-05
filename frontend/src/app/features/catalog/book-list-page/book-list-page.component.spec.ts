@@ -12,7 +12,7 @@ import { BookFiltersComponent } from '../book-filters/book-filters.component';
 import { bookFilterFromParams, BookListPageComponent } from './book-list-page.component';
 
 describe('bookFilterFromParams', () => {
-  it('maps sort/page and omits blanks', () => {
+  it('maps sort/page and forces size=12', () => {
     const filter = bookFilterFromParams(
       convertToParamMap({
         sort: 'price_asc',
@@ -23,7 +23,7 @@ describe('bookFilterFromParams', () => {
     );
     expect(filter.sort).toBe('price_asc');
     expect(filter.page).toBe(1);
-    expect(filter.size).toBe(10);
+    expect(filter.size).toBe(12);
     expect(filter.categoryId).toBeNull();
   });
 });
@@ -84,15 +84,36 @@ describe('BookListPageComponent', () => {
         },
       ],
       page: 0,
-      size: 20,
+      size: 12,
       totalElements: 1,
       totalPages: 1,
     });
     fixture.detectChanges();
   }
 
-  it('loads books from CatalogApi with default page/size', () => {
-    flushInitial();
+  it('loads books from CatalogApi with default page and size=12', () => {
+    httpMock.expectOne('/api/categories').flush([]);
+    const req = httpMock.expectOne((r) => r.url === '/api/books');
+    expect(req.request.params.get('size')).toBe('12');
+    expect(req.request.params.get('page')).toBe('0');
+    req.flush({
+      items: [
+        {
+          id: 'b1',
+          title: 'Deneme',
+          authors: [{ id: 'a1', name: 'Yazar', slug: 'yazar' }],
+          publisher: { id: 'p1', name: 'Yayınevi', slug: 'yayinevi' },
+          priceAmount: 99.9,
+          currency: 'TRY',
+          inStock: true,
+        },
+      ],
+      page: 0,
+      size: 12,
+      totalElements: 1,
+      totalPages: 1,
+    });
+    fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
     expect(el.textContent).toContain('Deneme');
   });

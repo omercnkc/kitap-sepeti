@@ -12,8 +12,11 @@
 | --- | --- | --- |
 | Shell | `features/admin/admin-shell/` | yan menü; lg altı NgbOffcanvas |
 | Header Sepet | `layout/header/` | **Kural A:** `role===ADMIN` iken Sepet+rozet her yerde gizli; USER/misafir aynı |
+| Marka logo | `assets/brand/logo.png` | header + mobil menü `<img>`; metin tekrarı yok; favicon aynı PNG |
+| Header nav | `layout/header/` | `header-nav-btn` outline chip; active primary+turuncu vurgu; Sepet rozeti chip içinde |
 | Publishers / Authors | `admin-*-page/` | lg tablo / dar kart; modal CRUD |
-| Categories | `admin-categories-page/` | ağaç; parent taşıma; sil |
+| Categories | `admin-categories-page/` | düz satır ağaç; `level` girinti + └/├ + Alt kategori rozeti + «Üst: …»; kart yok |
+
 | Books list | `admin-books-page/` | status filter; Yayınla/Arşivle/Stok; taslak≠vitrin yardım metni |
 | Book form | `admin-book-form-page/` | create/edit; lifecycle + stok; taslak/vitrin notu |
 | AdminCatalogApi | `core/api/admin-catalog.api.ts` | publish/archive/stock-adjustments |
@@ -66,9 +69,9 @@
 | Parça | Yol | Not |
 | --- | --- | --- |
 | BookCard | `shared/components/book-card/` | max 280px; Tükendi; addToCart emit |
-| Pagination | `shared/components/pagination/` | NgbPagination; backend page 0-tabanlı |
+| Pagination | `shared/components/pagination/` | NgbPagination; backend page 0-tabanlı; vitrin `layout=simple` (Önceki / 1/N / Sonraki) |
 | BookFilters | `features/catalog/book-filters/` | kategori ağacı, fiyat, sort; lg offcanvas |
-| BookListPage | `features/catalog/book-list-page/` | queryParams → switchMap → CatalogApi.list |
+| BookListPage | `features/catalog/book-list-page/` | size=12 sabit; lg 4 kolon (~3×4); queryParams → switchMap; kapak lazy |
 | BookDetailPage | `features/catalog/book-detail-page/` | getById; 404 EmptyState; sepete ekle → CartStore |
 
 ## Auth katmanı

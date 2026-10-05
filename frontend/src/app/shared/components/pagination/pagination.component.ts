@@ -7,8 +7,9 @@ import {
 } from '@angular/core';
 
 /**
- * NgbPagination sarmalayıcı.
+ * Sayfalama.
  * Backend `page` 0-tabanlı; UI 1-tabanlı — dönüşüm burada.
+ * `layout=full`: NgbPagination; `layout=simple`: Önceki / 1/N / Sonraki.
  */
 @Component({
   selector: 'app-pagination',
@@ -23,6 +24,8 @@ export class PaginationComponent {
   @Input() totalElements = 0;
   @Input() totalPages = 0;
   @Input() maxSize = 5;
+  /** `full` = Ngb sayfa numaraları; `simple` = Prev + 1/N + Next */
+  @Input() layout: 'full' | 'simple' = 'full';
 
   /** Emits 0-based page index. */
   @Output() readonly pageIndexChange = new EventEmitter<number>();
@@ -39,7 +42,18 @@ export class PaginationComponent {
   }
 
   get visible(): boolean {
+    if (this.layout === 'simple') {
+      return this.totalPages >= 1;
+    }
     return this.totalPages > 1;
+  }
+
+  get canGoPrev(): boolean {
+    return this.pageIndex > 0;
+  }
+
+  get canGoNext(): boolean {
+    return this.totalPages > 0 && this.pageIndex < this.totalPages - 1;
   }
 
   onPageChange(uiPage: number): void {
@@ -51,5 +65,19 @@ export class PaginationComponent {
       return;
     }
     this.pageIndexChange.emit(nextIndex);
+  }
+
+  goPrev(): void {
+    if (!this.canGoPrev) {
+      return;
+    }
+    this.pageIndexChange.emit(this.pageIndex - 1);
+  }
+
+  goNext(): void {
+    if (!this.canGoNext) {
+      return;
+    }
+    this.pageIndexChange.emit(this.pageIndex + 1);
   }
 }

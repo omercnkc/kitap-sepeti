@@ -1,5 +1,35 @@
-<nav *ngIf="visible" class="app-pagination d-flex justify-content-center" aria-label="Sayfalama">
+<nav
+  *ngIf="visible"
+  class="app-pagination d-flex justify-content-center align-items-center"
+  aria-label="Sayfalama"
+>
+  <div
+    *ngIf="layout === 'simple'"
+    class="app-pagination__simple d-flex align-items-center gap-2"
+  >
+    <button
+      type="button"
+      class="btn btn-sm btn-outline-secondary"
+      [disabled]="!canGoPrev"
+      (click)="goPrev()"
+    >
+      Önceki
+    </button>
+    <span class="app-pagination__status small text-muted" aria-live="polite">
+      {{ uiPage }} / {{ totalPages }}
+    </span>
+    <button
+      type="button"
+      class="btn btn-sm btn-outline-secondary"
+      [disabled]="!canGoNext"
+      (click)="goNext()"
+    >
+      Sonraki
+    </button>
+  </div>
+
   <ngb-pagination
+    *ngIf="layout !== 'simple'"
     [collectionSize]="collectionSize"
     [pageSize]="pageSize"
     [page]="uiPage"

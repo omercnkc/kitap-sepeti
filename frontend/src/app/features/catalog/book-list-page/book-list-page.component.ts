@@ -17,7 +17,7 @@ type ListState =
   | { kind: 'error' };
 
 const DEFAULT_PAGE = 0;
-const DEFAULT_SIZE = 20;
+const DEFAULT_SIZE = 12;
 
 const CLEARABLE_PARAMS = [
   'categoryId',
@@ -189,7 +189,8 @@ export function bookFilterFromParams(params: ParamMap): BookFilter {
     maxPrice: optionalNumber(params.get('maxPrice')),
     sort: optionalString(params.get('sort')),
     page: optionalInt(params.get('page'), DEFAULT_PAGE),
-    size: optionalInt(params.get('size'), DEFAULT_SIZE),
+    // Vitrin: sayfa başına 12 (3×4 lg); URL size yok sayılır
+    size: DEFAULT_SIZE,
   };
 }
 

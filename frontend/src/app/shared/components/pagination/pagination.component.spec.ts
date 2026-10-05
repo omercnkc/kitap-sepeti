@@ -27,10 +27,48 @@ describe('PaginationComponent', () => {
     expect(component.uiPage).toBe(3);
   });
 
-  it('is visible only when totalPages > 1', () => {
+  it('full layout is visible only when totalPages > 1', () => {
+    component.layout = 'full';
     expect(component.visible).toBeTrue();
     component.totalPages = 1;
     expect(component.visible).toBeFalse();
+  });
+
+  it('simple layout shows 1/N and disables Prev on first page', () => {
+    const simpleFixture = TestBed.createComponent(PaginationComponent);
+    const simple = simpleFixture.componentInstance;
+    simple.layout = 'simple';
+    simple.pageIndex = 0;
+    simple.pageSize = 12;
+    simple.totalElements = 36;
+    simple.totalPages = 3;
+    simpleFixture.detectChanges();
+
+    expect(simple.visible).toBeTrue();
+    expect(simple.canGoPrev).toBeFalse();
+    expect(simple.canGoNext).toBeTrue();
+    const status = (simpleFixture.nativeElement as HTMLElement).querySelector(
+      '.app-pagination__status',
+    );
+    expect(status?.textContent?.replace(/\s+/g, ' ').trim()).toBe('1 / 3');
+  });
+
+  it('simple layout disables Next on last page and emits goPrev', () => {
+    const simpleFixture = TestBed.createComponent(PaginationComponent);
+    const simple = simpleFixture.componentInstance;
+    simple.layout = 'simple';
+    simple.pageIndex = 2;
+    simple.totalPages = 3;
+    simple.pageSize = 12;
+    simple.totalElements = 36;
+    simpleFixture.detectChanges();
+
+    expect(simple.canGoNext).toBeFalse();
+    expect(simple.canGoPrev).toBeTrue();
+    const spy = jasmine.createSpy('pageIndexChange');
+    simple.pageIndexChange.subscribe(spy);
+    simple.goPrev();
+    expect(spy).toHaveBeenCalledWith(1);
   });
 
   it('emits 0-based pageIndexChange from Ngb pageChange', () => {

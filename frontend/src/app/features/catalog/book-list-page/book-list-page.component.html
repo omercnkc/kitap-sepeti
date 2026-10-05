@@ -39,11 +39,8 @@
           message="Katalog şu an görüntülenemiyor. Biraz sonra tekrar deneyin."
         ></app-empty-state>
 
-        <div *ngIf="state.kind === 'ready'" class="row g-3">
-          <div
-            *ngFor="let book of state.page.items"
-            class="col-12 col-sm-6 col-md-4 col-xl-3"
-          >
+        <div *ngIf="state.kind === 'ready'" class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-3">
+          <div *ngFor="let book of state.page.items" class="col">
             <app-book-card [book]="book" (addToCart)="onAddToCart($event)"></app-book-card>
           </div>
         </div>
@@ -51,6 +48,7 @@
         <app-pagination
           *ngIf="state.kind === 'ready' || state.kind === 'empty'"
           class="mt-4"
+          layout="simple"
           [pageIndex]="state.page.page"
           [pageSize]="state.page.size"
           [totalElements]="state.page.totalElements"

@@ -32,17 +32,41 @@
   ></app-empty-state>
 
   <ng-container *ngIf="pageState === 'ready'">
-    <ng-template #nodeTpl let-nodes>
+    <ng-template #nodeTpl let-nodes let-level="level" let-parentName="parentName">
       <ul class="list-unstyled admin-categories__list mb-0">
-        <li *ngFor="let node of nodes; trackBy: trackById" class="admin-categories__item">
+        <li
+          *ngFor="let node of nodes; let last = last; trackBy: trackById"
+          class="admin-categories__item"
+        >
           <div
-            class="admin-categories__row d-flex flex-wrap align-items-center justify-content-between gap-2 border rounded p-2 p-lg-3"
+            class="admin-categories__row d-flex flex-wrap align-items-center gap-2 py-2"
+            [style.padding-left.rem]="level * 1.5"
           >
-            <div class="min-w-0">
-              <div class="fw-semibold">{{ node.name }}</div>
+            <div class="admin-categories__meta min-w-0 flex-grow-1">
+              <div class="d-flex flex-wrap align-items-center gap-2">
+                <span
+                  *ngIf="level > 0"
+                  class="admin-categories__branch"
+                  aria-hidden="true"
+                >{{ last ? '└' : '├' }}</span>
+                <span
+                  class="admin-categories__name"
+                  [class.admin-categories__name--root]="level === 0"
+                  [class.admin-categories__name--child]="level > 0"
+                >{{ node.name }}</span>
+                <span *ngIf="level === 0" class="badge bg-light text-muted border">
+                  Ana kategori
+                </span>
+                <span *ngIf="level > 0" class="badge bg-secondary">Alt kategori</span>
+              </div>
               <div class="font-monospace small text-muted">{{ node.slug }}</div>
+              <div *ngIf="level > 0 && parentName" class="small text-muted">
+                Üst: {{ parentName }}
+              </div>
             </div>
-            <div class="d-flex flex-wrap gap-1">
+            <div
+              class="admin-categories__actions d-flex flex-wrap gap-1 ms-auto flex-shrink-0"
+            >
               <button
                 type="button"
                 class="btn btn-sm btn-outline-secondary"
@@ -69,16 +93,30 @@
               </button>
             </div>
           </div>
-          <div class="admin-categories__children ms-3 ms-lg-4 mt-2" *ngIf="node.children.length">
+          <ng-container *ngIf="node.children.length">
             <ng-container
-              *ngTemplateOutlet="nodeTpl; context: { $implicit: node.children }"
+              *ngTemplateOutlet="
+                nodeTpl;
+                context: {
+                  $implicit: node.children,
+                  level: level + 1,
+                  parentName: node.name
+                }
+              "
             ></ng-container>
-          </div>
+          </ng-container>
         </li>
       </ul>
     </ng-template>
 
-    <ng-container *ngTemplateOutlet="nodeTpl; context: { $implicit: tree }"></ng-container>
+    <div class="admin-categories__tree">
+      <ng-container
+        *ngTemplateOutlet="
+          nodeTpl;
+          context: { $implicit: tree, level: 0, parentName: null }
+        "
+      ></ng-container>
+    </div>
   </ng-container>
 </section>
 

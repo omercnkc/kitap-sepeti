@@ -50,9 +50,14 @@ describe('HeaderComponent', () => {
     expect(fixture.componentInstance).toBeTruthy();
   });
 
-  it('should show guest login/register links', () => {
+  it('should show logo brand link and guest login/register', () => {
     const el = fixture.nativeElement as HTMLElement;
-    expect(el.textContent).toContain('Kitap Sepeti');
+    const logo = el.querySelector(
+      'a.navbar-brand[routerLink="/books"] img.app-header__logo',
+    ) as HTMLImageElement | null;
+    expect(logo).toBeTruthy();
+    expect(logo?.getAttribute('src')).toBe('assets/brand/logo.png');
+    expect(logo?.getAttribute('alt')).toBe('Kitap Sepeti');
     expect(el.querySelector('a[routerLink="/login"]')).toBeTruthy();
     expect(el.querySelector('a[routerLink="/register"]')).toBeTruthy();
   });
@@ -82,7 +87,9 @@ describe('HeaderComponent', () => {
     cartCount$.next(3);
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
-    const badge = el.querySelector('a[routerLink="/cart"] .badge');
+    const badge = el.querySelector(
+      'a[routerLink="/cart"] .header-nav-btn__badge',
+    );
     expect(badge?.textContent?.trim()).toBe('3');
   });
 

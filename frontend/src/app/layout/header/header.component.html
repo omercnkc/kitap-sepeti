@@ -1,7 +1,13 @@
 <header class="app-header border-bottom bg-white">
   <nav class="navbar navbar-expand-lg navbar-light container py-2">
-    <a class="navbar-brand fw-semibold text-primary mb-0" routerLink="/books">
-      Kitap Sepeti
+    <a class="navbar-brand mb-0" routerLink="/books" aria-label="Kitap Sepeti">
+      <img
+        class="app-header__logo"
+        src="assets/brand/logo.png"
+        alt="Kitap Sepeti"
+        width="160"
+        height="48"
+      />
     </a>
 
     <button
@@ -16,14 +22,23 @@
     <div class="collapse navbar-collapse d-none d-lg-flex">
       <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
         <li class="nav-item">
-          <a class="nav-link" routerLink="/books" routerLinkActive="active">Kitaplar</a>
+          <a
+            class="nav-link header-nav-btn"
+            routerLink="/books"
+            routerLinkActive="active"
+            >Kitaplar</a
+          >
         </li>
         <li class="nav-item" *ngIf="showCart$ | async">
-          <a class="nav-link position-relative" routerLink="/cart" routerLinkActive="active">
-            Sepet
+          <a
+            class="nav-link header-nav-btn header-nav-btn--cart"
+            routerLink="/cart"
+            routerLinkActive="active"
+          >
+            <span>Sepet</span>
             <span
               *ngIf="(cartCount$ | async) as count"
-              class="badge rounded-pill bg-primary ms-1"
+              class="badge rounded-pill header-nav-btn__badge"
               [class.d-none]="count < 1"
             >
               {{ count }}
@@ -33,32 +48,68 @@
 
         <ng-container *ngIf="currentUser$ | async as user; else guestLinks">
           <li class="nav-item">
-            <a class="nav-link" routerLink="/account/profile" routerLinkActive="active">Profil</a>
+            <a
+              class="nav-link header-nav-btn"
+              routerLink="/account/profile"
+              routerLinkActive="active"
+              >Profil</a
+            >
           </li>
           <li class="nav-item">
-            <a class="nav-link" routerLink="/account/addresses" routerLinkActive="active">Adreslerim</a>
+            <a
+              class="nav-link header-nav-btn"
+              routerLink="/account/addresses"
+              routerLinkActive="active"
+              >Adreslerim</a
+            >
           </li>
           <li class="nav-item">
-            <a class="nav-link" routerLink="/orders" routerLinkActive="active">Siparişler</a>
+            <a
+              class="nav-link header-nav-btn"
+              routerLink="/orders"
+              routerLinkActive="active"
+              >Siparişler</a
+            >
           </li>
           <li class="nav-item" *ngIf="isAdmin(user)">
-            <a class="nav-link" routerLink="/admin" routerLinkActive="active">Admin</a>
+            <a
+              class="nav-link header-nav-btn"
+              routerLink="/admin"
+              routerLinkActive="active"
+              >Admin</a
+            >
           </li>
           <li class="nav-item">
-            <span class="nav-link text-body pe-0">{{ displayName(user) }}</span>
+            <span class="nav-link header-nav-btn header-nav-btn--label">{{
+              displayName(user)
+            }}</span>
           </li>
           <li class="nav-item">
-            <button type="button" class="btn btn-link nav-link" (click)="logout()">
+            <button
+              type="button"
+              class="nav-link header-nav-btn"
+              (click)="logout()"
+            >
               Çıkış
             </button>
           </li>
         </ng-container>
         <ng-template #guestLinks>
           <li class="nav-item">
-            <a class="nav-link" routerLink="/login" routerLinkActive="active">Giriş</a>
+            <a
+              class="nav-link header-nav-btn"
+              routerLink="/login"
+              routerLinkActive="active"
+              >Giriş</a
+            >
           </li>
           <li class="nav-item">
-            <a class="nav-link" routerLink="/register" routerLinkActive="active">Kayıt</a>
+            <a
+              class="nav-link header-nav-btn"
+              routerLink="/register"
+              routerLinkActive="active"
+              >Kayıt</a
+            >
           </li>
         </ng-template>
       </ul>
@@ -68,7 +119,20 @@
 
 <ng-template #mobileMenu let-offcanvas>
   <div class="offcanvas-header border-bottom">
-    <h2 class="offcanvas-title h5 mb-0">Menü</h2>
+    <a
+      class="offcanvas-title app-header__brand-link mb-0"
+      routerLink="/books"
+      aria-label="Kitap Sepeti"
+      (click)="offcanvas.dismiss()"
+    >
+      <img
+        class="app-header__logo app-header__logo--menu"
+        src="assets/brand/logo.png"
+        alt="Kitap Sepeti"
+        width="140"
+        height="42"
+      />
+    </a>
     <button
       type="button"
       class="btn-close"
@@ -77,9 +141,9 @@
     ></button>
   </div>
   <div class="offcanvas-body">
-    <nav class="nav flex-column gap-1">
+    <nav class="nav flex-column gap-2 app-header__mobile-nav">
       <a
-        class="nav-link px-0"
+        class="nav-link header-nav-btn"
         routerLink="/books"
         routerLinkActive="active"
         (click)="offcanvas.dismiss()"
@@ -88,15 +152,15 @@
       </a>
       <a
         *ngIf="showCart$ | async"
-        class="nav-link px-0"
+        class="nav-link header-nav-btn header-nav-btn--cart"
         routerLink="/cart"
         routerLinkActive="active"
         (click)="offcanvas.dismiss()"
       >
-        Sepet
+        <span>Sepet</span>
         <span
           *ngIf="(cartCount$ | async) as count"
-          class="badge rounded-pill bg-primary ms-1"
+          class="badge rounded-pill header-nav-btn__badge"
           [class.d-none]="count < 1"
         >
           {{ count }}
@@ -105,7 +169,7 @@
 
       <ng-container *ngIf="currentUser$ | async as user; else mobileGuest">
         <a
-          class="nav-link px-0"
+          class="nav-link header-nav-btn"
           routerLink="/account/profile"
           routerLinkActive="active"
           (click)="offcanvas.dismiss()"
@@ -113,7 +177,7 @@
           Profil
         </a>
         <a
-          class="nav-link px-0"
+          class="nav-link header-nav-btn"
           routerLink="/account/addresses"
           routerLinkActive="active"
           (click)="offcanvas.dismiss()"
@@ -121,7 +185,7 @@
           Adreslerim
         </a>
         <a
-          class="nav-link px-0"
+          class="nav-link header-nav-btn"
           routerLink="/orders"
           routerLinkActive="active"
           (click)="offcanvas.dismiss()"
@@ -130,17 +194,19 @@
         </a>
         <a
           *ngIf="isAdmin(user)"
-          class="nav-link px-0"
+          class="nav-link header-nav-btn"
           routerLink="/admin"
           routerLinkActive="active"
           (click)="offcanvas.dismiss()"
         >
           Admin
         </a>
-        <span class="nav-link px-0 text-body">{{ displayName(user) }}</span>
+        <span class="nav-link header-nav-btn header-nav-btn--label">{{
+          displayName(user)
+        }}</span>
         <button
           type="button"
-          class="btn btn-link nav-link px-0 text-start"
+          class="nav-link header-nav-btn text-start"
           (click)="logout(); offcanvas.dismiss()"
         >
           Çıkış
@@ -148,7 +214,7 @@
       </ng-container>
       <ng-template #mobileGuest>
         <a
-          class="nav-link px-0"
+          class="nav-link header-nav-btn"
           routerLink="/login"
           routerLinkActive="active"
           (click)="offcanvas.dismiss()"
@@ -156,7 +222,7 @@
           Giriş
         </a>
         <a
-          class="nav-link px-0"
+          class="nav-link header-nav-btn"
           routerLink="/register"
           routerLinkActive="active"
           (click)="offcanvas.dismiss()"

@@ -1,12 +1,31 @@
+.admin-categories__tree {
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
 .admin-categories__item {
-  margin-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .admin-categories__row {
-  background-color: var(--bs-body-bg);
+  background: transparent;
 }
 
-.admin-categories__children {
-  border-left: 2px solid rgba(0, 0, 0, 0.08);
-  padding-left: 0.75rem;
+.admin-categories__branch {
+  display: inline-block;
+  min-width: 1rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: rgba(0, 0, 0, 0.45);
+  line-height: 1;
+}
+
+.admin-categories__name--root {
+  font-weight: 600;
+}
+
+.admin-categories__name--child {
+  font-weight: 500;
+}
+
+.admin-categories__actions {
+  max-width: 100%;
 }
