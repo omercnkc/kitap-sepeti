@@ -11,6 +11,7 @@ import { BookCardComponent } from './components/book-card/book-card.component';
 import { PaginationComponent } from './components/pagination/pagination.component';
 import { ConfirmDialogComponent } from './components/confirm-dialog/confirm-dialog.component';
 import { AddressFormComponent } from './components/address-form/address-form.component';
+import { OrderStatusPipe } from './pipes/order-status.pipe';
 
 /**
  * Ortak sunum parçaları (pipe, presentational component) burada export edilir.
@@ -26,6 +27,7 @@ import { AddressFormComponent } from './components/address-form/address-form.com
     PaginationComponent,
     ConfirmDialogComponent,
     AddressFormComponent,
+    OrderStatusPipe,
   ],
   imports: [CommonModule, RouterModule, NgbModule, ReactiveFormsModule],
   exports: [
@@ -41,6 +43,7 @@ import { AddressFormComponent } from './components/address-form/address-form.com
     PaginationComponent,
     ConfirmDialogComponent,
     AddressFormComponent,
+    OrderStatusPipe,
   ],
 })
 export class SharedModule {}

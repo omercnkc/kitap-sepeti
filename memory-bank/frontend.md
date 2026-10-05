@@ -1,19 +1,20 @@
 # Frontend (Kitap Sepeti UI)
 
-## Durum (UI-7 Adım 1–3)
+## Durum (UI-7 Adım 1–5)
 
 - Angular 13 NgModule; lazy features; proxy `/api` → Gateway 8080
-- UI-3…6 tamam; UI-7.1–3: OrderApi + CheckoutPage (POST)
-- Sırada: sipariş polling / paid-failed; liste UI; `q` arama (B1)
+- UI-7.1–5: OrderApi, Checkout, OrderDetail polling (paid/failed)
+- Sırada: sipariş listesi UI; `q` arama (B1)
 
 ## Sipariş / Checkout
 
 | Parça | Yol | Not |
 | --- | --- | --- |
-| Modeller | `core/models/order.ts` | CheckoutRequest / OrderResponse OpenAPI birebir |
+| Modeller | `core/models/order.ts` | CheckoutRequest / OrderResponse; status + cancelled |
 | OrderApi | `core/api/order.api.ts` | checkout, getById, list |
 | CheckoutPage | `features/checkout/checkout-page/` | sepet özeti; adres seç/ekle; POST; 409 ORDER_PENDING_EXISTS |
-| OrderDetail | `features/orders/order-detail-page/` | şimdilik placeholder (polling sonraki) |
+| OrderDetail | `features/orders/order-detail-page/` | timer 2s poll; takeWhile pending; ~60s; paid→CartStore.load |
+| OrderStatusPipe | `shared/pipes/order-status.pipe.ts` | pending/paid/failed/cancelled Türkçe |
 
 ## Hesap
 

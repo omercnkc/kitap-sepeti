@@ -1,10 +1,103 @@
-<section class="container py-4">
-  <h1 class="h4 mb-2">Sipariş detayı</h1>
-  <p class="text-muted mb-2">Sipariş kimliği: {{ orderId || '—' }}</p>
-  <p class="mb-0 small text-muted">
-    Ödeme sonucu yakında burada güncellenecek. Sipariş durumu için bu sayfayı yenileyebilirsiniz.
-  </p>
-  <p class="mt-3 mb-0">
+<section class="container py-4 order-detail">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <h1 class="h4 mb-0">Sipariş detayı</h1>
     <a routerLink="/orders" class="small text-decoration-none">Siparişlerime dön</a>
-  </p>
+  </div>
+
+  <app-spinner *ngIf="pageState === 'loading'" label="Sipariş yükleniyor…"></app-spinner>
+
+  <app-empty-state
+    *ngIf="pageState === 'notFound'"
+    title="Sipariş bulunamadı"
+    message="Bu sipariş silinmiş olabilir veya size ait değil."
+    ctaLabel="Siparişlerime dön"
+    ctaLink="/orders"
+  ></app-empty-state>
+
+  <app-empty-state
+    *ngIf="pageState === 'error'"
+    title="Sipariş yüklenemedi"
+    message="Sipariş bilgisi alınamadı. Lütfen tekrar deneyin."
+    ctaLabel="Siparişlerime dön"
+    ctaLink="/orders"
+  ></app-empty-state>
+
+  <ng-container *ngIf="pageState === 'ready'">
+    <ng-container *ngIf="order as o">
+      <div *ngIf="o.status === 'pending'" class="text-center py-5">
+        <app-spinner label="Ödeme işleniyor…"></app-spinner>
+        <p class="text-muted mt-3 mb-0">
+          Sipariş no: <span class="font-monospace">{{ o.id }}</span>
+        </p>
+        <p *ngIf="pollTimedOut" class="alert alert-warning mt-3 mb-0 text-start" role="status">
+          Ödeme hâlâ işleniyor. Biraz sonra bu sayfayı yenileyebilirsiniz.
+        </p>
+      </div>
+
+      <div *ngIf="o.status === 'paid'" class="order-detail__result">
+        <div class="alert alert-success" role="status">
+          <strong>Ödeme başarılı.</strong> Siparişiniz alındı.
+        </div>
+        <ng-container *ngTemplateOutlet="summary; context: { $implicit: o }"></ng-container>
+      </div>
+
+      <div *ngIf="o.status === 'failed'" class="order-detail__result">
+        <div class="alert alert-danger" role="alert">
+          <strong>Ödeme başarısız.</strong>
+          {{ failureMessage }}
+        </div>
+        <p class="mb-3">Sepetiniz korunur; tekrar deneyebilirsiniz.</p>
+        <div class="d-flex flex-wrap gap-2 mb-4">
+          <a routerLink="/checkout" class="btn btn-primary btn-sm">Tekrar dene</a>
+          <a routerLink="/cart" class="btn btn-outline-secondary btn-sm">Sepete git</a>
+        </div>
+        <ng-container *ngTemplateOutlet="summary; context: { $implicit: o }"></ng-container>
+      </div>
+
+      <div *ngIf="o.status === 'cancelled'" class="order-detail__result">
+        <div class="alert alert-secondary" role="status">
+          <strong>Sipariş iptal edildi.</strong>
+        </div>
+        <ng-container *ngTemplateOutlet="summary; context: { $implicit: o }"></ng-container>
+      </div>
+    </ng-container>
+  </ng-container>
 </section>
+
+<ng-template #summary let-o>
+  <div class="order-detail__summary border rounded p-3">
+    <dl class="row small mb-2">
+      <dt class="col-sm-4 text-muted">Sipariş no</dt>
+      <dd class="col-sm-8 font-monospace">{{ o.id }}</dd>
+      <dt class="col-sm-4 text-muted">Durum</dt>
+      <dd class="col-sm-8">{{ o.status | orderStatus }}</dd>
+      <dt class="col-sm-4 text-muted">Toplam</dt>
+      <dd class="col-sm-8 fw-semibold">
+        {{ o.totalAmount | currency: (o.currency || 'TRY') : 'symbol' : '1.2-2' : 'tr-TR' }}
+      </dd>
+      <dt class="col-sm-4 text-muted">Alıcı</dt>
+      <dd class="col-sm-8">{{ o.address.recipientName }} · {{ o.address.phone }}</dd>
+      <dt class="col-sm-4 text-muted">Adres</dt>
+      <dd class="col-sm-8">{{ addressSummary(o) }}</dd>
+    </dl>
+
+    <h2 class="h6 mt-3 mb-2">Kalemler</h2>
+    <ul class="list-unstyled small mb-0">
+      <li
+        *ngFor="let item of o.items; trackBy: trackByBookId"
+        class="d-flex justify-content-between gap-2 mb-2"
+      >
+        <span class="min-w-0">
+          {{ item.title }}
+          <span class="text-muted">× {{ item.quantity }}</span>
+        </span>
+        <span class="text-nowrap">
+          {{
+            item.lineTotal
+              | currency: (o.currency || 'TRY') : 'symbol' : '1.2-2' : 'tr-TR'
+          }}
+        </span>
+      </li>
+    </ul>
+  </div>
+</ng-template>

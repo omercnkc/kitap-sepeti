@@ -15,8 +15,8 @@ export interface CheckoutRequest {
   address: AddressRequest;
 }
 
-/** OpenAPI `OrderResponse.status` / `OrderSummaryResponse.status` */
-export type OrderStatus = 'pending' | 'paid' | 'failed';
+/** OpenAPI `OrderResponse.status` / `OrderSummaryResponse.status` (+ cancelled UI) */
+export type OrderStatus = 'pending' | 'paid' | 'failed' | 'cancelled';
 
 /** OpenAPI `OrderAddressResponse` */
 export interface OrderAddressResponse {
