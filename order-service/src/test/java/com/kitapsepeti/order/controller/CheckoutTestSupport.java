@@ -36,9 +36,9 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
  * önce sunucular açık ve boş, circuit breaker'lar kapalı ve sıfır, saat gerçek; her test kendi kullanıcısıyla çalışır
  * (bekleyen sipariş kuralı testler arasında çakışmaz).
  */
-abstract class CheckoutTestSupport extends ApiTestSupport {
+public abstract class CheckoutTestSupport extends ApiTestSupport {
 
-	static final String CHECKOUT = "/api/orders/checkout";
+	public static final String CHECKOUT = "/api/orders/checkout";
 
 	static final String SNAPSHOT = "/internal/cart/snapshot";
 
@@ -51,53 +51,53 @@ abstract class CheckoutTestSupport extends ApiTestSupport {
 	static final String RELEASE_PATH_REGEX = "/internal/stock/reservations/[^/]+/release";
 
 	/** Adres değerleri logda aranır; başka hiçbir metinde geçmeyecek kadar özgün. */
-	static final String RECIPIENT = "Gizlialici Soyadxq";
+	public static final String RECIPIENT = "Gizlialici Soyadxq";
 
-	static final String PHONE = "+905559876543";
+	public static final String PHONE = "+905559876543";
 
-	static final String LINE1 = "Saklisokak No 77";
+	public static final String LINE1 = "Saklisokak No 77";
 
-	static final String LINE2 = "Kat 9 Daire 31";
+	public static final String LINE2 = "Kat 9 Daire 31";
 
-	static final String DISTRICT = "Gizliilce";
+	public static final String DISTRICT = "Gizliilce";
 
-	static final String CITY = "Saklisehir";
+	public static final String CITY = "Saklisehir";
 
-	static final String POSTAL_CODE = "26999";
+	public static final String POSTAL_CODE = "26999";
 
-	static final String ADDRESS_JSON = """
+	public static final String ADDRESS_JSON = """
 			{"recipientName":"%s","phone":"%s","line1":"%s","line2":"%s","district":"%s","city":"%s",\
 			"postalCode":"%s","country":"TR"}""".formatted(RECIPIENT, PHONE, LINE1, LINE2, DISTRICT, CITY, POSTAL_CODE);
 
-	static final String CHECKOUT_BODY = "{\"address\":" + ADDRESS_JSON + "}";
+	public static final String CHECKOUT_BODY = "{\"address\":" + ADDRESS_JSON + "}";
 
-	static final List<StubServer> STUBS = List.of(CART, CATALOG, PAYMENT);
-
-	@Autowired
-	DownstreamCircuitBreakers breakers;
+	public static final List<StubServer> STUBS = List.of(CART, CATALOG, PAYMENT);
 
 	@Autowired
-	MutableClock clock;
+	public DownstreamCircuitBreakers breakers;
 
-	UUID userId;
+	@Autowired
+	public MutableClock clock;
 
-	String token;
+	public UUID userId;
 
-	record Book(UUID id, String title, String price, String currency, boolean inStock) {
+	public String token;
 
-		static Book of(String title, String price) {
+	public record Book(UUID id, String title, String price, String currency, boolean inStock) {
+
+		public static Book of(String title, String price) {
 			return new Book(UUID.randomUUID(), title, price, "TRY", true);
 		}
 
-		Book withCurrency(String newCurrency) {
+		public Book withCurrency(String newCurrency) {
 			return new Book(this.id, this.title, this.price, newCurrency, this.inStock);
 		}
 
-		Book outOfStock() {
+		public Book outOfStock() {
 			return new Book(this.id, this.title, this.price, this.currency, false);
 		}
 
-		String json() {
+		public String json() {
 			return """
 					{"id":"%s","title":"%s","priceAmount":%s,"currency":"%s","inStock":%s,"slug":"yok-sayilir"}"""
 				.formatted(this.id, this.title, this.price, this.currency, this.inStock);
@@ -105,11 +105,11 @@ abstract class CheckoutTestSupport extends ApiTestSupport {
 
 	}
 
-	record Line(Book book, int quantity) {
+	public record Line(Book book, int quantity) {
 	}
 
 	@BeforeEach
-	void resetRemotesAndUser() {
+	public void resetRemotesAndUser() {
 		for (StubServer stub : STUBS) {
 			stub.ensureRunning();
 			stub.server().resetAll();
@@ -124,7 +124,7 @@ abstract class CheckoutTestSupport extends ApiTestSupport {
 	}
 
 	@AfterEach
-	void restoreRemotes() {
+	public void restoreRemotes() {
 		STUBS.forEach(StubServer::ensureRunning);
 		for (Downstream downstream : Downstream.values()) {
 			this.breakers.get(downstream).reset();
@@ -133,11 +133,11 @@ abstract class CheckoutTestSupport extends ApiTestSupport {
 		org.mockito.Mockito.reset(this.transactions);
 	}
 
-	ResultActions checkout() throws Exception {
+	public ResultActions checkout() throws Exception {
 		return checkout(this.token, CHECKOUT_BODY);
 	}
 
-	ResultActions checkout(String bearerToken, String body) throws Exception {
+	public ResultActions checkout(String bearerToken, String body) throws Exception {
 		return mockMvc.perform(MockMvcRequestBuilders.post(CHECKOUT)
 			.with(bearer(bearerToken))
 			.contentType(MediaType.APPLICATION_JSON)
@@ -147,7 +147,7 @@ abstract class CheckoutTestSupport extends ApiTestSupport {
 	// --- Stub'lar ---
 
 	/** Sepet: kitaplar ve adetler (Cart'ın tüm alanlarıyla; Order yalnızca cartId + bookId/quantity okur). */
-	static UUID stubCart(Line... lines) {
+	public static UUID stubCart(Line... lines) {
 		UUID cartId = UUID.randomUUID();
 		String items = List.of(lines)
 			.stream()
@@ -160,44 +160,44 @@ abstract class CheckoutTestSupport extends ApiTestSupport {
 		return cartId;
 	}
 
-	static void stubCart(ResponseDefinitionBuilder response) {
+	public static void stubCart(ResponseDefinitionBuilder response) {
 		CART.server().stubFor(post(urlEqualTo(SNAPSHOT)).willReturn(response));
 	}
 
 	/** Catalog lookup: yalnızca verilen kitaplar yanıtta (diğerleri "bulunamadı"). */
-	static void stubLookup(Book... books) {
+	public static void stubLookup(Book... books) {
 		stubLookup(json(200, "{\"items\":[" + List.of(books).stream().map(Book::json).collect(Collectors.joining(","))
 				+ "]}"));
 	}
 
-	static void stubLookup(ResponseDefinitionBuilder response) {
+	public static void stubLookup(ResponseDefinitionBuilder response) {
 		CATALOG.server().stubFor(get(urlPathEqualTo(LOOKUP)).willReturn(response));
 	}
 
 	/** Rezervasyon {@code held}: yanıttaki orderId istekteki sipariş (Catalog sözleşmesi). */
-	static void stubReserveHeld() {
+	public static void stubReserveHeld() {
 		stubReserve(reservation(201, "held"));
 	}
 
-	static void stubReserve(ResponseDefinitionBuilder response) {
+	public static void stubReserve(ResponseDefinitionBuilder response) {
 		CATALOG.server().stubFor(post(urlEqualTo(RESERVATIONS)).willReturn(response));
 	}
 
-	static ResponseDefinitionBuilder reservation(int status, String reservationStatus) {
+	public static ResponseDefinitionBuilder reservation(int status, String reservationStatus) {
 		return json(status, """
 				{"orderId":"{{jsonPath request.body '$.orderId'}}","status":"%s","expiresAt":"2026-10-04T10:15:00Z",\
 				"items":[]}""".formatted(reservationStatus)).withTransformers("response-template");
 	}
 
 	/** Payment 201: verilen ödeme id'siyle, istekteki siparişe ait. */
-	static void stubPaymentInitiated(UUID paymentId, String paymentStatus) {
+	public static void stubPaymentInitiated(UUID paymentId, String paymentStatus) {
 		stubPayment(json(201, """
 				{"paymentId":"%s","orderId":"{{jsonPath request.body '$.orderId'}}","status":"%s","amount":1.00,\
 				"currency":"TRY","failureCode":null,"redirectUrl":null}""".formatted(paymentId, paymentStatus))
 			.withTransformers("response-template"));
 	}
 
-	static void stubPayment(ResponseDefinitionBuilder response) {
+	public static void stubPayment(ResponseDefinitionBuilder response) {
 		PAYMENT.server().stubFor(post(urlEqualTo(PAYMENTS)).willReturn(response));
 	}
 
@@ -229,14 +229,14 @@ abstract class CheckoutTestSupport extends ApiTestSupport {
 		return aResponse().withStatus(status).withHeader("Content-Type", "application/json").withBody(body);
 	}
 
-	static ResponseDefinitionBuilder problem(int status, String code) {
+	public static ResponseDefinitionBuilder problem(int status, String code) {
 		return aResponse().withStatus(status)
 			.withHeader("Content-Type", "application/problem+json")
 			.withBody("""
 					{"type":"about:blank","title":"t","status":%d,"code":"%s","instance":"/x"}""".formatted(status, code));
 	}
 
-	static ResponseDefinitionBuilder stockProblem(String code, UUID bookId) {
+	public static ResponseDefinitionBuilder stockProblem(String code, UUID bookId) {
 		return aResponse().withStatus(409)
 			.withHeader("Content-Type", "application/problem+json")
 			.withBody("""
@@ -300,12 +300,12 @@ abstract class CheckoutTestSupport extends ApiTestSupport {
 				String.class, orderId.toString());
 	}
 
-	static UUID orderIdOf(ResultActions result) throws Exception {
+	public static UUID orderIdOf(ResultActions result) throws Exception {
 		String body = result.andReturn().getResponse().getContentAsString();
 		return UUID.fromString(JsonPath.read(body, "$.orderId"));
 	}
 
-	static UUID idOf(ResultActions result) throws Exception {
+	public static UUID idOf(ResultActions result) throws Exception {
 		String body = result.andReturn().getResponse().getContentAsString();
 		return UUID.fromString(JsonPath.read(body, "$.id"));
 	}

@@ -94,6 +94,8 @@ springdoc:
     operations-sorter: method
 
 app:
+  # Maven resource filtering ile pom'daki sürüm yazılır (OpenAPI info.version).
+  version: "@project.version@"
   jwt:
     issuer: kitapsepeti-user-service
   # Exchange tüm servislerle ortaktır; ad değişirse tüm servislerde birlikte değişmeli.

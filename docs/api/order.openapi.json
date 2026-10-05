@@ -1,0 +1,677 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "description": "Sipariş yönetimi: kullanıcının sepetinden sipariş oluşturma (checkout), sipariş detayı ve sipariş listesi.\n\n**Erişim:**\n- Tüm uçlar (`/api/**`): user-service'ten alınan JWT, `Authorization: Bearer <accessToken>` (`bearerAuth`); rol şartı yok (`USER` ve `ADMIN`). Kullanıcı yalnızca token'dan gelir; başka kullanıcının siparişlerine erişilemez.\n- Internal uç yoktur; servisler arası çağrılar bu serviste sunulmaz.\n\n**Checkout Akışı:** `POST /api/orders/checkout` aktif sepetten sipariş oluşturur. Sipariş önce `pending` durumunda oluşturulur (201 Created + `Location` başlığı). Stok rezervasyonu ve ödeme başlatma adımları sırayla işletilir. Ödeme asenkrondur; ödeme sonucu RabbitMQ üzerinden tüketilir ve sipariş `paid` ya da `failed` olur. İstemci sipariş durumunu `GET /api/orders/{orderId}` ile izler.\n\n**Sayfalama ve Sıralama:** `GET /api/orders` kullanıcının kendi siparişlerini `created_at DESC, id DESC` sabit sırasıyla sayfalı döner. `page >= 0` (varsayılan 0), `size 1..50` (varsayılan 20). Öğe özeti (`OrderSummaryResponse`) iç durumları ve detayları içermez; `itemCount` farklı kitap (satır) sayısıdır; adet toplamı değildir.\n\n**Para:** İstekte ve yanıtta para alanları JSON sayıdır, 2 ondalık basamak.\n\n**Hatalar:** Tüm hatalar RFC 9457 ProblemDetail olarak `application/problem+json` ile döner (`Problem` şeması). İstemci hatayı `code` alanına göre ayırt eder. Sipariş DB'ye yazıldıktan sonraki hatalarda veya bekleyen sipariş çakışmasında yanıtta ek olarak `orderId` alanı bulunur.\n",
+    "title": "Kitap Sepeti Order API",
+    "version": "0.0.1-SNAPSHOT"
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Dokümanın sunulduğu sunucu"
+    }
+  ],
+  "tags": [
+    {
+      "description": "Kullanıcı siparişleri: checkout, detay ve sayfalı özet.",
+      "name": "Orders"
+    }
+  ],
+  "paths": {
+    "/api/orders": {
+      "get": {
+        "description": "Kullanıcının kendi siparişlerinin sayfalı özeti; `created_at DESC, id DESC` sabit sırasıyla. `itemCount` farklı kitap (satır) sayısıdır; adet toplamı değildir.",
+        "operationId": "listOrders",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0,
+              "minimum": 0
+            }
+          },
+          {
+            "in": "query",
+            "name": "size",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponseOrderSummaryResponse"
+                }
+              }
+            },
+            "description": "Sayfalı sipariş özeti."
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`VALIDATION_FAILED`: `page` negatif veya `size` 1–50 aralığı dışında."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`UNAUTHORIZED`: token yok, geçersiz, süresi dolmuş ya da `sub` kullanıcı id'si (UUID) değil.",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Token yoksa `Bearer`, geçersizse `Bearer error=\"invalid_token\"`.",
+                "schema": {
+                  "type": "string",
+                  "example": "Bearer"
+                }
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INTERNAL_ERROR`: beklenmeyen hata; ayrıntı yanıtta yer almaz."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`AUTHENTICATION_UNAVAILABLE`: token doğrulanamadı çünkü user-service JWKS ucuna ulaşılamıyor; daha sonra tekrar deneyin."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Siparişleri listele",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/api/orders/checkout": {
+      "post": {
+        "description": "Aktif sepetten sipariş oluşturur; 201 + `Location`. Sonuç (`paid`/`failed`) asenkrondur; `GET /api/orders/{orderId}` ile izlenir.",
+        "operationId": "checkout",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckoutRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              }
+            },
+            "description": "Sipariş oluşturuldu.",
+            "headers": {
+              "Location": {
+                "description": "Oluşturulan siparişin adresi: `/api/orders/{orderId}`.",
+                "schema": {
+                  "type": "string",
+                  "format": "uri-reference"
+                },
+                "style": "simple"
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`VALIDATION_FAILED` (adres alan hataları `errors` dizisinde) veya `MALFORMED_REQUEST` (geçersiz JSON)."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`UNAUTHORIZED`: token yok, geçersiz, süresi dolmuş ya da `sub` kullanıcı id'si (UUID) değil.",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Token yoksa `Bearer`, geçersizse `Bearer error=\"invalid_token\"`.",
+                "schema": {
+                  "type": "string",
+                  "example": "Bearer"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Çakışma: `ORDER_PENDING_EXISTS` (kullanıcının bekleyen siparişi var; `orderId` taşır), `BOOK_NOT_AVAILABLE` (kitap satışta değil) veya `INSUFFICIENT_STOCK` (stok yetersiz; `orderId` taşır)."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "İş kuralı ihlali: `CART_EMPTY` (sepet boş), `MIXED_CURRENCY` (farklı para birimleri), `ORDER_TOTAL_ZERO` (toplam 0), `ORDER_TOTAL_TOO_LARGE` (üst limit aşımı), `EMPTY_ORDER`, `DUPLICATE_BOOK`, `INVALID_QUANTITY`, `INVALID_PRICE` veya `INVALID_CURRENCY`."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INTERNAL_ERROR`: beklenmeyen hata; ayrıntı yanıtta yer almaz."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Servis kesintisi: `CART_UNAVAILABLE`, `CATALOG_UNAVAILABLE` (rezervasyon aşamasında `orderId` taşır), `PAYMENT_UNAVAILABLE` (`orderId` taşır), `ORDER_UNAVAILABLE` (`orderId` taşır), `CHECKOUT_INTERRUPTED` (`orderId` taşır) veya `AUTHENTICATION_UNAVAILABLE`."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Sipariş oluştur (checkout)",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/api/orders/{orderId}": {
+      "get": {
+        "description": "Sipariş detayı; yalnızca siparişin sahibi okuyabilir.",
+        "operationId": "getOrder",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orderId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              }
+            },
+            "description": "Sipariş detayı."
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`MALFORMED_REQUEST`: `orderId` UUID biçiminde değil."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`UNAUTHORIZED`: token yok, geçersiz, süresi dolmuş ya da `sub` kullanıcı id'si (UUID) değil.",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Token yoksa `Bearer`, geçersizse `Bearer error=\"invalid_token\"`.",
+                "schema": {
+                  "type": "string",
+                  "example": "Bearer"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`ORDER_NOT_FOUND`: sipariş bulunamadı veya başka bir kullanıcıya ait."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INTERNAL_ERROR`: beklenmeyen hata; ayrıntı yanıtta yer almaz."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`AUTHENTICATION_UNAVAILABLE`: token doğrulanamadı çünkü user-service JWKS ucuna ulaşılamıyor; daha sonra tekrar deneyin."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Sipariş detayını oku",
+        "tags": [
+          "Orders"
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AddressRequest": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 0
+          },
+          "country": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}$"
+          },
+          "district": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 0
+          },
+          "line1": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 0
+          },
+          "line2": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 0
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 0
+          },
+          "postalCode": {
+            "type": "string",
+            "maxLength": 16,
+            "minLength": 0
+          },
+          "recipientName": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "city",
+          "country",
+          "line1",
+          "phone",
+          "recipientName"
+        ]
+      },
+      "CheckoutRequest": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "$ref": "#/components/schemas/AddressRequest"
+          }
+        },
+        "required": [
+          "address"
+        ]
+      },
+      "OrderAddressResponse": {
+        "type": "object",
+        "description": "Siparişin teslimat adresi (checkout anındaki anlık kopya).",
+        "properties": {
+          "city": {
+            "type": "string",
+            "description": "İl."
+          },
+          "country": {
+            "type": "string",
+            "description": "ISO 3166-1 alpha-2 ülke kodu.",
+            "example": "TR"
+          },
+          "district": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "İlçe; yoksa null."
+          },
+          "line1": {
+            "type": "string",
+            "description": "Adres satırı 1."
+          },
+          "line2": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Adres satırı 2; yoksa null."
+          },
+          "phone": {
+            "type": "string",
+            "description": "Telefon numarası."
+          },
+          "postalCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Posta kodu; yoksa null."
+          },
+          "recipientName": {
+            "type": "string",
+            "description": "Teslim alacak kişinin adı soyadı."
+          }
+        },
+        "required": [
+          "city",
+          "country",
+          "district",
+          "line1",
+          "line2",
+          "phone",
+          "postalCode",
+          "recipientName"
+        ]
+      },
+      "OrderItemResponse": {
+        "type": "object",
+        "description": "Sipariş kalemi.",
+        "properties": {
+          "bookId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Kitap id'si."
+          },
+          "lineTotal": {
+            "type": "number",
+            "description": "Satır toplam tutarı (quantity × unitPrice), 2 ondalık basamak."
+          },
+          "quantity": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Sipariş edilen adet.",
+            "minimum": 1
+          },
+          "title": {
+            "type": "string",
+            "description": "Checkout anındaki kitap başlığı."
+          },
+          "unitPrice": {
+            "type": "number",
+            "description": "Checkout anındaki birim fiyat, 2 ondalık basamak."
+          }
+        },
+        "required": [
+          "bookId",
+          "lineTotal",
+          "quantity",
+          "title",
+          "unitPrice"
+        ]
+      },
+      "OrderResponse": {
+        "type": "object",
+        "description": "Sipariş. Tüm alanlar her yanıtta bulunur; boş olanlar null gelir.",
+        "properties": {
+          "address": {
+            "$ref": "#/components/schemas/OrderAddressResponse",
+            "description": "Checkout anındaki teslimat adresinin kopyası."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Oluşturulma zamanı (UTC)."
+          },
+          "currency": {
+            "type": "string",
+            "description": "ISO 4217 para birimi.",
+            "example": "TRY"
+          },
+          "discountAmount": {
+            "type": "number",
+            "description": "İndirim tutarı, 2 ondalık basamak."
+          },
+          "failureCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Yalnızca failed siparişte dolu (ör. OUT_OF_STOCK); diğerlerinde null."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Sipariş id'si."
+          },
+          "items": {
+            "type": "array",
+            "description": "Sipariş kalemleri, eklenme sırasıyla.",
+            "items": {
+              "$ref": "#/components/schemas/OrderItemResponse"
+            }
+          },
+          "status": {
+            "type": "string",
+            "description": "Sipariş durumu: pending, paid veya failed.",
+            "enum": [
+              "pending",
+              "paid",
+              "failed"
+            ]
+          },
+          "subtotal": {
+            "type": "number",
+            "description": "Kalemlerin toplamı, 2 ondalık basamak."
+          },
+          "totalAmount": {
+            "type": "number",
+            "description": "Ödenecek toplam tutar, 2 ondalık basamak."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Son değişiklik zamanı (UTC)."
+          }
+        },
+        "required": [
+          "address",
+          "createdAt",
+          "currency",
+          "discountAmount",
+          "failureCode",
+          "id",
+          "items",
+          "status",
+          "subtotal",
+          "totalAmount",
+          "updatedAt"
+        ]
+      },
+      "OrderSummaryResponse": {
+        "type": "object",
+        "description": "Sipariş listesi öğesi (özet).",
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Oluşturulma zamanı (UTC)."
+          },
+          "currency": {
+            "type": "string",
+            "description": "ISO 4217 para birimi.",
+            "example": "TRY"
+          },
+          "failureCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Yalnızca failed siparişte dolu; diğerlerinde null."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Sipariş id'si."
+          },
+          "itemCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "farklı kitap (satır) sayısı; adet toplamı değil."
+          },
+          "status": {
+            "type": "string",
+            "description": "Sipariş durumu: pending, paid veya failed.",
+            "enum": [
+              "pending",
+              "paid",
+              "failed"
+            ]
+          },
+          "totalAmount": {
+            "type": "number",
+            "description": "Ödenecek toplam tutar, 2 ondalık basamak."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Son değişiklik zamanı (UTC)."
+          }
+        },
+        "required": [
+          "createdAt",
+          "currency",
+          "failureCode",
+          "id",
+          "itemCount",
+          "status",
+          "totalAmount",
+          "updatedAt"
+        ]
+      },
+      "PageResponseOrderSummaryResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderSummaryResponse"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalElements": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalPages": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "size",
+          "totalElements",
+          "totalPages"
+        ]
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "bearerFormat": "JWT",
+        "description": "user-service `POST /api/auth/login` yanıtındaki `accessToken`; rol şartı yok (`USER` ve `ADMIN`). Sipariş token'ın `sub`'ındaki kullanıcınındır.",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
