@@ -32,16 +32,46 @@
 
     <div
       *ngIf="!isCreate && book"
-      class="d-flex flex-wrap gap-3 small text-muted mb-3"
+      class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3"
     >
-      <span>
-        Durum:
-        <strong class="text-body">{{ book.status }}</strong>
-      </span>
-      <span>Stok {{ book.stockQuantity }}</span>
-      <span>Rezerve {{ book.reservedQuantity }}</span>
-      <span>Uygun {{ book.availableQuantity }}</span>
-      <span>Sürüm {{ book.version }}</span>
+      <div class="d-flex flex-wrap gap-3 small text-muted">
+        <span>
+          Durum:
+          <strong class="text-body">{{ statusLabel(book.status) }}</strong>
+        </span>
+        <span>Stok {{ book.stockQuantity }}</span>
+        <span>Rezerve {{ book.reservedQuantity }}</span>
+        <span>Uygun {{ book.availableQuantity }}</span>
+        <span>Sürüm {{ book.version }}</span>
+      </div>
+      <div class="d-flex flex-wrap gap-1">
+        <button
+          *ngIf="canPublish"
+          type="button"
+          class="btn btn-sm btn-outline-success"
+          (click)="onPublish()"
+          [disabled]="actionBusy || saving"
+        >
+          Yayınla
+        </button>
+        <button
+          *ngIf="canArchive"
+          type="button"
+          class="btn btn-sm btn-outline-warning"
+          (click)="onArchive()"
+          [disabled]="actionBusy || saving"
+        >
+          Arşivle
+        </button>
+        <button
+          type="button"
+          class="btn btn-sm btn-outline-primary"
+          (click)="openStockAdjust()"
+          [disabled]="actionBusy || saving"
+        >
+          Stok düzelt
+        </button>
+      </div>
     </div>
 
     <form [formGroup]="form" (ngSubmit)="onSubmit()" novalidate class="admin-book-form__form">
@@ -207,3 +237,55 @@
     </form>
   </ng-container>
 </section>
+
+<ng-template #stockModal>
+  <div class="modal-header">
+    <h3 class="modal-title h5 mb-0">Stok düzelt</h3>
+    <button
+      type="button"
+      class="btn-close"
+      aria-label="Kapat"
+      (click)="closeStockModal()"
+      [disabled]="stockSaving"
+    ></button>
+  </div>
+  <div class="modal-body" *ngIf="book">
+    <p class="small text-muted mb-3">
+      Mevcut stok {{ book.stockQuantity }}, rezerve {{ book.reservedQuantity }}, uygun
+      {{ book.availableQuantity }}
+    </p>
+    <form [formGroup]="stockForm" (ngSubmit)="onStockSubmit()" novalidate>
+      <div class="mb-3">
+        <label class="form-label" for="stock-delta-form">Delta</label>
+        <input
+          id="stock-delta-form"
+          type="number"
+          class="form-control"
+          formControlName="delta"
+          min="-100000"
+          max="100000"
+          step="1"
+        />
+        <div class="form-text">Pozitif ekler, negatif düşer. 0 geçersiz; |delta| ≤ 100000.</div>
+      </div>
+      <div class="d-flex justify-content-end gap-2">
+        <button
+          type="button"
+          class="btn btn-outline-secondary"
+          (click)="closeStockModal()"
+          [disabled]="stockSaving"
+        >
+          Vazgeç
+        </button>
+        <button type="submit" class="btn btn-primary" [disabled]="!canSubmitStock">
+          <span
+            *ngIf="stockSaving"
+            class="spinner-border spinner-border-sm me-1"
+            role="status"
+          ></span>
+          Uygula
+        </button>
+      </div>
+    </form>
+  </div>
+</ng-template>

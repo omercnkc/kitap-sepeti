@@ -1,27 +1,23 @@
 # Frontend (Kitap Sepeti UI)
 
-## Durum (UI-9 adım 5–6)
+## Durum (UI-9 tamam — adım 7–9)
 
 - Angular 13 NgModule; lazy features; proxy `/api` → Gateway 8080
-- UI-9.5–6: Admin kitap listesi + form (create/edit)
-- Sırada: publish/archive/stock-adjust; `q` arama (B1); Notifications
+- UI-9.7–9: publish / archive / stock-adjust + dar ekran kart listeler
+- Sırada: UI-10 Docker; `q` arama (B1); Notifications
 
 ## Admin
 
 | Parça | Yol | Not |
 | --- | --- | --- |
 | Shell | `features/admin/admin-shell/` | yan menü; lg altı NgbOffcanvas |
-| Publishers | `features/admin/admin-publishers-page/` | sayfalı liste; modal CRUD; ConfirmDialog sil |
-| Authors | `features/admin/admin-authors-page/` | publishers ile aynı kalıp |
-| Categories | `features/admin/admin-categories-page/` | ağaç; parent taşıma PUT; sil |
-| Books list | `features/admin/admin-books-page/` | status queryParam; stok/reserved/available |
-| Book form | `features/admin/admin-book-form-page/` | `/books/new`, `/books/:id`; version PATCH |
-| NameSlugForm | `features/admin/admin-name-slug-form/` | name + opsiyonel slug modal formu |
-| Modeller | `core/models/admin-catalog.ts` | OpenAPI admin create/update/list |
-| AdminCatalogApi | `core/api/admin-catalog.api.ts` | `/api/admin/**` CRUD + publish/archive/stock |
-| Hata mesajları | `core/interceptors/error-messages.ts` | RESOURCE_IN_USE, CATEGORY_CYCLE, CONCURRENT_MODIFICATION |
-| Guard | `core/guards/admin.guard.ts` | canActivate + canLoad → `/books` |
-| Header | `layout/header/` | Admin linki yalnız `ADMIN` |
+| Publishers / Authors | `admin-*-page/` | lg tablo / dar kart; modal CRUD |
+| Categories | `admin-categories-page/` | ağaç; parent taşıma; sil |
+| Books list | `admin-books-page/` | status filter; Yayınla/Arşivle/Stok |
+| Book form | `admin-book-form-page/` | create/edit; lifecycle + stok modal |
+| AdminCatalogApi | `core/api/admin-catalog.api.ts` | publish/archive/stock-adjustments |
+| Hata mesajları | `error-messages.ts` | STOCK_BELOW_RESERVED, BOOK_NOT_PUBLISHABLE |
+| Guard | `admin.guard.ts` | canActivate + canLoad → `/books` |
 
 ## Sipariş / Checkout
 

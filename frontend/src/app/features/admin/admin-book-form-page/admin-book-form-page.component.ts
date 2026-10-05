@@ -4,15 +4,19 @@ import {
   Component,
   OnDestroy,
   OnInit,
+  TemplateRef,
+  ViewChild,
 } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
+import { NgbModal, NgbModalRef } from '@ng-bootstrap/ng-bootstrap';
 import { forkJoin, Observable, of, Subject } from 'rxjs';
 import { finalize, map, switchMap, takeUntil } from 'rxjs/operators';
 import { AdminCatalogApi } from '../../../core/api/admin-catalog.api';
 import { toProblemDetail } from '../../../core/interceptors/error.interceptor';
 import {
   AdminBook,
+  AdminBookStatus,
   AuthorResponse,
   CategoryResponse,
   CreateBookRequest,
@@ -22,6 +26,7 @@ import {
   UpdateBookRequest,
 } from '../../../core/models';
 import { ToastService } from '../../../core/services/toast.service';
+import { ConfirmDialogService } from '../../../shared/components/confirm-dialog/confirm-dialog.service';
 
 const LOOKUP_SIZE = 100;
 
@@ -35,14 +40,19 @@ type PageState = 'loading' | 'ready' | 'notFound' | 'error';
 })
 export class AdminBookFormPageComponent implements OnInit, OnDestroy {
   private readonly destroy$ = new Subject<void>();
+  private stockModalRef: NgbModalRef | null = null;
+
+  @ViewChild('stockModal') stockModal!: TemplateRef<unknown>;
 
   pageState: PageState = 'loading';
   isCreate = true;
   bookId: string | null = null;
   book: AdminBook | null = null;
   saving = false;
+  actionBusy = false;
   fieldErrors: FieldError[] = [];
   concurrentConflict = false;
+  stockSaving = false;
 
   publishers: PublisherResponse[] = [];
   authors: AuthorResponse[] = [];
@@ -62,9 +72,18 @@ export class AdminBookFormPageComponent implements OnInit, OnDestroy {
     version: [null as number | null],
   });
 
+  readonly stockForm: FormGroup = this.fb.group({
+    delta: [
+      null as number | null,
+      [Validators.required, Validators.min(-100000), Validators.max(100000)],
+    ],
+  });
+
   constructor(
     private readonly api: AdminCatalogApi,
     private readonly fb: FormBuilder,
+    private readonly modal: NgbModal,
+    private readonly confirmDialog: ConfirmDialogService,
     private readonly route: ActivatedRoute,
     private readonly router: Router,
     private readonly toast: ToastService,
@@ -96,9 +115,7 @@ export class AdminBookFormPageComponent implements OnInit, OnDestroy {
 
           this.isCreate = false;
           this.bookId = id;
-          return this.loadLookups().pipe(
-            switchMap(() => this.api.getBook(id)),
-          );
+          return this.loadLookups().pipe(switchMap(() => this.api.getBook(id)));
         }),
       )
       .subscribe({
@@ -118,16 +135,38 @@ export class AdminBookFormPageComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.stockModalRef?.dismiss();
     this.destroy$.next();
     this.destroy$.complete();
   }
 
   get canSave(): boolean {
-    return this.form.valid && !this.saving;
+    return this.form.valid && !this.saving && !this.actionBusy;
   }
 
   get pageTitle(): string {
     return this.isCreate ? 'Yeni kitap' : 'Kitabı düzenle';
+  }
+
+  get canPublish(): boolean {
+    return !!this.book && (this.book.status === 'draft' || this.book.status === 'archived');
+  }
+
+  get canArchive(): boolean {
+    return !!this.book && this.book.status === 'published';
+  }
+
+  statusLabel(status: AdminBookStatus): string {
+    switch (status) {
+      case 'draft':
+        return 'Taslak';
+      case 'published':
+        return 'Yayında';
+      case 'archived':
+        return 'Arşiv';
+      default:
+        return status;
+    }
   }
 
   isAuthorSelected(id: string): boolean {
@@ -172,6 +211,137 @@ export class AdminBookFormPageComponent implements OnInit, OnDestroy {
           this.pageState = problem.status === 404 ? 'notFound' : 'error';
           this.cdr.markForCheck();
         },
+      });
+  }
+
+  onPublish(): void {
+    if (!this.bookId || !this.book || this.actionBusy || !this.canPublish) {
+      return;
+    }
+    const previous = this.book.status;
+    this.actionBusy = true;
+    this.cdr.markForCheck();
+    this.api
+      .publishBook(this.bookId)
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
+          this.actionBusy = false;
+          this.cdr.markForCheck();
+        }),
+      )
+      .subscribe({
+        next: (book) => {
+          if (book.status !== previous) {
+            this.toast.success('Kitap yayınlandı');
+          }
+          this.patchFromBook(book);
+        },
+        error: () => undefined,
+      });
+  }
+
+  onArchive(): void {
+    if (!this.bookId || !this.book || this.actionBusy || !this.canArchive) {
+      return;
+    }
+    this.confirmDialog
+      .confirm({
+        title: 'Kitabı arşivle',
+        message: `"${this.book.title}" arşivlenecek ve vitrinden kalkacak. Emin misiniz?`,
+        confirmLabel: 'Arşivle',
+        cancelLabel: 'Vazgeç',
+        confirmButtonClass: 'btn-warning',
+      })
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((ok) => {
+        if (!ok || !this.bookId || !this.book) {
+          return;
+        }
+        const previous = this.book.status;
+        this.actionBusy = true;
+        this.cdr.markForCheck();
+        this.api
+          .archiveBook(this.bookId)
+          .pipe(
+            takeUntil(this.destroy$),
+            finalize(() => {
+              this.actionBusy = false;
+              this.cdr.markForCheck();
+            }),
+          )
+          .subscribe({
+            next: (book) => {
+              if (book.status !== previous) {
+                this.toast.success('Kitap arşivlendi');
+              }
+              this.patchFromBook(book);
+            },
+            error: () => undefined,
+          });
+      });
+  }
+
+  openStockAdjust(): void {
+    if (!this.book || this.actionBusy || !this.stockModal) {
+      return;
+    }
+    this.stockForm.reset({ delta: null });
+    this.stockModalRef?.dismiss();
+    this.stockModalRef = this.modal.open(this.stockModal, {
+      centered: true,
+      backdrop: 'static',
+    });
+    this.stockModalRef.result.finally(() => {
+      this.stockModalRef = null;
+      this.stockSaving = false;
+      this.cdr.markForCheck();
+    });
+    this.cdr.markForCheck();
+  }
+
+  closeStockModal(): void {
+    this.stockModalRef?.dismiss();
+  }
+
+  get canSubmitStock(): boolean {
+    const delta = this.stockForm.get('delta')?.value;
+    return (
+      this.stockForm.valid &&
+      !this.stockSaving &&
+      delta !== null &&
+      delta !== '' &&
+      Number(delta) !== 0
+    );
+  }
+
+  onStockSubmit(): void {
+    this.stockForm.markAllAsTouched();
+    this.cdr.markForCheck();
+    if (!this.canSubmitStock || !this.bookId) {
+      return;
+    }
+    const delta = Number(this.stockForm.get('delta')?.value);
+    this.stockSaving = true;
+    this.actionBusy = true;
+    this.cdr.markForCheck();
+    this.api
+      .adjustBookStock(this.bookId, { delta })
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
+          this.stockSaving = false;
+          this.actionBusy = false;
+          this.cdr.markForCheck();
+        }),
+      )
+      .subscribe({
+        next: (book) => {
+          this.toast.success('Stok güncellendi');
+          this.stockModalRef?.close();
+          this.patchFromBook(book);
+        },
+        error: () => undefined,
       });
   }
 
@@ -267,6 +437,7 @@ export class AdminBookFormPageComponent implements OnInit, OnDestroy {
       initialStock: 0,
       version: book.version,
     });
+    this.cdr.markForCheck();
   }
 
   private toCreateBody(): CreateBookRequest {

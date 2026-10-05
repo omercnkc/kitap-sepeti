@@ -186,4 +186,21 @@ describe('AdminCatalogApi', () => {
     expect(req.request.method).toBe('POST');
     req.flush({ ...book, status: 'published' });
   });
+
+  it('archiveBook should POST /api/admin/books/:id/archive', () => {
+    api.archiveBook('b1').subscribe((res) => expect(res.status).toBe('archived'));
+    const req = httpMock.expectOne('/api/admin/books/b1/archive');
+    expect(req.request.method).toBe('POST');
+    req.flush({ ...book, status: 'archived' });
+  });
+
+  it('adjustBookStock should POST /api/admin/books/:id/stock-adjustments', () => {
+    api.adjustBookStock('b1', { delta: -2 }).subscribe((res) => {
+      expect(res.stockQuantity).toBe(8);
+    });
+    const req = httpMock.expectOne('/api/admin/books/b1/stock-adjustments');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ delta: -2 });
+    req.flush({ ...book, stockQuantity: 8, availableQuantity: 8 });
+  });
 });

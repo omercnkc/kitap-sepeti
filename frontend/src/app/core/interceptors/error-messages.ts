@@ -17,10 +17,10 @@ export const ERROR_CODE_MESSAGES: Readonly<Record<string, string>> = {
   CONCURRENT_MODIFICATION:
     'Kayıt başka biri tarafından değiştirildi. Formu yeniden yükleyin ve tekrar deneyin.',
   CATEGORY_CYCLE: 'Bir kategoriyi kendi altına veya alt kategorisine taşıyamazsınız.',
-  BOOK_NOT_PUBLISHABLE: 'Kitap yayınlanabilir durumda değil.',
-  STOCK_BELOW_RESERVED: 'Stok rezervasyonun altına düşürülemez.',
+  STOCK_BELOW_RESERVED: 'Stok, rezerve edilen miktarın altına düşürülemez.',
   INSUFFICIENT_STOCK: 'Yeterli stok yok.',
   BOOK_NOT_AVAILABLE: 'Kitap satışa uygun değil.',
+  BOOK_NOT_PUBLISHABLE: 'Kitap yayınlanabilir durumda değil (eksik alan veya geçersiz durum).',
   CART_LINE_LIMIT_EXCEEDED: 'Sepetteki farklı kitap sayısı sınırına ulaşıldı.',
   CART_QUANTITY_LIMIT_EXCEEDED: 'Bu kitap için sepet adet sınırına ulaşıldı.',
   DEFAULT_ADDRESS_REQUIRED: 'Önce başka bir adresi varsayılan yapın.',

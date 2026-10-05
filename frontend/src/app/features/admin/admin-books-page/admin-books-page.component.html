@@ -7,7 +7,7 @@
   </div>
 
   <div class="row g-2 align-items-end mb-3">
-    <div class="col-sm-6 col-md-4 col-lg-3">
+    <div class="col-12 col-sm-6 col-md-4 col-lg-3">
       <label class="form-label small mb-1" for="book-status-filter">Durum</label>
       <select
         id="book-status-filter"
@@ -47,7 +47,8 @@
   ></app-empty-state>
 
   <ng-container *ngIf="pageState === 'ready'">
-    <div class="table-responsive d-none d-lg-block">
+    <!-- lg+: tablo (dar ekranda gizli — yatay kaydırma yok) -->
+    <div class="d-none d-lg-block">
       <table class="table table-hover align-middle mb-0">
         <thead>
           <tr>
@@ -62,15 +63,12 @@
           </tr>
         </thead>
         <tbody>
-          <tr
-            *ngFor="let item of items; trackBy: trackById"
-            class="admin-books__row"
-            role="link"
-            tabindex="0"
-            (click)="openEdit(item)"
-            (keydown.enter)="openEdit(item)"
-          >
-            <td class="fw-semibold">{{ item.title }}</td>
+          <tr *ngFor="let item of items; trackBy: trackById">
+            <td class="fw-semibold">
+              <a [routerLink]="['/admin/books', item.id]" class="text-decoration-none text-body">
+                {{ item.title }}
+              </a>
+            </td>
             <td>{{ item.publisher.name }}</td>
             <td>
               <span class="badge" [ngClass]="statusBadgeClass(item.status)">
@@ -86,46 +84,111 @@
             <td class="text-end">{{ item.stockQuantity }}</td>
             <td class="text-end">{{ item.reservedQuantity }}</td>
             <td class="text-end">{{ item.availableQuantity }}</td>
-            <td class="text-end" (click)="$event.stopPropagation()">
-              <button
-                type="button"
-                class="btn btn-sm btn-outline-secondary"
-                (click)="openEdit(item)"
-              >
-                Düzenle
-              </button>
+            <td class="text-end">
+              <div class="d-inline-flex flex-wrap justify-content-end gap-1">
+                <button
+                  type="button"
+                  class="btn btn-sm btn-outline-secondary"
+                  (click)="openEdit(item)"
+                  [disabled]="busyId === item.id"
+                >
+                  Düzenle
+                </button>
+                <button
+                  *ngIf="canPublish(item.status)"
+                  type="button"
+                  class="btn btn-sm btn-outline-success"
+                  (click)="onPublish(item)"
+                  [disabled]="busyId === item.id"
+                >
+                  Yayınla
+                </button>
+                <button
+                  *ngIf="canArchive(item.status)"
+                  type="button"
+                  class="btn btn-sm btn-outline-warning"
+                  (click)="onArchive(item)"
+                  [disabled]="busyId === item.id"
+                >
+                  Arşivle
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-outline-primary"
+                  (click)="openStockAdjust(item)"
+                  [disabled]="busyId === item.id"
+                >
+                  Stok
+                </button>
+              </div>
             </td>
           </tr>
         </tbody>
       </table>
     </div>
 
+    <!-- dar: kart -->
     <ul class="list-unstyled d-lg-none mb-0">
-      <li *ngFor="let item of items; trackBy: trackById" class="mb-2">
-        <button
-          type="button"
-          class="admin-books__card border rounded p-3 w-100 text-start bg-white"
-          (click)="openEdit(item)"
-        >
-          <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
-            <span class="fw-semibold">{{ item.title }}</span>
-            <span class="badge" [ngClass]="statusBadgeClass(item.status)">
-              {{ statusLabel(item.status) }}
-            </span>
-          </div>
-          <div class="small text-muted mb-2">{{ item.publisher.name }}</div>
-          <div class="d-flex flex-wrap gap-3 small">
-            <span>
-              {{
-                item.priceAmount
-                  | currency: (item.currency || 'TRY') : 'symbol' : '1.2-2' : 'tr-TR'
-              }}
-            </span>
-            <span>Stok {{ item.stockQuantity }}</span>
-            <span>Rez. {{ item.reservedQuantity }}</span>
-            <span>Uygun {{ item.availableQuantity }}</span>
-          </div>
-        </button>
+      <li *ngFor="let item of items; trackBy: trackById" class="admin-books__card border rounded p-3 mb-2">
+        <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+          <a
+            [routerLink]="['/admin/books', item.id]"
+            class="fw-semibold text-decoration-none text-body"
+          >
+            {{ item.title }}
+          </a>
+          <span class="badge" [ngClass]="statusBadgeClass(item.status)">
+            {{ statusLabel(item.status) }}
+          </span>
+        </div>
+        <div class="small text-muted mb-2">{{ item.publisher.name }}</div>
+        <div class="d-flex flex-wrap gap-3 small mb-3">
+          <span>
+            {{
+              item.priceAmount
+                | currency: (item.currency || 'TRY') : 'symbol' : '1.2-2' : 'tr-TR'
+            }}
+          </span>
+          <span>Stok {{ item.stockQuantity }}</span>
+          <span>Rez. {{ item.reservedQuantity }}</span>
+          <span>Uygun {{ item.availableQuantity }}</span>
+        </div>
+        <div class="d-flex flex-wrap gap-1">
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-secondary"
+            (click)="openEdit(item)"
+            [disabled]="busyId === item.id"
+          >
+            Düzenle
+          </button>
+          <button
+            *ngIf="canPublish(item.status)"
+            type="button"
+            class="btn btn-sm btn-outline-success"
+            (click)="onPublish(item)"
+            [disabled]="busyId === item.id"
+          >
+            Yayınla
+          </button>
+          <button
+            *ngIf="canArchive(item.status)"
+            type="button"
+            class="btn btn-sm btn-outline-warning"
+            (click)="onArchive(item)"
+            [disabled]="busyId === item.id"
+          >
+            Arşivle
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-primary"
+            (click)="openStockAdjust(item)"
+            [disabled]="busyId === item.id"
+          >
+            Stok
+          </button>
+        </div>
       </li>
     </ul>
 
@@ -139,3 +202,56 @@
     ></app-pagination>
   </ng-container>
 </section>
+
+<ng-template #stockModal>
+  <div class="modal-header">
+    <h3 class="modal-title h5 mb-0">Stok düzelt</h3>
+    <button
+      type="button"
+      class="btn-close"
+      aria-label="Kapat"
+      (click)="closeStockModal()"
+      [disabled]="stockSaving"
+    ></button>
+  </div>
+  <div class="modal-body" *ngIf="stockTarget">
+    <p class="small text-muted mb-3">
+      <strong class="text-body">{{ stockTarget.title }}</strong>
+      — mevcut stok {{ stockTarget.stockQuantity }}, rezerve
+      {{ stockTarget.reservedQuantity }}, uygun {{ stockTarget.availableQuantity }}
+    </p>
+    <form [formGroup]="stockForm" (ngSubmit)="onStockSubmit()" novalidate>
+      <div class="mb-3">
+        <label class="form-label" for="stock-delta-list">Delta</label>
+        <input
+          id="stock-delta-list"
+          type="number"
+          class="form-control"
+          formControlName="delta"
+          min="-100000"
+          max="100000"
+          step="1"
+        />
+        <div class="form-text">Pozitif ekler, negatif düşer. 0 geçersiz; |delta| ≤ 100000.</div>
+      </div>
+      <div class="d-flex justify-content-end gap-2">
+        <button
+          type="button"
+          class="btn btn-outline-secondary"
+          (click)="closeStockModal()"
+          [disabled]="stockSaving"
+        >
+          Vazgeç
+        </button>
+        <button type="submit" class="btn btn-primary" [disabled]="!canSubmitStock">
+          <span
+            *ngIf="stockSaving"
+            class="spinner-border spinner-border-sm me-1"
+            role="status"
+          ></span>
+          Uygula
+        </button>
+      </div>
+    </form>
+  </div>
+</ng-template>

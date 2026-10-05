@@ -183,6 +183,22 @@ describe('ErrorInterceptor', () => {
     );
   });
 
+  it('409 STOCK_BELOW_RESERVED should toast stock message', () => {
+    http.post('/api/admin/books/b1/stock-adjustments', { delta: -100 }).subscribe({
+      next: () => fail('expected error'),
+      error: () => undefined,
+    });
+
+    httpMock.expectOne('/api/admin/books/b1/stock-adjustments').flush(
+      { title: 'Conflict', status: 409, code: 'STOCK_BELOW_RESERVED' },
+      { status: 409, statusText: 'Conflict' },
+    );
+
+    expect(toast.error).toHaveBeenCalledWith(
+      'Stok, rezerve edilen miktarın altına düşürülemez.',
+    );
+  });
+
   it('401 should not toast (auth deferred) and rethrow', () => {
     let caught: ProblemDetail | undefined;
     http.get('/api/me').subscribe({
