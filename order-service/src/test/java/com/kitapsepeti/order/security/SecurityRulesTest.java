@@ -25,7 +25,7 @@ import org.springframework.http.MediaType;
 
 /**
  * SecurityConfig kuralları ve JWT doğrulaması (token'lar gerçek HTTP JWKS ucuyla doğrulanır). {@code GET /api/orders}
- * (liste) henüz yok: kimlik doğrulamasını geçen istek MVC'nin 404'ü, geçemeyen 401.
+ * (liste) kimlik ister: kimlik doğrulamasını geçen istek 200, geçemeyen 401.
  */
 @ExtendWith(OutputCaptureExtension.class)
 class SecurityRulesTest extends ApiTestSupport {
@@ -57,7 +57,7 @@ class SecurityRulesTest extends ApiTestSupport {
 	 * {@code /api/orders/x} sipariş ucuna düşer (geçersiz id → 400); bu yüzden iki segmentli yol.
 	 */
 	@ParameterizedTest
-	@ValueSource(strings = { ORDERS, "/api/orders/olmayan/yol", "/api/other/ping" })
+	@ValueSource(strings = { "/api/olmayan/yol", "/api/orders/olmayan/yol", "/api/other/ping" })
 	void unknownApiPathWithValidTokenReturns404(String path) throws Exception {
 		for (String token : new String[] { TestJwt.user(SUBJECT), TestJwt.admin(SUBJECT) }) {
 			mockMvc.perform(get(path).with(bearer(token)))
@@ -141,7 +141,7 @@ class SecurityRulesTest extends ApiTestSupport {
 	@Test
 	void responsesCreateNoSession() throws Exception {
 		mockMvc.perform(get(ORDERS).with(bearer(TestJwt.user(SUBJECT))))
-			.andExpect(status().isNotFound())
+			.andExpect(status().isOk())
 			.andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE))
 			.andExpect(result -> assertThat(result.getRequest().getSession(false)).isNull());
 	}
@@ -154,7 +154,7 @@ class SecurityRulesTest extends ApiTestSupport {
 		String validToken = TestJwt.userWithClaims(subject, Map.of("email", email));
 		String expiredToken = TestJwt.expiredUser(subject);
 
-		mockMvc.perform(get(ORDERS).with(bearer(validToken))).andExpect(status().isNotFound());
+		mockMvc.perform(get(ORDERS).with(bearer(validToken))).andExpect(status().isOk());
 		mockMvc.perform(get(ORDERS).with(bearer(expiredToken))).andExpect(status().isUnauthorized());
 		mockMvc.perform(get(ORDERS).with(bearer(TestJwt.user("not-a-uuid")))).andExpect(status().isUnauthorized());
 		mockMvc.perform(get("/internal/orders").with(bearer(validToken))).andExpect(status().isForbidden());

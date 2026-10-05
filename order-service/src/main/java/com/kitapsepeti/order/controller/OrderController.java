@@ -4,14 +4,19 @@ import java.net.URI;
 import java.util.UUID;
 
 import com.kitapsepeti.order.dto.request.CheckoutRequest;
+import com.kitapsepeti.order.dto.request.OrderListRequest;
 import com.kitapsepeti.order.dto.response.OrderResponse;
+import com.kitapsepeti.order.dto.response.OrderSummaryResponse;
+import com.kitapsepeti.order.dto.response.PageResponse;
 import com.kitapsepeti.order.security.CurrentUserId;
 import com.kitapsepeti.order.service.CheckoutService;
 import com.kitapsepeti.order.service.OrderQueryService;
 import jakarta.validation.Valid;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -41,6 +46,13 @@ public class OrderController {
 			@Valid @RequestBody CheckoutRequest request) {
 		OrderResponse order = this.checkoutService.checkout(userId, request.address().toSnapshot());
 		return ResponseEntity.created(URI.create("/api/orders/" + order.id())).body(order);
+	}
+
+	/** Kullanıcının kendi siparişlerinin sayfalı özeti; created_at DESC, id DESC sabit sırasıyla. */
+	@GetMapping
+	public PageResponse<OrderSummaryResponse> list(@CurrentUserId UUID userId,
+			@Valid @ParameterObject @ModelAttribute OrderListRequest request) {
+		return this.orderQueryService.list(userId, request);
 	}
 
 	@GetMapping("/{orderId}")

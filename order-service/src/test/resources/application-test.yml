@@ -7,6 +7,12 @@ spring:
   rabbitmq:
     username: test
     password: test
+  jpa:
+    properties:
+      hibernate:
+        session_factory:
+          statement_inspector: com.kitapsepeti.order.support.SqlCapture
+
 
 app:
   # Worker arka planda outbox satırlarını kilitleyip yayınlamasın.

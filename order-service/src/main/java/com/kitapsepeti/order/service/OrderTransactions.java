@@ -8,6 +8,8 @@ import java.util.function.Function;
 
 import com.kitapsepeti.common.outbox.OutboxService;
 import com.kitapsepeti.order.dto.response.OrderResponse;
+import com.kitapsepeti.order.dto.response.OrderSummaryResponse;
+import com.kitapsepeti.order.dto.response.PageResponse;
 import com.kitapsepeti.order.entity.Order;
 import com.kitapsepeti.order.entity.OrderStatus;
 import com.kitapsepeti.order.entity.StockState;
@@ -19,6 +21,8 @@ import com.kitapsepeti.order.service.event.OrderFailedEvent;
 import com.kitapsepeti.order.service.event.OrderPaidEvent;
 import com.kitapsepeti.order.service.event.StockCommitReadyEvent;
 import com.kitapsepeti.order.service.event.StockReleaseReadyEvent;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -92,6 +96,16 @@ public class OrderTransactions {
 	@Transactional(readOnly = true)
 	public Optional<OrderResponse> findOwned(UUID orderId, UUID userId) {
 		return this.orders.findByIdAndUserId(orderId, userId).map(OrderResponse::of);
+	}
+
+	/**
+	 * Kullanıcının sipariş özeti listesi: {@code created_at DESC, id DESC} sabit sırasıyla.
+	 * (user_id, created_at, id) indeksini kullanır; N+1 yok (itemCount tek sorguda). Kilitsiz.
+	 */
+	@Transactional(readOnly = true)
+	public PageResponse<OrderSummaryResponse> listOwned(UUID userId, int page, int size) {
+		Page<OrderSummaryResponse> result = this.orders.findSummariesByUserId(userId, PageRequest.of(page, size));
+		return PageResponse.of(result);
 	}
 
 	/**

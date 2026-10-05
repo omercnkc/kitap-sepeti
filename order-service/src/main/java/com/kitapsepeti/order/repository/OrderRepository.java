@@ -3,9 +3,12 @@ package com.kitapsepeti.order.repository;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.kitapsepeti.order.dto.response.OrderSummaryResponse;
 import com.kitapsepeti.order.entity.Order;
 import com.kitapsepeti.order.entity.OrderStatus;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -92,5 +95,27 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
 			org.springframework.data.domain.Pageable pageable) {
 		return findPendingReconcileCandidates(OrderStatus.PENDING, cutoff, pageable);
 	}
+
+	/**
+	 * Kullanıcının sipariş özeti listesi: {@code created_at DESC, id DESC} sabit sırasıyla.
+	 * {@code ix_orders_user_created (user_id, created_at, id)} indeksini kullanır (filesort yok).
+	 * {@code itemCount} skaler alt sorguyla tek SQL'de çekilir (N+1 yok).
+	 */
+	@Query(value = """
+			select new com.kitapsepeti.order.dto.response.OrderSummaryResponse(
+			    o.id,
+			    o.status,
+			    o.failureCode,
+			    o.currency,
+			    o.totalAmount,
+			    (select count(i) from OrderItem i where i.order = o),
+			    o.createdAt,
+			    o.updatedAt)
+			from Order o
+			where o.userId = :userId
+			order by o.createdAt desc, o.id desc
+			""",
+			countQuery = "select count(o) from Order o where o.userId = :userId")
+	Page<OrderSummaryResponse> findSummariesByUserId(@Param("userId") UUID userId, Pageable pageable);
 
 }
