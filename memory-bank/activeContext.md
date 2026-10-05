@@ -1435,11 +1435,16 @@
     - Order üretici: `OrderEventsProducerContractTest` 3 olay için gerçek DTO'ları Jackson ile serileştirip belgelerdeki örnek JSON'ların alan kümesi ve tipleriyle eşleştirir (parametreli test).
     - Order tüketici: `PaymentEventsConsumerContractTest` payment olay belgelerindeki (`docs/events/payment-succeeded.md`, `payment-failed.md`) örnekleri `PaymentResultMessageParser` ile doğrular.
     - Cart tüketici: `CartCheckedOutContractTest` Order kodunu derleme bağımlılığından kurtarıldı; doğrudan `docs/events/cart-checked-out.md` dosyasındaki json örneğini okur, routing key de belgeden alınır.
-  - Log hijyeni testi: `OrderLogHygieneTest` tek bir testte mutlu checkout, bir kayıt sonrası hata (stok yetersiz), bir PaymentSucceeded, bir poison mesaj, birer StockSyncJob ve PendingReconciliationJob turu çalıştırır. Loglarda UUID, tutar regex'i (`(?<![0-9])\d+\.\d{2}(?![0-9])`), adres test değerleri, `"Bearer "` ve internal API anahtarı bulunmadığı doğrulanır.
+- **Order Adım 11 (YAPILDI, COMMIT EDİLMEDİ): order-service Dockerfile + Compose entegrasyonu (8088). Faz 8 kapandı.**
+  - `order-service/Dockerfile`: Eclipse Temurin 21 (JDK builder -> extract -> JRE runtime, non-root `appuser`, layered jar, JarLauncher).
+  - `docker-compose.yml`: `kitapsepeti-order-service` servisi (port 8088), `mysql` ve `rabbitmq` bağımlılıkları (`service_healthy`), iç Feign URL'leri (`cart-service:8083`, `catalog-service:8082`, `payment-service:8087`), readiness healthcheck (`/actuator/health/readiness`).
+  - İzolasyon: Cart, Catalog veya Payment kapalıyken order-service sağlıklı kalır (readiness yalnızca DB'ye bakar; dış servis kesintileri circuit breaker ile 502 döner).
+  - DB kullanıcısı ve şeması: `infra/mysql/init/40-order-db.sh` (`order_db`, `order_svc`).
+  - `docs/docker.md` güncellendi (order-service bölümü ve çalıştırma yönergeleri eklendi).
 - Order planı: 0a common sertleştirme (YAPILDI) → 0b outbox → common (YAPILDI, push'landı) → 1 modül/db (YAPILDI, push'landı) → 2 domain (YAPILDI) → 3a Order istemcileri + CB (YAPILDI) → 3b Cart→Catalog CB (YAPILDI) → 4 checkout mutlu yol +
   GET {id} (YAPILDI) → 5 hata yolları/telafi (YAPILDI) → 6a Payment sonucu consumer+Order olayları (YAPILDI) → 6b stok
   commit/release+StockSyncJob+V2 lost (YAPILDI) → 7 Cart CartCheckedOut tüketicisi (YAPILDI) → 8 timeout görevi
-  (PendingReconciliationJob + late_payment, YAPILDI) → 9 liste (YAPILDI) → 10 OpenAPI/olay belgeleri (YAPILDI) → 11 Docker.
+  (PendingReconciliationJob + late_payment, YAPILDI) → 9 liste (YAPILDI) → 10 OpenAPI/olay belgeleri (YAPILDI) → 11 Docker (YAPILDI). **FAZ 8 (ORDER SERVICE) TAMAMLANDI.**
 - (KAPANDI, Cart Adım 7) CartConcurrencyTest 500 flake'i: ilk sepet INSERT deadlock'u (1213) artık bir kez yeniden deneniyor.
 - (KAPANDI, Order Adım 8) Order consumer DLQ gürültüsü: error handler no-op, DLQ'da stack trace yok.
 - Veri Değiştirme Kuralı: Catalog ve User verisi YALNIZCA ilgili servisin API'siyle değiştirilir; doğrudan SQL ile yazma KESİNLİKLE YOKTUR (root yalnızca okuma). Admin token yoksa DUR ve sor. Raporda id, başlık, token, tutar ASLA YAZILMAZ.

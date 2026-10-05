@@ -6,6 +6,7 @@
   healthcheck) + catalog-service (aynı imaj kalıbı, readiness yalnızca DB). Kullanım: `docs/docker.md`.
 - **payment-service: TAMAMLANDI** (Faz 7 Adım 1–8; mock sağlayıcı, imzalı webhook, outbox → RabbitMQ, OpenAPI, Docker + compose
   8087). 365 test yeşil.
+- **order-service: TAMAMLANDI** (Faz 8 Adım 0–11; checkout, durum makinesi, Outbox, stok telafi/sync, Feign + CB, uzlaştırma, liste, OpenAPI, Docker + compose 8088). 665 test yeşil.
 - **catalog-service: TAMAMLANDI** (Adım 1–11: şema, public okuma, admin CRUD, kitap yaşam döngüsü + stok, outbox olayları,
   internal stok rezervasyonu + süre dolumu, OpenAPI + drift testi, actuator, Docker + compose). 270 test yeşil.
 - user-service: Flyway V1 şeması, entity/repository, RS256 JWT + JWKS, kayıt/giriş/refresh (rotation),
@@ -211,6 +212,7 @@
   Catalog stoku 3'ten 2'ye düştü; ret yolu (.99 kuruş) katalog verisi değiştirilemeyeceği için atlandı; lost sorgusu 1 döndü.
 - Order Adım 9 YAPILDI (COMMIT EDİLMEDİ): GET /api/orders sayfalı liste ucu, PageResponse<OrderSummaryResponse>, JPQL constructor projection + skaler alt sorgu ile tek SQL'de itemCount, backward index scan (filesort yok), 14 test, toplam 657 test yeşil.
 - Order Adım 10 YAPILDI (COMMIT EDİLMEDİ): docs/api/order.openapi.json (OpenAPI 3.1.0), drift testi (OpenApiContractTest), required/nullable alanlar testi (OpenApiRequiredFieldsTest); docs/events/ altında order-paid.md, order-failed.md, cart-checked-out.md olay belgeleri; OrderEventsProducerContractTest, PaymentEventsConsumerContractTest ve CartCheckedOutContractTest (Cart'ın Order kodu derleme bağımlılığı kaldırıldı, doğrudan markdown'daki JSON örneğinden okur); OrderLogHygieneTest tek testte tüm akışları çalıştırarak UUID, tutar, adres test değerleri, Bearer ve internal API anahtarı hijyenini doğrular.
+- Order Adım 11 YAPILDI (COMMIT EDİLMEDİ): order-service/Dockerfile (Temurin 21 layered jar), docker-compose.yml kitapsepeti-order-service (8088), mysql/rabbitmq bağımlılıkları, iç Feign URL'leri, DB-only readiness healthcheck, izolasyon (diğer servisler kapalıyken UP), docs/docker.md güncellendi. Faz 8 (Order Service) tamamlandı.
 - Gateway fazı: docs/Swagger'ı (dört servis) dışarıya kapatmak.
 - order-service (catalog rezervasyon istemcisi).
 - Search için: yayınevi/yazar/kategori yeniden adlandırması yayındaki kitaplar için olay üretmiyor → yeniden indeksleme gerekecek.
