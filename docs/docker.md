@@ -4,9 +4,9 @@ Tüm komutlar repo kökünden. Değerler kökteki `.env`'den okunur (şablon: `.
 Compose `env_file` kullanmaz; her servise yalnızca gereken değişkenler `${VAR}` ile verilir.
 
 ```powershell
-docker compose build user-service catalog-service cart-service payment-service
+docker compose build user-service catalog-service cart-service payment-service order-service
 docker compose up -d
-docker compose ps        # mysql, rabbitmq, user-service, catalog-service, cart-service, payment-service → healthy
+docker compose ps        # mysql, rabbitmq, user-service, catalog-service, cart-service, payment-service, order-service → healthy
 ```
 
 Volume'ları silen `docker compose down -v` veritabanını ve kuyrukları da siler; durdurmak için `docker compose stop`.
@@ -145,3 +145,40 @@ docker compose logs -f payment-service
 
 Internal uçlar için Swagger'da `internalApiKey`'e `.env`'deki `ORDER_INTERNAL_API_KEY` girilir. Webhook ucu imza ister;
 Swagger'dan elle denemek yerine mock akışının kendisi kullanılır.
+
+## order-service
+
+| | |
+|---|---|
+| İmaj | `kitapsepeti/order-service:local` (`order-service/Dockerfile`, build context = repo kökü) |
+| Container | `kitapsepeti-order-service`, port `8088` |
+| Swagger UI | http://localhost:8088/swagger-ui.html (OpenAPI: `/v3/api-docs`, sözleşme `docs/api/order.openapi.json`) |
+| Health | `/actuator/health/liveness`, `/actuator/health/readiness` (yalnızca `status`); diğer actuator uçları kapalı |
+
+`.env`'de dolu olması gereken değişkenler (compose `${VAR:?}` ile zorunlu tutar; biri boşsa `docker compose` hata verir):
+
+| Değişken | Açıklama |
+|---|---|
+| `ORDER_DB_USER`, `ORDER_DB_PASSWORD` | `order_db` kullanıcısı (MySQL init script'i `40-order-db.sh` de aynı değerlerle oluşturur). |
+| `RABBITMQ_USER`, `RABBITMQ_PASSWORD` | Olayların (`order.paid`, `order.failed`, `cart.checked-out`) yayınlandığı ve ödeme sonuçlarının tüketildiği broker kullanıcısı. |
+| `ORDER_INTERNAL_API_KEY` | Cart, Catalog ve Payment `/internal/**` uçlarına giden ham anahtar. Boşsa uygulama açılmaz. |
+
+Compose'da sabit verilenler: `ORDER_DB_HOST=mysql`, `ORDER_DB_PORT=3306`, `RABBITMQ_HOST=rabbitmq`, `RABBITMQ_PORT=5672`,
+`USER_SERVICE_JWKS_URI=http://user-service:8081/.well-known/jwks.json`, `ORDER_CART_URL=http://cart-service:8083`,
+`ORDER_CATALOG_URL=http://catalog-service:8082`, `ORDER_PAYMENT_URL=http://payment-service:8087`.
+
+Bağımlılıklar:
+
+- `mysql` ve `rabbitmq` healthy olmadan başlamaz. Readiness yalnızca DB'ye bakar.
+- `cart-service`, `catalog-service` veya `payment-service` kapalıyken order-service healthy kalır; dış servis kesintileri
+  circuit breaker ile yönetilir ve istemciye uygun ProblemDetail (502 `CART_UNAVAILABLE`, `CATALOG_UNAVAILABLE`, `PAYMENT_UNAVAILABLE`)
+  olarak yansır.
+- `user-service`'e başlangıç bağımlılığı yoktur. JWKS ilk istekte çekilir ve önbellekte tutulur.
+
+Yeniden üretme ve başlatma:
+
+```powershell
+docker compose build order-service
+docker compose up -d order-service
+docker compose logs -f order-service
+```
