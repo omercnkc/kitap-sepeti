@@ -21,12 +21,17 @@ import {
   CategoryResponse,
   CreateBookRequest,
   FieldError,
+  IsbnMetadataResponse,
   PageResponse,
   PublisherResponse,
   UpdateBookRequest,
 } from '../../../core/models';
 import { ToastService } from '../../../core/services/toast.service';
 import { ConfirmDialogService } from '../../../shared/components/confirm-dialog/confirm-dialog.service';
+import { httpUrlValidator } from '../../../shared/validators/http-url.validator';
+import { isValidIsbnOptional, normalizeIsbn } from '../../../shared/validators/isbn';
+import { isbnValidator } from '../../../shared/validators/isbn.validator';
+import { buildCreateBookBody, buildUpdateBookBody, roundMoney2 } from './admin-book-form-body';
 
 const LOOKUP_SIZE = 100;
 
@@ -41,6 +46,8 @@ type PageState = 'loading' | 'ready' | 'notFound' | 'error';
 export class AdminBookFormPageComponent implements OnInit, OnDestroy {
   private readonly destroy$ = new Subject<void>();
   private stockModalRef: NgbModalRef | null = null;
+  /** DB’den gelen ISBN; checksum geçersiz olsa da formu kilitlememek için validator’a verilir. */
+  private loadedIsbn: string | null = null;
 
   @ViewChild('stockModal') stockModal!: TemplateRef<unknown>;
 
@@ -50,6 +57,8 @@ export class AdminBookFormPageComponent implements OnInit, OnDestroy {
   book: AdminBook | null = null;
   saving = false;
   actionBusy = false;
+  isbnLookupBusy = false;
+  isbnLookupHints: string[] = [];
   fieldErrors: FieldError[] = [];
   concurrentConflict = false;
   stockSaving = false;
@@ -64,9 +73,9 @@ export class AdminBookFormPageComponent implements OnInit, OnDestroy {
     priceAmount: [null as number | null, [Validators.required, Validators.min(0)]],
     authorIds: [[] as string[]],
     categoryIds: [[] as string[]],
-    coverUrl: ['', [Validators.maxLength(500)]],
+    coverUrl: ['', [Validators.maxLength(500), httpUrlValidator()]],
     description: ['', [Validators.maxLength(10000)]],
-    isbn: [''],
+    isbn: ['', [isbnValidator(() => this.loadedIsbn)]],
     pageCount: [null as number | null, [Validators.min(1)]],
     initialStock: [0, [Validators.min(0), Validators.max(1000000)]],
     version: [null as number | null],
@@ -156,6 +165,17 @@ export class AdminBookFormPageComponent implements OnInit, OnDestroy {
     return !!this.book && this.book.status === 'published';
   }
 
+  /** Yüklenen ISBN checksum’sız; kullanıcı değiştirmeden kaydederse korunur. */
+  get hasLegacyInvalidIsbn(): boolean {
+    if (this.isCreate || !this.loadedIsbn) {
+      return false;
+    }
+    const current = String(this.form.get('isbn')?.value ?? '');
+    const cur = normalizeIsbn(current);
+    const prev = normalizeIsbn(this.loadedIsbn);
+    return !isValidIsbnOptional(this.loadedIsbn) && cur != null && prev != null && cur === prev;
+  }
+
   statusLabel(status: AdminBookStatus): string {
     switch (status) {
       case 'draft':
@@ -183,6 +203,39 @@ export class AdminBookFormPageComponent implements OnInit, OnDestroy {
 
   toggleCategory(id: string, checked: boolean): void {
     this.toggleId('categoryIds', id, checked);
+  }
+
+  onLookupIsbn(): void {
+    const raw = String(this.form.get('isbn')?.value ?? '').trim();
+    if (!raw || this.isbnLookupBusy || this.saving || this.actionBusy) {
+      return;
+    }
+    this.isbnLookupBusy = true;
+    this.isbnLookupHints = [];
+    this.fieldErrors = this.fieldErrors.filter((e) => e.field !== 'isbn');
+    this.cdr.markForCheck();
+    this.api
+      .lookupBookByIsbn(raw)
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
+          this.isbnLookupBusy = false;
+          this.cdr.markForCheck();
+        }),
+      )
+      .subscribe({
+        next: (meta) => this.applyIsbnMetadata(meta),
+        error: (err: unknown) => {
+          const problem = toProblemDetail(err);
+          if (problem.code === 'VALIDATION_FAILED' && problem.errors?.length) {
+            this.fieldErrors = [...problem.errors];
+          } else if (problem.code === 'BOOK_METADATA_NOT_FOUND') {
+            this.toast.error('Bu ISBN için Open Library’de bilgi bulunamadı.');
+          } else {
+            this.toast.error('Kitap bilgileri alınamadı. Biraz sonra tekrar deneyin.');
+          }
+        },
+      });
   }
 
   onCancel(): void {
@@ -406,7 +459,70 @@ export class AdminBookFormPageComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
   }
 
+  private applyIsbnMetadata(meta: IsbnMetadataResponse): void {
+    const patch: Record<string, unknown> = {
+      isbn: meta.isbn || this.form.get('isbn')?.value,
+    };
+    if (meta.title) {
+      patch['title'] = meta.title;
+    }
+    if (meta.description) {
+      patch['description'] = meta.description;
+    }
+    if (meta.coverUrl) {
+      patch['coverUrl'] = meta.coverUrl;
+    }
+    if (meta.pageCount != null) {
+      patch['pageCount'] = meta.pageCount;
+    }
+
+    const hints: string[] = [];
+    const matchedAuthorIds: string[] = [];
+    const unmatchedAuthors: string[] = [];
+    for (const name of meta.authors ?? []) {
+      const match = this.authors.find((a) => this.namesEqual(a.name, name));
+      if (match) {
+        matchedAuthorIds.push(match.id);
+      } else {
+        unmatchedAuthors.push(name);
+      }
+    }
+    if (matchedAuthorIds.length) {
+      patch['authorIds'] = matchedAuthorIds;
+    }
+    if (unmatchedAuthors.length) {
+      hints.push(`yazar bulunamadı: ${unmatchedAuthors.join(', ')}`);
+    }
+
+    const publisherName = (meta.publishers ?? [])[0];
+    if (publisherName) {
+      const pub = this.publishers.find((p) => this.namesEqual(p.name, publisherName));
+      if (pub) {
+        patch['publisherId'] = pub.id;
+      } else {
+        hints.push(`yayınevi bulunamadı: ${publisherName}`);
+      }
+    }
+
+    this.form.patchValue(patch);
+    this.form.markAsDirty();
+    this.isbnLookupHints = hints;
+    if (hints.length) {
+      this.toast.error(
+        'Bazı yazar/yayınevi eşleşmedi — önce admin’den ekleyin veya elle seçin.',
+      );
+    } else {
+      this.toast.success('ISBN bilgileri forma yazıldı. Kontrol edip kaydedin.');
+    }
+    this.cdr.markForCheck();
+  }
+
+  private namesEqual(a: string, b: string): boolean {
+    return a.trim().toLocaleLowerCase('tr-TR') === b.trim().toLocaleLowerCase('tr-TR');
+  }
+
   private resetCreateForm(): void {
+    this.loadedIsbn = null;
     this.form.reset({
       title: '',
       publisherId: '',
@@ -420,14 +536,17 @@ export class AdminBookFormPageComponent implements OnInit, OnDestroy {
       initialStock: 0,
       version: null,
     });
+    this.isbnLookupHints = [];
   }
 
   private patchFromBook(book: AdminBook): void {
     this.book = book;
+    this.loadedIsbn = book.isbn || null;
     this.form.reset({
       title: book.title,
       publisherId: book.publisher.id,
-      priceAmount: book.priceAmount,
+      priceAmount:
+        book.priceAmount != null ? roundMoney2(Number(book.priceAmount)) : null,
       authorIds: book.authors.map((a) => a.id),
       categoryIds: book.categories.map((c) => c.id),
       coverUrl: book.coverUrl || '',
@@ -441,58 +560,13 @@ export class AdminBookFormPageComponent implements OnInit, OnDestroy {
   }
 
   private toCreateBody(): CreateBookRequest {
-    const raw = this.form.getRawValue();
-    const body: CreateBookRequest = {
-      title: String(raw.title).trim(),
-      publisherId: raw.publisherId as string,
-      priceAmount: Number(raw.priceAmount),
-    };
-    const authorIds = raw.authorIds as string[];
-    const categoryIds = raw.categoryIds as string[];
-    if (authorIds.length) {
-      body.authorIds = authorIds;
-    }
-    if (categoryIds.length) {
-      body.categoryIds = categoryIds;
-    }
-    const coverUrl = String(raw.coverUrl || '').trim();
-    if (coverUrl) {
-      body.coverUrl = coverUrl;
-    }
-    const description = String(raw.description || '').trim();
-    if (description) {
-      body.description = description;
-    }
-    const isbn = String(raw.isbn || '').trim();
-    if (isbn) {
-      body.isbn = isbn;
-    }
-    if (raw.pageCount != null && raw.pageCount !== '') {
-      body.pageCount = Number(raw.pageCount);
-    }
-    if (raw.initialStock != null && raw.initialStock !== '') {
-      body.initialStock = Number(raw.initialStock);
-    }
-    return body;
+    return buildCreateBookBody(this.form.getRawValue());
   }
 
   private toUpdateBody(): UpdateBookRequest {
-    const raw = this.form.getRawValue();
-    const body: UpdateBookRequest = {
-      version: Number(raw.version),
-      title: String(raw.title).trim(),
-      publisherId: raw.publisherId as string,
-      priceAmount: Number(raw.priceAmount),
-      authorIds: raw.authorIds as string[],
-      categoryIds: raw.categoryIds as string[],
-    };
-    body.coverUrl = String(raw.coverUrl || '').trim();
-    body.description = String(raw.description || '').trim();
-    body.isbn = String(raw.isbn || '').trim();
-    if (raw.pageCount != null && raw.pageCount !== '') {
-      body.pageCount = Number(raw.pageCount);
-    }
-    return body;
+    return buildUpdateBookBody(this.form.getRawValue(), {
+      previousIsbn: this.loadedIsbn,
+    });
   }
 
   private loadLookups(): Observable<void> {

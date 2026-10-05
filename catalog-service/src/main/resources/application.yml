@@ -83,6 +83,10 @@ app:
       enabled: true
       interval: 30s
       batch-size: 100
+  openlibrary:
+    base-url: https://openlibrary.org
+    connect-timeout: 3s
+    read-timeout: 5s
 
 logging:
   level:

@@ -25,7 +25,8 @@ public enum CatalogErrorCode implements ErrorCode {
 	BOOK_NOT_AVAILABLE(HttpStatus.CONFLICT, Level.INFO, "One or more books are not available for sale."),
 	RESERVATION_MISMATCH(HttpStatus.CONFLICT, Level.INFO, "A different reservation already exists for this order."),
 	RESERVATION_RELEASED(HttpStatus.CONFLICT, Level.INFO, "Reservation was released and can no longer be committed."),
-	RESERVATION_COMMITTED(HttpStatus.CONFLICT, Level.INFO, "Reservation was already committed and cannot be released.");
+	RESERVATION_COMMITTED(HttpStatus.CONFLICT, Level.INFO, "Reservation was already committed and cannot be released."),
+	BOOK_METADATA_NOT_FOUND(HttpStatus.NOT_FOUND, Level.INFO, "No book metadata found for this ISBN.");
 
 	/**
 	 * Bu servisin döndürebildiği tüm kodlar, OpenAPI {@code Problem.code} enum'undaki sırayla. Sıra yayımlanmış
@@ -54,6 +55,7 @@ public enum CatalogErrorCode implements ErrorCode {
 			RESERVATION_MISMATCH,
 			RESERVATION_RELEASED,
 			RESERVATION_COMMITTED,
+			BOOK_METADATA_NOT_FOUND,
 			CommonErrorCode.AUTHENTICATION_UNAVAILABLE,
 			CommonErrorCode.INTERNAL_ERROR);
 

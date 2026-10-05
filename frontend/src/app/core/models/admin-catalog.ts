@@ -154,3 +154,14 @@ export interface AdminPageQuery {
 export interface AdminBookQuery extends AdminPageQuery {
   status?: AdminBookStatus | null;
 }
+
+/** OpenAPI `IsbnMetadataResponse` — Open Library ham metadata */
+export interface IsbnMetadataResponse {
+  isbn: string;
+  title?: string | null;
+  description?: string | null;
+  coverUrl?: string | null;
+  pageCount?: number | null;
+  authors: string[];
+  publishers: string[];
+}

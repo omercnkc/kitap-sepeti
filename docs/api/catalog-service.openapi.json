@@ -848,6 +848,113 @@
         ]
       }
     },
+    "/api/admin/books/isbn-lookup": {
+      "get": {
+        "description": "Open Library üzerinden başlık, açıklama, kapak, sayfa, yazar/yayınevi **isimleri**. Bizim yayınevi/yazar UUID'leri dönmez; form eşleştirir. Geçersiz ISBN → 400.",
+        "operationId": "lookupBookByIsbn",
+        "parameters": [
+          {
+            "description": "ISBN-10 veya ISBN-13 (tire/boşluk kabul)",
+            "in": "query",
+            "name": "isbn",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IsbnMetadataResponse"
+                }
+              }
+            },
+            "description": "Metadata."
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`VALIDATION_FAILED` (alan hataları `errors` dizisinde) veya `MALFORMED_REQUEST` (okunamayan JSON ya da bozuk path değişkeni)."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`UNAUTHORIZED`: token yok, geçersiz ya da süresi dolmuş.",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Token yoksa `Bearer`, geçersizse `Bearer error=\"invalid_token\"`.",
+                "schema": {
+                  "type": "string",
+                  "example": "Bearer"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`FORBIDDEN`: token geçerli ama rol `ADMIN` değil."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`BOOK_METADATA_NOT_FOUND`: Open Library'de yok veya sağlayıcıya ulaşılamadı."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INTERNAL_ERROR`: beklenmeyen hata; ayrıntı yanıtta yer almaz."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`AUTHENTICATION_UNAVAILABLE`: token doğrulanamadı çünkü user-service JWKS ucuna ulaşılamıyor; daha sonra tekrar deneyin."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "ISBN ile dış metadata getir",
+        "tags": [
+          "Admin – Books"
+        ]
+      }
+    },
     "/api/admin/books/{id}": {
       "delete": {
         "description": "Arşivlemeyle aynı işlem; kayıt fiziksel olarak silinmez.",
@@ -4043,6 +4150,47 @@
           "message"
         ]
       },
+      "IsbnMetadataResponse": {
+        "type": "object",
+        "properties": {
+          "authors": {
+            "type": "array",
+            "description": "Yazar adları (sıra korunur).",
+            "items": {
+              "type": "string"
+            }
+          },
+          "coverUrl": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "isbn": {
+            "type": "string",
+            "description": "Normalize edilmiş ISBN-10/13."
+          },
+          "pageCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "publishers": {
+            "type": "array",
+            "description": "Yayınevi adları.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "authors",
+          "isbn",
+          "publishers"
+        ]
+      },
       "MoveCategoryRequest": {
         "type": "object",
         "properties": {
@@ -4252,6 +4400,7 @@
               "RESERVATION_MISMATCH",
               "RESERVATION_RELEASED",
               "RESERVATION_COMMITTED",
+              "BOOK_METADATA_NOT_FOUND",
               "AUTHENTICATION_UNAVAILABLE",
               "INTERNAL_ERROR"
             ],

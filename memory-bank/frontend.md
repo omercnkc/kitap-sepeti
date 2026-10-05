@@ -18,9 +18,14 @@
 | Book form | `admin-book-form-page/` | create/edit; lifecycle + stok; taslak/vitrin notu |
 | AdminCatalogApi | `core/api/admin-catalog.api.ts` | publish/archive/stock-adjustments |
 | Hata mesajları | `error-messages.ts` | STOCK_BELOW_RESERVED, BOOK_NOT_PUBLISHABLE |
-| Guard | `admin.guard.ts` | canActivate + canLoad → `/books` |
+## Admin kitap formu (PATCH 400)
 
-## Sipariş / Checkout
+- İstemci: `isbnValidator` (checksum), `httpUrlValidator` (mutlak http/https)
+- `toUpdateBody`: boş `isbn`/`coverUrl`/`description` → `""` (temizle); dolu ISBN normalize; fiyat `roundMoney2`
+- **Legacy ISBN:** seed’deki checksum’sız ISBN yüklenince validator kabul eder; PATCH’te değişmediyse `isbn` alanı **gönderilmez** (BE Bean Validation tekrarlamasın). Sarı uyarı: `hasLegacyInvalidIsbn`
+- 400 `errors[]` → `fieldErrors` + interceptor toast “Girdiğiniz bilgileri kontrol edin.”
+- `toCreateBody`: boş isbn/cover hiç gönderilmez
+- 400 `errors[]` → `fieldErrors` + interceptor toast “Girdiğiniz bilgileri kontrol edin.”
 
 | Parça | Yol | Not |
 | --- | --- | --- |

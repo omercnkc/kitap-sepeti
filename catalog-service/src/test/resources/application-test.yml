@@ -24,6 +24,10 @@ app:
   stock:
     expiry:
       enabled: false
+  openlibrary:
+    base-url: http://127.0.0.1:9
+    connect-timeout: 1s
+    read-timeout: 1s
   # Yalnızca testte geçerli anahtarın özeti (ham hali InternalTestKeys'te); .env'deki gerçek özet kullanılmaz.
   internal-auth:
     clients:

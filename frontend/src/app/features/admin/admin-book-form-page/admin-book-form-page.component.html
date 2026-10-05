@@ -147,7 +147,40 @@
       <div class="row g-3 mt-1">
         <div class="col-md-6">
           <label class="form-label" for="book-isbn">ISBN</label>
-          <input id="book-isbn" type="text" class="form-control" formControlName="isbn" />
+          <div class="input-group">
+            <input
+              id="book-isbn"
+              type="text"
+              class="form-control"
+              formControlName="isbn"
+              [class.is-invalid]="form.get('isbn')?.invalid && form.get('isbn')?.touched"
+            />
+            <button
+              type="button"
+              class="btn btn-outline-secondary"
+              (click)="onLookupIsbn()"
+              [disabled]="isbnLookupBusy || saving || actionBusy"
+            >
+              {{ isbnLookupBusy ? 'Getiriliyor…' : 'Bilgileri getir' }}
+            </button>
+          </div>
+          <div
+            *ngIf="form.get('isbn')?.touched && form.get('isbn')?.hasError('isbn')"
+            class="invalid-feedback d-block"
+          >
+            Geçerli bir ISBN girin (10 veya 13 hane + doğru kontrol basamağı). Örn.
+            9780306406157. Boş bırakırsanız ISBN silinir.
+          </div>
+          <div *ngIf="hasLegacyInvalidIsbn" class="form-text text-warning">
+            Kayıttaki ISBN kontrol basamağı geçersiz. Değiştirmezseniz korunur; geçerli bir
+            ISBN girin veya boşaltıp kaydederek silin.
+          </div>
+          <div *ngIf="isbnLookupHints.length" class="form-text">
+            Open Library:
+            <span *ngFor="let hint of isbnLookupHints; let last = last">
+              {{ hint }}<span *ngIf="!last">; </span>
+            </span>
+          </div>
           <app-field-error [errors]="fieldErrors" field="isbn"></app-field-error>
         </div>
         <div class="col-md-3">
@@ -164,7 +197,20 @@
         </div>
         <div class="col-md-3">
           <label class="form-label" for="book-cover">Kapak URL</label>
-          <input id="book-cover" type="url" class="form-control" formControlName="coverUrl" />
+          <input
+            id="book-cover"
+            type="url"
+            class="form-control"
+            formControlName="coverUrl"
+            placeholder="https://…"
+            [class.is-invalid]="form.get('coverUrl')?.invalid && form.get('coverUrl')?.touched"
+          />
+          <div
+            *ngIf="form.get('coverUrl')?.touched && form.get('coverUrl')?.hasError('httpUrl')"
+            class="invalid-feedback d-block"
+          >
+            Kapak adresi http(s):// ile başlamalı.
+          </div>
           <app-field-error [errors]="fieldErrors" field="coverUrl"></app-field-error>
         </div>
       </div>

@@ -41,6 +41,7 @@ public class SecurityConfig {
 		return RequestPathMasker.of(
 				"/api/books/lookup",
 				"/api/books/{bookId}",
+				"/api/admin/books/isbn-lookup",
 				"/api/admin/books/{bookId}",
 				"/api/admin/books/{bookId}/publish",
 				"/api/admin/books/{bookId}/archive",

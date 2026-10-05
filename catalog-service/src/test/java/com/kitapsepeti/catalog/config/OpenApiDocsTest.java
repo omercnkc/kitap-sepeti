@@ -55,7 +55,8 @@ class OpenApiDocsTest extends ApiTestSupport {
 	void documentsExactlyTheRealOperationsAndNoTestEndpoints() throws Exception {
 		assertThat(operations(docs()).keySet()).containsExactlyInAnyOrder(
 				"GET /api/books", "GET /api/books/lookup", "GET /api/books/{id}", "GET /api/categories",
-				"GET /api/admin/books", "POST /api/admin/books", "GET /api/admin/books/{id}",
+				"GET /api/admin/books", "POST /api/admin/books", "GET /api/admin/books/isbn-lookup",
+				"GET /api/admin/books/{id}",
 				"PATCH /api/admin/books/{id}", "DELETE /api/admin/books/{id}", "POST /api/admin/books/{id}/publish",
 				"POST /api/admin/books/{id}/archive", "POST /api/admin/books/{id}/stock-adjustments",
 				"GET /api/admin/publishers", "POST /api/admin/publishers", "GET /api/admin/publishers/{id}",
@@ -89,7 +90,7 @@ class OpenApiDocsTest extends ApiTestSupport {
 			.containsEntry("type", "http").containsEntry("scheme", "bearer").containsEntry("bearerFormat", "JWT");
 
 		Map<String, Map<String, Object>> admin = operationsUnder(docs, "/api/admin/");
-		assertThat(admin).hasSize(24);
+		assertThat(admin).hasSize(25);
 		admin.forEach((operation, spec) -> {
 			assertThat(spec.get("security")).as(operation).isEqualTo(List.of(Map.of("bearerAuth", List.of())));
 			assertThat(responses(spec)).as(operation).containsKeys("401", "403", "503");

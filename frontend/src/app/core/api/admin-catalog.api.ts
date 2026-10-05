@@ -13,6 +13,7 @@ import {
   CreateBookRequest,
   CreateCategoryRequest,
   CreatePublisherRequest,
+  IsbnMetadataResponse,
   MoveCategoryRequest,
   PageResponse,
   PublisherResponse,
@@ -116,6 +117,12 @@ export class AdminCatalogApi {
 
   getBook(id: string): Observable<AdminBook> {
     return this.http.get<AdminBook>(`${this.base}/books/${id}`);
+  }
+
+  lookupBookByIsbn(isbn: string): Observable<IsbnMetadataResponse> {
+    return this.http.get<IsbnMetadataResponse>(`${this.base}/books/isbn-lookup`, {
+      params: { isbn },
+    });
   }
 
   createBook(body: CreateBookRequest): Observable<AdminBook> {

@@ -10,8 +10,10 @@ import com.kitapsepeti.catalog.dto.request.StockAdjustmentRequest;
 import com.kitapsepeti.catalog.dto.request.UpdateBookRequest;
 import com.kitapsepeti.catalog.dto.response.AdminBookResponse;
 import com.kitapsepeti.catalog.dto.response.AdminBookSummaryResponse;
+import com.kitapsepeti.catalog.dto.response.IsbnMetadataResponse;
 import com.kitapsepeti.catalog.dto.response.PageResponse;
 import com.kitapsepeti.catalog.service.BookAdminService;
+import com.kitapsepeti.catalog.service.IsbnLookupService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.headers.Header;
@@ -30,6 +32,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -46,8 +49,11 @@ public class AdminBookController {
 
 	private final BookAdminService bookAdminService;
 
-	public AdminBookController(BookAdminService bookAdminService) {
+	private final IsbnLookupService isbnLookupService;
+
+	public AdminBookController(BookAdminService bookAdminService, IsbnLookupService isbnLookupService) {
 		this.bookAdminService = bookAdminService;
+		this.isbnLookupService = isbnLookupService;
 	}
 
 	/** Son güncellenen önce ({@code updatedAt desc, id desc}). */
@@ -57,6 +63,17 @@ public class AdminBookController {
 	@ApiResponse(responseCode = "200", description = "Sayfa.")
 	public PageResponse<AdminBookSummaryResponse> list(@Valid @ParameterObject @ModelAttribute AdminBookListRequest request) {
 		return bookAdminService.list(request);
+	}
+
+	@GetMapping("/isbn-lookup")
+	@Operation(operationId = "lookupBookByIsbn", summary = "ISBN ile dış metadata getir",
+			description = "Open Library üzerinden başlık, açıklama, kapak, sayfa, yazar/yayınevi **isimleri**. "
+					+ "Bizim yayınevi/yazar UUID'leri dönmez; form eşleştirir. Geçersiz ISBN → 400.")
+	@ApiResponse(responseCode = "200", description = "Metadata.")
+	@ApiResponse(responseCode = "404", description = "`BOOK_METADATA_NOT_FOUND`: Open Library'de yok veya sağlayıcıya ulaşılamadı.")
+	public IsbnMetadataResponse lookupByIsbn(
+			@Parameter(description = "ISBN-10 veya ISBN-13 (tire/boşluk kabul)", required = true) @RequestParam String isbn) {
+		return isbnLookupService.lookup(isbn);
 	}
 
 	@GetMapping("/{id}")
