@@ -7,7 +7,7 @@
 - **payment-service: TAMAMLANDI** (Faz 7 Adım 1–8; mock sağlayıcı, imzalı webhook, outbox → RabbitMQ, OpenAPI, Docker + compose
   8087). 365 test yeşil.
 - **order-service: TAMAMLANDI** (Faz 8 Adım 0–11; checkout, durum makinesi, Outbox, stok telafi/sync, Feign + CB, uzlaştırma, liste, OpenAPI, Docker + compose 8088). 665 test yeşil.
-- **api-gateway: ADIM 1, 2, 3 & 7 TAMAMLANDI** (Faz 10; WebFlux tabanlı reaktif gateway, port 8080, Spring Cloud 2025.1.3, route yönlendirmeleri, RequestIdGlobalFilter correlation tracing, CorsConfig reaktif CORS desteği). 17 test yeşil.
+- **api-gateway: ADIM 1, 2, 3, 4 & 7 TAMAMLANDI** (Faz 10; WebFlux tabanlı reaktif gateway, port 8080, Spring Cloud 2025.1.3, route yönlendirmeleri, RequestIdGlobalFilter correlation tracing, CorsConfig reaktif CORS desteği, JwtAuthGlobalFilter & JwksKeyProvider reaktif JWT doğrulaması ve JWKS cache). 23 test yeşil.
 - **catalog-service: TAMAMLANDI** (Adım 1–11: şema, public okuma, admin CRUD, kitap yaşam döngüsü + stok, outbox olayları,
   internal stok rezervasyonu + süre dolumu, OpenAPI + drift testi, actuator, Docker + compose). 270 test yeşil.
 - user-service: Flyway V1 şeması, entity/repository, RS256 JWT + JWKS, kayıt/giriş/refresh (rotation),

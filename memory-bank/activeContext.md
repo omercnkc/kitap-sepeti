@@ -1447,11 +1447,16 @@
   - Port `8080`, `/actuator/health` açık.
   - Downstream yönlendirmeleri (`user-service`, `catalog-service`, `cart-service`, `order-service`, `search-service`, `notification-service`) `application.yml` içinde tanımlandı.
   - Testler: `GatewayApplicationTests` (1 test) ve WireMock + WebTestClient tabanlı `RouteConfigurationTest` (11 test: tüm route'lar ve health endpoint). Toplam 12 test yeşil.
-- **Gateway Adım 3 & 7 (YAPILDI, COMMIT EDİLMEDİ): RequestId Tracing & CORS Yapılandırması (Faz 10).**
+- **Gateway Adım 3 & 7 (YAPILDI, push edildi - commit 1c57d54): RequestId Tracing & CORS Yapılandırması (Faz 10).**
   - `RequestIdGlobalFilter`: `GlobalFilter`, `Ordered.HIGHEST_PRECEDENCE`. Gelen `X-Request-Id` varsa korur, yoksa `UUID.randomUUID()` üretir; hem downstream istek header'ına hem de istemci yanıt header'ına ekler.
   - `CorsConfig`: `CorsWebFilter` reaktif bean'i ile Angular UI (`http://localhost:4200`, `http://127.0.0.1:4200`, `http://localhost:3000`) için CORS desteği. `GET, POST, PUT, DELETE, PATCH, OPTIONS`, allowCredentials=true, exposedHeaders (`X-Request-Id`, `Authorization`, `Location`), maxAge=3600s.
-  - Testler: `RequestIdGlobalFilterTest` (UUID üretimi, downstream iletimi ve mevcut correlation id korunması doğrulaması) ve `CorsConfigurationTest` (OPTIONS preflight 200 OK + header doğrulaması, actual request expose headers doğrulaması, yabancı origin 403 kontrolü).
-  - api-gateway modülü toplam 17 test yeşil.
+  - Testler: `RequestIdGlobalFilterTest` ve `CorsConfigurationTest` (toplam 17 test).
+- **Gateway Adım 4 (YAPILDI, COMMIT EDİLMEDİ): Reaktif JWT Doğrulama ve JWKS Önbellekleme (Faz 10).**
+  - `JwtProperties`: `app.jwt` ön ekiyle `jwks-url` (`http://localhost:8081/.well-known/jwks.json`), `cache-ttl-seconds` (300) ve `protected-paths` yapılandırması.
+  - `JwksKeyProvider`: `WebClient` ile reaktif JWKS çekme, `AtomicReference` ile önbellekleme (TTL süresince tekrarlı istek yok), kesinti anında stale cache fallback desteği.
+  - `JwtAuthGlobalFilter`: `GlobalFilter`, `Ordered.HIGHEST_PRECEDENCE + 10`. Bearer token doğrulaması, süre dolumu kontrolü (`TOKEN_EXPIRED`), RSA imza doğrulaması (`INVALID_TOKEN`), eksik token kontrolü (`AUTHENTICATION_REQUIRED`). RFC 7807 `ProblemDetail` standardında hata yanıtları. Başarılı doğrulamada downstream'e `X-User-Id` ve `X-User-Role` başlıklarını ekler.
+  - Testler: `JwtAuthFilterTest` (geçerli token ile downstream header iletimi, eksik token 401 ProblemDetail, süresi dolmuş token 401 ProblemDetail, sahte/geçersiz imza 401 ProblemDetail, JWKS cache round-trip optimizasyonu, korumasız yol geçişi).
+  - api-gateway modülü toplam 23 test yeşil.
 - Order planı: 0a common sertleştirme (YAPILDI) → 0b outbox → common (YAPILDI, push'landı) → 1 modül/db (YAPILDI, push'landı) → 2 domain (YAPILDI) → 3a Order istemcileri + CB (YAPILDI) → 3b Cart→Catalog CB (YAPILDI) → 4 checkout mutlu yol +
   GET {id} (YAPILDI) → 5 hata yolları/telafi (YAPILDI) → 6a Payment sonucu consumer+Order olayları (YAPILDI) → 6b stok
   commit/release+StockSyncJob+V2 lost (YAPILDI) → 7 Cart CartCheckedOut tüketicisi (YAPILDI) → 8 timeout görevi
