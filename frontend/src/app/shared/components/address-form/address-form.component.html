@@ -52,28 +52,149 @@
     <app-field-error [errors]="fieldErrors" field="phone"></app-field-error>
   </div>
 
-  <div class="mb-3">
-    <label class="form-label" for="address-line1">Adres satırı 1</label>
-    <input
-      id="address-line1"
-      type="text"
-      class="form-control"
-      formControlName="line1"
-      maxlength="200"
-      autocomplete="address-line1"
-      [class.is-invalid]="form.get('line1')!.touched && form.get('line1')!.invalid"
-    />
-    <div
-      *ngIf="form.get('line1')!.touched && form.get('line1')!.hasError('required')"
-      class="invalid-feedback d-block"
+  <div *ngIf="geoMismatchMessage" class="alert alert-warning py-2 small" role="status">
+    {{ geoMismatchMessage }}
+    <button
+      *ngIf="freeTextMode"
+      type="button"
+      class="btn btn-link btn-sm p-0 align-baseline ms-1"
+      (click)="useSelectMode()"
     >
-      Adres satırı gerekli.
-    </div>
-    <app-field-error [errors]="fieldErrors" field="line1"></app-field-error>
+      Listeden seç
+    </button>
   </div>
 
+  <ng-container *ngIf="!freeTextMode; else freeTextGeo">
+    <div class="row g-3">
+      <div class="col-md-4 mb-3">
+        <label class="form-label" for="address-sehirId">İl</label>
+        <select
+          id="address-sehirId"
+          class="form-select"
+          formControlName="sehirId"
+          [attr.disabled]="illerLoading ? true : null"
+          [class.is-invalid]="form.get('sehirId')!.touched && form.get('sehirId')!.invalid"
+        >
+          <option value="">{{ illerLoading ? 'Yükleniyor…' : 'İl seçin' }}</option>
+          <option *ngFor="let il of iller" [value]="il.sehir_id">{{ il.sehir_adi }}</option>
+        </select>
+        <div
+          *ngIf="form.get('sehirId')!.touched && form.get('sehirId')!.hasError('required')"
+          class="invalid-feedback d-block"
+        >
+          İl seçin.
+        </div>
+        <app-field-error [errors]="fieldErrors" field="city"></app-field-error>
+      </div>
+
+      <div class="col-md-4 mb-3">
+        <label class="form-label" for="address-ilceId">İlçe</label>
+        <select
+          id="address-ilceId"
+          class="form-select"
+          formControlName="ilceId"
+          [attr.disabled]="!form.get('sehirId')!.value || ilcelerLoading ? true : null"
+          [class.is-invalid]="form.get('ilceId')!.touched && form.get('ilceId')!.invalid"
+        >
+          <option value="">
+            {{ ilcelerLoading ? 'Yükleniyor…' : 'İlçe seçin' }}
+          </option>
+          <option *ngFor="let ilce of ilceler" [value]="ilce.ilce_id">{{ ilce.ilce_adi }}</option>
+        </select>
+        <div
+          *ngIf="form.get('ilceId')!.touched && form.get('ilceId')!.hasError('required')"
+          class="invalid-feedback d-block"
+        >
+          İlçe seçin.
+        </div>
+        <app-field-error [errors]="fieldErrors" field="district"></app-field-error>
+      </div>
+
+      <div class="col-md-4 mb-3">
+        <label class="form-label" for="address-mahalleId">Mahalle</label>
+        <select
+          id="address-mahalleId"
+          class="form-select"
+          formControlName="mahalleId"
+          [attr.disabled]="!form.get('ilceId')!.value || mahallelerLoading ? true : null"
+          [class.is-invalid]="form.get('mahalleId')!.touched && form.get('mahalleId')!.invalid"
+        >
+          <option value="">
+            {{ mahallelerLoading ? 'Yükleniyor…' : 'Mahalle seçin' }}
+          </option>
+          <option *ngFor="let m of mahalleler" [value]="m.mahalle_id">{{ m.mahalle_adi }}</option>
+        </select>
+        <div
+          *ngIf="form.get('mahalleId')!.touched && form.get('mahalleId')!.hasError('required')"
+          class="invalid-feedback d-block"
+        >
+          Mahalle seçin.
+        </div>
+        <app-field-error [errors]="fieldErrors" field="line1"></app-field-error>
+      </div>
+    </div>
+  </ng-container>
+
+  <ng-template #freeTextGeo>
+    <div class="mb-3">
+      <label class="form-label" for="address-line1">Adres satırı 1 (mahalle)</label>
+      <input
+        id="address-line1"
+        type="text"
+        class="form-control"
+        formControlName="line1"
+        maxlength="200"
+        autocomplete="address-line1"
+        [class.is-invalid]="form.get('line1')!.touched && form.get('line1')!.invalid"
+      />
+      <div
+        *ngIf="form.get('line1')!.touched && form.get('line1')!.hasError('required')"
+        class="invalid-feedback d-block"
+      >
+        Adres satırı gerekli.
+      </div>
+      <app-field-error [errors]="fieldErrors" field="line1"></app-field-error>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-md-6 mb-3">
+        <label class="form-label" for="address-district">İlçe <span class="text-muted">(opsiyonel)</span></label>
+        <input
+          id="address-district"
+          type="text"
+          class="form-control"
+          formControlName="district"
+          maxlength="80"
+          autocomplete="address-level2"
+        />
+        <app-field-error [errors]="fieldErrors" field="district"></app-field-error>
+      </div>
+      <div class="col-md-6 mb-3">
+        <label class="form-label" for="address-city">İl</label>
+        <input
+          id="address-city"
+          type="text"
+          class="form-control"
+          formControlName="city"
+          maxlength="80"
+          autocomplete="address-level1"
+          [class.is-invalid]="form.get('city')!.touched && form.get('city')!.invalid"
+        />
+        <div
+          *ngIf="form.get('city')!.touched && form.get('city')!.hasError('required')"
+          class="invalid-feedback d-block"
+        >
+          İl gerekli.
+        </div>
+        <app-field-error [errors]="fieldErrors" field="city"></app-field-error>
+      </div>
+    </div>
+  </ng-template>
+
   <div class="mb-3">
-    <label class="form-label" for="address-line2">Adres satırı 2 <span class="text-muted">(opsiyonel)</span></label>
+    <label class="form-label" for="address-line2"
+      >Cadde / sokak / bina <span class="text-muted">(opsiyonel)</span></label
+    >
     <input
       id="address-line2"
       type="text"
@@ -81,42 +202,9 @@
       formControlName="line2"
       maxlength="200"
       autocomplete="address-line2"
+      placeholder="Cadde, sokak, kapı no, daire"
     />
     <app-field-error [errors]="fieldErrors" field="line2"></app-field-error>
-  </div>
-
-  <div class="row g-3">
-    <div class="col-md-6 mb-3">
-      <label class="form-label" for="address-district">İlçe <span class="text-muted">(opsiyonel)</span></label>
-      <input
-        id="address-district"
-        type="text"
-        class="form-control"
-        formControlName="district"
-        maxlength="80"
-        autocomplete="address-level2"
-      />
-      <app-field-error [errors]="fieldErrors" field="district"></app-field-error>
-    </div>
-    <div class="col-md-6 mb-3">
-      <label class="form-label" for="address-city">İl</label>
-      <input
-        id="address-city"
-        type="text"
-        class="form-control"
-        formControlName="city"
-        maxlength="80"
-        autocomplete="address-level1"
-        [class.is-invalid]="form.get('city')!.touched && form.get('city')!.invalid"
-      />
-      <div
-        *ngIf="form.get('city')!.touched && form.get('city')!.hasError('required')"
-        class="invalid-feedback d-block"
-      >
-        İl gerekli.
-      </div>
-      <app-field-error [errors]="fieldErrors" field="city"></app-field-error>
-    </div>
   </div>
 
   <div class="row g-3">

@@ -37,7 +37,8 @@
 | Modeller | `core/models/user.ts` | UpdateProfile / Address OpenAPI birebir |
 | AccountApi | `core/api/account.api.ts` | PATCH `/api/me`; addresses CRUD; setDefault=PATCH isDefault |
 | ProfilePage | `features/account/profile-page/` | Reactive Forms; phone `""` = sil |
-| AddressForm | `shared/components/address-form/` | sunum; checkout yeniden kullanır |
+| AddressForm | `shared/components/address-form/` | İl→İlçe→Mahalle select; checkout yeniden kullanır |
+| TR geo | `core/geo/TrAddressDataService` + `assets/geo/` | lazy JSON + shareReplay; `city`/`district`/`line1` string map |
 | AddressListPage | `features/account/addresses-page/` | modal CRUD; `/addresses/:id` 404 EmptyState |
 | Header | `layout/header/` | Profil → `/account/profile`; Adreslerim → `/account/addresses` |
 
