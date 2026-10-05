@@ -1,26 +1,27 @@
 # Frontend (Kitap Sepeti UI)
 
-## Durum (UI-3 Adım 1–5 + Register formu)
+## Durum (UI-3 Adım 1–6)
 
 - Angular 13 NgModule iskeleti, global SCSS (Bootstrap kaynak), layout (Shell/Header/Footer/NotFound)
 - Lazy feature modülleri: catalog, auth (login/register), cart, checkout, orders, account, notifications, admin
 - Geliştirme proxy: `/api` → `http://localhost:8080` (API Gateway)
 - Locale: `tr-TR` (`LOCALE_ID` + `registerLocaleData`)
 - UI-2: models, CatalogApi, Toast, ErrorInterceptor, Spinner/EmptyState/FieldError; `/books` liste denemesi
-- UI-3.1–5: AuthApi/TokenStorage/AuthService, LoginPage, RegisterPage (Reactive Forms), APP_INITIALIZER, Header
-- Sırada: AuthInterceptor, Guard
+- UI-3.1–6: AuthApi/TokenStorage/AuthService, Login/Register, APP_INITIALIZER, AuthInterceptor (single-flight refresh), Header
+- Sırada: Guard
 
 ## Auth katmanı
 
 | Parça | Yol | Not |
 | --- | --- | --- |
 | Modeller | `core/models/auth.ts` | OpenAPI birebir |
-| AuthApi | `core/api/auth.api.ts` | register/login/refresh/getMe; getMe geçici Bearer (interceptor öncesi) |
+| AuthApi | `core/api/auth.api.ts` | register/login/refresh/getMe — Bearer yok (interceptor) |
 | TokenStorage | `core/auth/token-storage.service.ts` | Access bellek; refresh rememberMe → local/session |
 | AuthService | `core/auth/auth.service.ts` | `currentUser$`; login/register/logout/refresh |
 | APP_INITIALIZER | `core/auth/auth.initializer.ts` | refresh varsa → access + getMe; yok/hata → sessiz logout |
+| AuthInterceptor | `core/interceptors/auth.interceptor.ts` | Bearer; public auth skip; 401 → tek refresh + retry; Error’dan önce |
 | LoginPage | `features/auth/login-page/` | Reactive Forms |
-| RegisterPage | `features/auth/register-page/` | Reactive Forms (login kalıbı); phone opsiyonel |
+| RegisterPage | `features/auth/register-page/` | Reactive Forms; phone opsiyonel |
 
 ## Ortam
 

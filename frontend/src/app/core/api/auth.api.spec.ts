@@ -1,13 +1,11 @@
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { AuthApi } from './auth.api';
-import { TokenStorageService } from '../auth/token-storage.service';
 import { TokenResponse, UserResponse } from '../models';
 
 describe('AuthApi', () => {
   let api: AuthApi;
   let httpMock: HttpTestingController;
-  let tokenStorage: TokenStorageService;
 
   const tokens: TokenResponse = {
     accessToken: 'access',
@@ -22,12 +20,10 @@ describe('AuthApi', () => {
     });
     api = TestBed.inject(AuthApi);
     httpMock = TestBed.inject(HttpTestingController);
-    tokenStorage = TestBed.inject(TokenStorageService);
   });
 
   afterEach(() => {
     httpMock.verify();
-    tokenStorage.clear();
   });
 
   it('register should POST /api/auth/register', () => {
@@ -67,8 +63,7 @@ describe('AuthApi', () => {
     req.flush(tokens);
   });
 
-  it('getMe should GET /api/me with Bearer access token', () => {
-    tokenStorage.setAccessToken('access');
+  it('getMe should GET /api/me without setting Authorization (interceptor owns Bearer)', () => {
     const user = {
       id: 'u1',
       email: 'a@b.com',
@@ -83,7 +78,7 @@ describe('AuthApi', () => {
 
     const req = httpMock.expectOne('/api/me');
     expect(req.request.method).toBe('GET');
-    expect(req.request.headers.get('Authorization')).toBe('Bearer access');
+    expect(req.request.headers.has('Authorization')).toBeFalse();
     req.flush(user);
   });
 });

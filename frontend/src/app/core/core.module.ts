@@ -10,6 +10,7 @@ import { HTTP_INTERCEPTORS, HttpClientModule } from '@angular/common/http';
 import { authInitializer } from './auth/auth.initializer';
 import { AuthService } from './auth/auth.service';
 import { TokenStorageService } from './auth/token-storage.service';
+import { AuthInterceptor } from './interceptors/auth.interceptor';
 import { ErrorInterceptor } from './interceptors/error.interceptor';
 
 export function throwIfAlreadyLoaded(parentModule: unknown, moduleName: string): void {
@@ -38,7 +39,8 @@ export class CoreModule {
           deps: [AuthService, TokenStorageService],
           multi: true,
         },
-        // AuthInterceptor (UI-3) eklendiğinde bu satırın ÜSTÜNE konur.
+        // Auth, Error'dan önce: 401'de refresh/retry Error toast'ından önce ele alınır.
+        { provide: HTTP_INTERCEPTORS, useClass: AuthInterceptor, multi: true },
         { provide: HTTP_INTERCEPTORS, useClass: ErrorInterceptor, multi: true },
       ],
     };

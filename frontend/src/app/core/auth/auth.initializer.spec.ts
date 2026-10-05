@@ -60,7 +60,7 @@ describe('authInitializer', () => {
     refreshReq.flush(tokenResponse);
 
     const meReq = httpMock.expectOne('/api/me');
-    expect(meReq.request.headers.get('Authorization')).toBe('Bearer access');
+    // Bearer AuthInterceptor sorumluluğunda; initializer birim testinde interceptor yok.
     meReq.flush(user);
 
     await expectAsync(done).toBeResolved();

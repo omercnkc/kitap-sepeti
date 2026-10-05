@@ -44,7 +44,7 @@ export class ErrorInterceptor implements HttpInterceptor {
     }
 
     if (status === 401) {
-      // AuthInterceptor (UI-3) gelene kadar yönlendirme yok; hatayı sayfaya bırak.
+      // AuthInterceptor refresh/logout yönetir; burada toast yok.
       return;
     }
 
