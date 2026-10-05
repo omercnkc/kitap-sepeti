@@ -1314,6 +1314,15 @@
   - Yerel E2E: yeni kullanıcı checkout 201 → paid; history 2, OrderPaid+CartCheckedOut yayımlanmış. Mock ret yolu ayrıca
     failed+OrderFailed verdi. Geçici kuyruk `order.paid`, `order.failed`, `cart.checked-out` mesajlarını gördü ve silindi; Payment
     results DLQ boş. Adım 4'ten olayı kayıp pending kalıntı hâlâ pending ve Adım 8'i bekliyor.
+- **Order Adım 6b (YAPILDI):**
+  - Flyway `V2__stock_state_lost.sql`: `stock_state` CHECK'e `'lost'` eklendi, `ck_orders_paid_state` güncellendi, `ck_orders_lost_paid` (`stock_state <> 'lost' OR status = 'paid'`) eklendi. V1'e dokunulmadı.
+  - Domain: `StockState.LOST` eklendi; `markStockLost(clock)` (`PAID+HELD -> LOST: APPLIED`, `LOST: ALREADY_IN_STATE`, diğerleri `CONFLICTING_FINAL`); `markStockCommitted` ve `markStockReleased` LOST'ta `CONFLICTING_FINAL`.
+  - Dispatcher & Coordinator: `StockDispatcher` (`TransactionPhase.AFTER_COMMIT`), `ThreadPoolTaskExecutor` (2-4 thread, queue 50, DiscardPolicy, dolunca WARN + drop; exception yok). Catalog commit/release çağrısı TX DIŞINDA (`StockCoordinator`), ardından `FOR UPDATE` ile durum güncellenir.
+  - Sonuç eşleme: Commit: `Committed` -> committed; `AlreadyReleased` (409) / `Rejected (404 RESOURCE_NOT_FOUND)` -> lost + ERROR STOCK_COMMIT_LOST; diğer Rejected (401 vb.) -> held + ERROR; NotPerformed / Unknown -> held + WARN. Release: `Released` -> released; `AlreadyCommitted` -> ERROR, değişiklik yok; diğerleri WARN.
+  - `StockSyncJob`: `@Scheduled(fixedDelayString = "${app.stock-sync.interval:30s}")`, min-age 10s, batch 50. `(stock_state, updated_at)` bileşik indeksi doğrulanmıştır. Devre kesici açıkken tur erken biter. Tur sonunda iş yapıldıysa tek INFO satırı (id/tutar yok). Tek instance varsayımı geçerlidir.
+  - Admin listesi şablonu: `SELECT id, user_id, status, stock_state, total_amount, currency, created_at, updated_at FROM orders WHERE stock_state = 'lost' ORDER BY updated_at DESC;`.
+  - Testler: `OrderTransitionsTest` (93), `OrderSchemaConstraintsTest` (117), `StockDispatcherIT` (9), `StockSyncJobIT` (8), `StartupLogHygieneTest` (V1+V2 2 migration doğrulama). Monorepo testleri tam yeşil: common 67, user 86, catalog 285, cart 321 (2 skipped), payment 367, order 599.
+  - Yerel E2E: Docker servisleri + yerelde order-service açılışında V2 başarıyla uygulandı; 6a kalıntısı paid+held rezervasyon süresi dolduğu için Catalog 409 döndü -> lost + ERROR STOCK_COMMIT_LOST; failed+held -> released oldu; yeni kullanıcıyla checkout -> paid -> saniyeler içinde committed ve Catalog stoku düştü; ret yolu (.99 kuralı) mevcut veriyle kurulamadığı için atlandı; lost sorgusu 1 sonucunu verdi.
 
 ## Sonraki adımlar
 - PROJE KARARI (Ekim 2026, UI paralel): UI (Angular 13) Order ile PARALEL başlıyor — ayrı agent, ayrı worktree
@@ -1338,8 +1347,10 @@
   - Stok commit/release Catalog internal HTTP ile (`/internal/stock/reservations/{orderId}/commit|release`).
 - Order planı: 0a common sertleştirme (YAPILDI) → 0b outbox → common (YAPILDI, push'landı) → 1 modül/db (YAPILDI, push'landı) → 2 domain (YAPILDI) → 3a Order istemcileri + CB (YAPILDI) → 3b Cart→Catalog CB (YAPILDI) → 4 checkout mutlu yol +
   GET {id} (YAPILDI) → 5 hata yolları/telafi (YAPILDI) → 6a Payment sonucu consumer+Order olayları (YAPILDI) → 6b stok
-  commit/release+StockSyncJob+V2 lost → 7 Cart CartCheckedOut tüketicisi → 8 timeout görevi → 9 liste →
+  commit/release+StockSyncJob+V2 lost (YAPILDI) → 7 Cart CartCheckedOut tüketicisi → 8 timeout görevi → 9 liste →
   10 OpenAPI/olay belgeleri → 11 Docker.
+- Backlog (Order fazı sonunda incelenecek): CartConcurrencyTest twelveConcurrentAddsGiveExactlyTenSuccessesAndTwoQuantityConflicts flake (beklenen 409, 409 yerine 409, 500 dönmesi).
+- Veri Değiştirme Kuralı: Catalog ve User verisi YALNIZCA ilgili servisin API'siyle değiştirilir; doğrudan SQL ile yazma KESİNLİKLE YOKTUR (root yalnızca okuma). Admin token yoksa DUR ve sor. Raporda id, başlık, token, tutar ASLA YAZILMAZ.
 - order-service eklenirken: `RequestPathMasker` bean'i (`/api/orders/{orderId}` vb.) ve `InternalAuthConfig` (gerekirse) — common
   politika aynen geçerli.
 - Payment artık işleri: (1) iyzico sandbox sağlayıcısı; (2) aynı siparişe eşzamanlı ilk isteklerde birden fazla sağlayıcı çağrısı

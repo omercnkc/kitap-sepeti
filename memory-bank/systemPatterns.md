@@ -865,3 +865,46 @@ Kök POM'un başındaki "YENİ SERVİS EKLERKEN KONTROL LİSTESİ" takip edilir:
 6. (Docker) Servisin Dockerfile'ını mevcutlardan kopyala; modül pom'ları `COPY --parents */pom.xml` ile otomatik gelir, diğer
    Dockerfile'lara satır eklenmez. Servise özel olan yalnızca src satırı (`common/src` + kendi `src`'si) ve servis adı.
    Ardından tüm imajları build ederek doğrula.
+
+## Stok Kesinleştirme / Serbest Bırakma ve Kurtarma (Order Adım 6b)
+- **İki Aşamalı Dağıtım (Dispatcher Pattern):**
+  - Ödeme sonucu TX'inde sipariş durumu `paid` veya `failed` yapıldığında ve geçiş `APPLIED` olduğunda Spring `ApplicationEventPublisher` ile `StockCommitReadyEvent` veya `StockReleaseReadyEvent` yayımlanır.
+  - `StockDispatcher` bu olayları `@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)` ile yakalar. TX rollback olursa iş bırakılmaz.
+  - Olaylar sınırlı bir `ThreadPoolTaskExecutor` (2 core, 4 max, 50 queue capacity, `DiscardPolicy`) havuzuna devredilir. Kuyruk dolduğunda istisna fırlatılmaz, `WARN` loglanır ve kurtarma görevi (`StockSyncJob`) tarafından toplanır.
+  - `ALREADY_IN_STATE` veya `CONFLICTING` durumlarda event fırlatılmaz, dış çağrı yapılmaz.
+- **Transaction Dışı Catalog Çağrısı ve Kilitli Durum Güncellemesi (`StockCoordinator`):**
+  - Catalog commit/release çağrısı DB transaction'ı DIŞINDA yapılır.
+  - Çağrı tamamlandıktan sonra sipariş `SELECT ... FOR UPDATE` ile okunur ve durum geçişi uygulanır.
+  - **Sonuç Eşleme Kuralları:**
+    - Commit:
+      - `Committed` → `markStockCommitted` (stock_state = `committed`)
+      - `AlreadyReleased` (409) → `markStockLost` + `ERROR STOCK_COMMIT_LOST` (tekrar deneme yok)
+      - `Rejected (404 RESOURCE_NOT_FOUND)` → `markStockLost` + `ERROR STOCK_COMMIT_LOST` (rezervasyon yok)
+      - Diğer `Rejected` (401 vb.) → durum değişmez (`held` kalır), `ERROR` (yapılandırma hatası; job toparlar)
+      - `NotPerformed` / `Unknown` (500 vb.) → durum değişmez (`held` kalır), `WARN` (job toparlar)
+    - Release:
+      - `Released` → `markStockReleased` (stock_state = `released`)
+      - `AlreadyCommitted` (409) → `ERROR`, değişiklik yok
+      - `NotPerformed` / `Unknown` / `Rejected` → değişiklik yok, `WARN`
+  - Geçiş `APPLIED` değilse (sipariş arada başka yoldan değişmişse) `DEBUG`/`WARN`, istisna fırlatılmaz.
+- **Kurtarma Görevi (`StockSyncJob`):**
+  - `@Scheduled(fixedDelayString = "${app.stock-sync.interval:30s}", initialDelayString = "${app.stock-sync.initial-delay:10s}")`
+  - Ayarlar: `app.stock-sync.enabled` (varsayılan true), `interval: 30s`, `min-age: 10s`, `batch: 50`.
+  - Seçim: `(status = 'paid' AND stock_state = 'held') OR (status = 'failed' AND stock_state IN ('requested', 'held'))`, `updated_at < now - minAge`, `updated_at ASC`, `LIMIT batch`.
+  - İndeks: `(stock_state, updated_at)` bileşik indeksini kullandığı EXPLAIN ile doğrulanmıştır.
+  - Seçim kilitsizdir; her aday için Catalog çağrısı TX dışında yapılır, ardından kilitli durum geçişi yapılır.
+  - Devre kesici açıkken (`NotPerformed`) tur erken bitirilir.
+  - Tur sonunda iş yapıldıysa kimlik ve tutar içermeyen tek bir `INFO` özet satırı loglanır.
+  - **Tek Instance Varsayımı:** `StockSyncJob` distributed lock (ShedLock vb.) içermez; v1 mimarisinde tek instance çalıştığı varsayılır. Çoklu instance'a geçilirse distributed lock eklenmelidir.
+- **Admin Lost Sipariş Sorgusu (Şablon):**
+  Kaybolan stoklu siparişler için açık uç yoktur; DB üzerinden aşağıdaki şablon sorgu ile incelenir:
+  ```sql
+  SELECT id, user_id, status, stock_state, total_amount, currency, created_at, updated_at
+  FROM orders
+  WHERE stock_state = 'lost'
+  ORDER BY updated_at DESC;
+  ```
+- **Veri Değiştirme Kuralı:**
+  - Catalog ve User verisi YALNIZCA ilgili servisin API'siyle değiştirilir; doğrudan SQL ile yazma KESİNLİKLE YOKTUR (root yalnızca okuma amaçlıdır). Admin token yoksa DUR ve kullanıcıya sor.
+  - Raporlarda id, başlık, token, tutar ASLA YAZILMAZ.
+

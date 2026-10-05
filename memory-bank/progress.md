@@ -178,6 +178,16 @@
   ikinci kök `clean verify` yeşil (ilk denemede kapsam dışı Cart concurrency testi bir kez 500 üretti, tekil tekrar ve kök tekrar
   yeşil). Yerel E2E: yeni kullanıcıyla checkout 201 → paid; history 2; yayımlanmış OrderPaid+CartCheckedOut; başarısız mock
   senaryosu failed + yayımlanmış OrderFailed; geçici kuyruk üç tip/routing'i gördü ve silindi; DLQ boş; eski pending kalıntı duruyor.
+- Order Adım 6b YAPILDI (COMMIT EDİLMEDİ): stok commit/release dispatcher (TransactionPhase.AFTER_COMMIT, ThreadPoolTaskExecutor
+  2-4 core, 50 queue capacity, DiscardPolicy ile WARN; exception yok), StockCoordinator (TX dışında Catalog çağrısı, ardından
+  `FOR UPDATE` ile durum güncelleme; AlreadyReleased/404 -> lost + ERROR STOCK_COMMIT_LOST; 401/Unknown -> held), StockSyncJob
+  (fixedDelay 30s, min-age 10s, batch 50, tek instance varsayımı, (stock_state, updated_at) indeksi doğrulandı, devre kesicide erken
+  sonlanma, tek INFO özeti), Flyway V2__stock_state_lost.sql (lost CHECK, ck_orders_lost_paid; V1'e dokunulmadı). Admin lost sorgusu
+  şablonu eklendi. Testler: order 560 → 599 (+39 test); kök `mvnw test` / `verify` tam yeşil: common 67, user 86, catalog 285,
+  cart 321 (2 skipped), payment 367, order 599. Yerel E2E: Docker servisleri + yerel order-service üzerinde V2 uygulandı;
+  6a'dan kalan paid+held sipariş Catalog rezervasyon süresi dolduğu için lost + ERROR STOCK_COMMIT_LOST oldu; Adım 5 kalıntısı
+  failed+held sipariş released oldu; yeni kullanıcıyla checkout -> paid -> committed döngüsü saniyeler içinde tamamlandı ve
+  Catalog stoku 3'ten 2'ye düştü; ret yolu (.99 kuruş) katalog verisi değiştirilemeyeceği için atlandı; lost sorgusu 1 döndü.
 - Gateway fazı: docs/Swagger'ı (dört servis) dışarıya kapatmak.
 - order-service (catalog rezervasyon istemcisi).
 - Search için: yayınevi/yazar/kategori yeniden adlandırması yayındaki kitaplar için olay üretmiyor → yeniden indeksleme gerekecek.
