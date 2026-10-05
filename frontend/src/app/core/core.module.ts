@@ -1,4 +1,5 @@
 import {
+  APP_INITIALIZER,
   ModuleWithProviders,
   NgModule,
   Optional,
@@ -6,6 +7,9 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HTTP_INTERCEPTORS, HttpClientModule } from '@angular/common/http';
+import { authInitializer } from './auth/auth.initializer';
+import { AuthService } from './auth/auth.service';
+import { TokenStorageService } from './auth/token-storage.service';
 import { ErrorInterceptor } from './interceptors/error.interceptor';
 
 export function throwIfAlreadyLoaded(parentModule: unknown, moduleName: string): void {
@@ -28,6 +32,12 @@ export class CoreModule {
     return {
       ngModule: CoreModule,
       providers: [
+        {
+          provide: APP_INITIALIZER,
+          useFactory: authInitializer,
+          deps: [AuthService, TokenStorageService],
+          multi: true,
+        },
         // AuthInterceptor (UI-3) eklendiğinde bu satırın ÜSTÜNE konur.
         { provide: HTTP_INTERCEPTORS, useClass: ErrorInterceptor, multi: true },
       ],
