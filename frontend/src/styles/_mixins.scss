@@ -1,0 +1,6 @@
+// Ortak SCSS mixin'leri (layout/feature adımlarında genişletilir).
+
+@mixin focus-ring($color: $primary) {
+  outline: 0;
+  box-shadow: 0 0 0 0.2rem rgba($color, 0.35);
+}
