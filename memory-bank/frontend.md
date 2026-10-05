@@ -1,10 +1,21 @@
 # Frontend (Kitap Sepeti UI)
 
-## Durum (UI-7 tamam)
+## Durum (UI-9 adım 1–2)
 
 - Angular 13 NgModule; lazy features; proxy `/api` → Gateway 8080
-- UI-7: checkout, polling, OrderList + Detail özet
-- Sırada: `q` arama (B1); Admin / Notifications
+- UI-9.1–2: Admin shell + AdminCatalogApi
+- Sırada: Admin CRUD listeleri; `q` arama (B1); Notifications
+
+## Admin
+
+| Parça | Yol | Not |
+| --- | --- | --- |
+| Shell | `features/admin/admin-shell/` | yan menü; lg altı NgbOffcanvas |
+| Placeholder | `features/admin/admin-placeholder-page/` | publishers/authors/categories/books |
+| Modeller | `core/models/admin-catalog.ts` | OpenAPI admin create/update/list |
+| AdminCatalogApi | `core/api/admin-catalog.api.ts` | `/api/admin/**` CRUD + publish/archive/stock |
+| Guard | `core/guards/admin.guard.ts` | canActivate + canLoad → `/books` |
+| Header | `layout/header/` | Admin linki yalnız `ADMIN` |
 
 ## Sipariş / Checkout
 

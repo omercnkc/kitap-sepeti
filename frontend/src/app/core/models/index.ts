@@ -1,6 +1,7 @@
 export * from './problem-detail';
 export * from './page-response';
 export * from './catalog';
+export * from './admin-catalog';
 export * from './auth';
 export * from './cart';
 export * from './user';

@@ -1,0 +1,64 @@
+<div class="admin-shell container-fluid py-3 py-lg-4">
+  <div class="row g-3 g-lg-4">
+    <aside class="col-lg-3 col-xl-2 d-none d-lg-block">
+      <nav class="admin-shell__nav" aria-label="Yönetim menüsü">
+        <h1 class="h5 mb-3">Yönetim</h1>
+        <ul class="nav flex-column gap-1">
+          <li class="nav-item" *ngFor="let item of navItems">
+            <a
+              class="nav-link admin-shell__link"
+              [routerLink]="item.path"
+              routerLinkActive="active"
+            >
+              {{ item.label }}
+            </a>
+          </li>
+        </ul>
+      </nav>
+    </aside>
+
+    <div class="col-12 col-lg-9 col-xl-10">
+      <div class="d-flex align-items-center gap-2 mb-3 d-lg-none">
+        <button
+          type="button"
+          class="btn btn-outline-secondary btn-sm"
+          (click)="openNav(mobileNav)"
+          aria-label="Menüyü aç"
+        >
+          Menü
+        </button>
+        <span class="fw-semibold">Yönetim</span>
+      </div>
+
+      <router-outlet></router-outlet>
+    </div>
+  </div>
+</div>
+
+<ng-template #mobileNav>
+  <div class="offcanvas-header">
+    <h2 class="offcanvas-title h5 mb-0">Yönetim</h2>
+    <button
+      type="button"
+      class="btn-close"
+      aria-label="Kapat"
+      (click)="offcanvas.dismiss()"
+    ></button>
+  </div>
+  <div class="offcanvas-body">
+    <nav aria-label="Yönetim menüsü">
+      <ul class="nav flex-column gap-1">
+        <li class="nav-item" *ngFor="let item of navItems">
+          <a
+            class="nav-link admin-shell__link"
+            [routerLink]="item.path"
+            routerLinkActive="active"
+            (click)="offcanvas.dismiss()"
+          >
+            {{ item.label }}
+          </a>
+        </li>
+      </ul>
+    </nav>
+  </div>
+</ng-template>
