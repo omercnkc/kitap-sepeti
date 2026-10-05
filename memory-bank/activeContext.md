@@ -1441,12 +1441,17 @@
   - İzolasyon: Cart, Catalog veya Payment kapalıyken order-service sağlıklı kalır (readiness yalnızca DB'ye bakar; dış servis kesintileri circuit breaker ile 502 döner).
   - DB kullanıcısı ve şeması: `infra/mysql/init/40-order-db.sh` (`order_db`, `order_svc`).
   - `docs/docker.md` güncellendi (order-service bölümü ve çalıştırma yönergeleri eklendi).
-- **Gateway Adım 1 & 2 (YAPILDI, COMMIT EDİLMEDİ): Gateway İskeleti, Cloud BOM ve Route Yönlendirmeleri (Faz 10).**
+- **Gateway Adım 1 & 2 (YAPILDI, push edildi - commit 80dfa6c): Gateway İskeleti, Cloud BOM ve Route Yönlendirmeleri (Faz 10).**
   - `api-gateway` modülü monorepoya eklendi; Spring Cloud 2025.1.3 (`spring-cloud-starter-gateway-server-webflux`) reaktif WebFlux tabanıyla kuruldu.
   - Blocking WebMVC, JPA, MySQL, Flyway KESİNLİKLE YOK; stateless reaktif mimari.
   - Port `8080`, `/actuator/health` açık.
   - Downstream yönlendirmeleri (`user-service`, `catalog-service`, `cart-service`, `order-service`, `search-service`, `notification-service`) `application.yml` içinde tanımlandı.
   - Testler: `GatewayApplicationTests` (1 test) ve WireMock + WebTestClient tabanlı `RouteConfigurationTest` (11 test: tüm route'lar ve health endpoint). Toplam 12 test yeşil.
+- **Gateway Adım 3 & 7 (YAPILDI, COMMIT EDİLMEDİ): RequestId Tracing & CORS Yapılandırması (Faz 10).**
+  - `RequestIdGlobalFilter`: `GlobalFilter`, `Ordered.HIGHEST_PRECEDENCE`. Gelen `X-Request-Id` varsa korur, yoksa `UUID.randomUUID()` üretir; hem downstream istek header'ına hem de istemci yanıt header'ına ekler.
+  - `CorsConfig`: `CorsWebFilter` reaktif bean'i ile Angular UI (`http://localhost:4200`, `http://127.0.0.1:4200`, `http://localhost:3000`) için CORS desteği. `GET, POST, PUT, DELETE, PATCH, OPTIONS`, allowCredentials=true, exposedHeaders (`X-Request-Id`, `Authorization`, `Location`), maxAge=3600s.
+  - Testler: `RequestIdGlobalFilterTest` (UUID üretimi, downstream iletimi ve mevcut correlation id korunması doğrulaması) ve `CorsConfigurationTest` (OPTIONS preflight 200 OK + header doğrulaması, actual request expose headers doğrulaması, yabancı origin 403 kontrolü).
+  - api-gateway modülü toplam 17 test yeşil.
 - Order planı: 0a common sertleştirme (YAPILDI) → 0b outbox → common (YAPILDI, push'landı) → 1 modül/db (YAPILDI, push'landı) → 2 domain (YAPILDI) → 3a Order istemcileri + CB (YAPILDI) → 3b Cart→Catalog CB (YAPILDI) → 4 checkout mutlu yol +
   GET {id} (YAPILDI) → 5 hata yolları/telafi (YAPILDI) → 6a Payment sonucu consumer+Order olayları (YAPILDI) → 6b stok
   commit/release+StockSyncJob+V2 lost (YAPILDI) → 7 Cart CartCheckedOut tüketicisi (YAPILDI) → 8 timeout görevi
