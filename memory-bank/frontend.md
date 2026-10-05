@@ -1,14 +1,25 @@
 # Frontend (Kitap Sepeti UI)
 
-## Durum (UI-1 tamam; UI-2 Adım 1–3)
+## Durum (UI-3 Adım 1–3)
 
 - Angular 13 NgModule iskeleti, global SCSS (Bootstrap kaynak), layout (Shell/Header/Footer/NotFound)
 - Lazy feature modülleri: catalog, auth (login/register), cart, checkout, orders, account, notifications, admin
 - Geliştirme proxy: `/api` → `http://localhost:8080` (API Gateway)
 - Locale: `tr-TR` (`LOCALE_ID` + `registerLocaleData`)
-- UI-2.1–5: models, CatalogApi, Toast, ErrorInterceptor, Spinner/EmptyState/FieldError; `/books` liste denemesi
-- Sırada: UI-3 guard’lar / auth
+- UI-2: models, CatalogApi, Toast, ErrorInterceptor, Spinner/EmptyState/FieldError; `/books` liste denemesi
+- UI-3.1–3: Auth modelleri, AuthApi, TokenStorageService, AuthService (+ birim testleri)
+- Sırada: Login/Register formları, AuthInterceptor, guard, APP_INITIALIZER
 
+## Auth katmanı (UI-3.1–3)
+
+| Parça | Yol | Not |
+| --- | --- | --- |
+| Modeller | `core/models/auth.ts` | OpenAPI birebir: Login/Register/Refresh/Token/User + JwtPayload |
+| AuthApi | `core/api/auth.api.ts` | `register`, `login`, `refresh`, `getMe` — base `${apiUrl}/api` |
+| TokenStorage | `core/auth/token-storage.service.ts` | Access bellek; refresh rememberMe → local/session; JWT payload decode (imza yok) |
+| AuthService | `core/auth/auth.service.ts` | `currentUser$`; login/register → token + getMe; logout temizler |
+
+Henüz yok: interceptor, guard, APP_INITIALIZER, login/register UI bağlama.
 ## Ortam
 
 | Araç | Sürüm |
