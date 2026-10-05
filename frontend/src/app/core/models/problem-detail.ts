@@ -13,4 +13,6 @@ export interface ProblemDetail {
   instance?: string;
   code?: string;
   errors?: FieldError[];
+  /** ORDER_PENDING_EXISTS / stok hatalarında taşınabilir */
+  orderId?: string;
 }

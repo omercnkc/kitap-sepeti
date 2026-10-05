@@ -1,4 +1,129 @@
-<section class="container py-4">
-  <h1 class="h4 mb-2">Ödeme</h1>
-  <p class="text-muted mb-0">Checkout akışı yakında burada olacak.</p>
+<section class="container py-4 checkout-page" *ngIf="cart$ | async as cart">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <h1 class="h4 mb-0">Sipariş onayı</h1>
+    <a routerLink="/cart" class="small text-decoration-none">Sepete dön</a>
+  </div>
+
+  <app-spinner *ngIf="loading"></app-spinner>
+
+  <div *ngIf="!loading" class="row g-4">
+    <div class="col-lg-7">
+      <section class="mb-4">
+        <h2 class="h6 mb-3">Teslimat adresi</h2>
+
+        <ul *ngIf="addresses.length > 0" class="list-unstyled mb-3">
+          <li *ngFor="let address of addresses; trackBy: trackByAddressId" class="mb-2">
+            <label
+              class="checkout-page__address border rounded p-3 d-block mb-0"
+              [class.checkout-page__address--selected]="selectedAddressId === address.id"
+            >
+              <div class="d-flex gap-2">
+                <input
+                  type="radio"
+                  class="form-check-input mt-1"
+                  name="checkoutAddress"
+                  [value]="address.id"
+                  [checked]="selectedAddressId === address.id"
+                  (change)="selectAddress(address.id)"
+                />
+                <div class="min-w-0">
+                  <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                    <span class="fw-semibold">
+                      {{ address.label || address.recipientName }}
+                    </span>
+                    <span *ngIf="address.isDefault" class="badge bg-primary">Varsayılan</span>
+                  </div>
+                  <p class="small text-muted mb-1">
+                    {{ address.recipientName }} · {{ address.phone }}
+                  </p>
+                  <p class="mb-0 small">{{ summaryLine(address) }}</p>
+                </div>
+              </div>
+            </label>
+          </li>
+        </ul>
+
+        <button
+          *ngIf="!showNewAddressForm"
+          type="button"
+          class="btn btn-outline-primary btn-sm mb-3"
+          (click)="openNewAddressForm()"
+        >
+          Yeni adres ekle
+        </button>
+
+        <div *ngIf="showNewAddressForm" class="border rounded p-3">
+          <h3 class="h6 mb-3">Yeni adres</h3>
+          <app-address-form
+            [address]="null"
+            [fieldErrors]="fieldErrors"
+            [submitting]="savingAddress"
+            [showCancel]="addresses.length > 0"
+            (save)="onNewAddressSave($event)"
+            (cancel)="cancelNewAddressForm()"
+          ></app-address-form>
+          <p *ngIf="addressFormComp && !isNewAddressFormValid" class="small text-muted mt-2 mb-0">
+            Kaydetmek için zorunlu alanları doldurun.
+          </p>
+        </div>
+      </section>
+
+      <div *ngIf="formError" class="alert alert-warning" role="alert">
+        <p class="mb-0">{{ formError }}</p>
+        <p *ngIf="pendingOrderId" class="mb-0 mt-2">
+          <a [routerLink]="['/orders', pendingOrderId]">Bekleyen siparişe git</a>
+        </p>
+      </div>
+    </div>
+
+    <aside class="col-lg-5">
+      <div class="checkout-page__summary border rounded p-3">
+        <h2 class="h6 mb-3">Sepet özeti</h2>
+        <ul class="list-unstyled small mb-3">
+          <li
+            *ngFor="let line of cart.items; trackBy: trackByBookId"
+            class="d-flex justify-content-between gap-2 mb-2"
+          >
+            <span class="min-w-0">
+              {{ line.title }}
+              <span class="text-muted">× {{ line.quantity }}</span>
+            </span>
+            <span class="text-nowrap">
+              {{
+                line.lineTotal
+                  | currency: (line.currency || 'TRY') : 'symbol' : '1.2-2' : 'tr-TR'
+              }}
+            </span>
+          </li>
+        </ul>
+        <dl class="row mb-2">
+          <dt class="col-7 text-muted">Ürün adedi</dt>
+          <dd class="col-5 text-end mb-0">{{ cart.itemCount }}</dd>
+        </dl>
+        <dl class="row mb-3">
+          <dt class="col-7">Ara toplam</dt>
+          <dd class="col-5 text-end mb-0 fw-semibold">
+            <ng-container *ngIf="cart.subtotal !== null; else noSubtotal">
+              {{
+                cart.subtotal
+                  | currency: (cart.currency || 'TRY') : 'symbol' : '1.2-2' : 'tr-TR'
+              }}
+            </ng-container>
+            <ng-template #noSubtotal>—</ng-template>
+          </dd>
+        </dl>
+        <p class="small text-muted mb-3">
+          Tutarlar gösterim amaçlıdır; ödeme adımında kesinleşir.
+        </p>
+        <button
+          type="button"
+          class="btn btn-primary w-100"
+          [disabled]="!canConfirm"
+          (click)="onConfirm()"
+        >
+          {{ submitting ? 'Sipariş oluşturuluyor…' : 'Siparişi onayla' }}
+        </button>
+      </div>
+    </aside>
+  </div>
 </section>

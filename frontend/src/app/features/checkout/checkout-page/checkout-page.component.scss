@@ -1,0 +1,14 @@
+.checkout-page__address {
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+
+  &--selected {
+    border-color: var(--bs-primary) !important;
+    box-shadow: 0 0 0 1px var(--bs-primary);
+  }
+}
+
+.checkout-page__summary {
+  position: sticky;
+  top: 1rem;
+}
