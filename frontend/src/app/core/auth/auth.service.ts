@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, OnDestroy } from '@angular/core';
 import { BehaviorSubject, Observable, throwError } from 'rxjs';
 import { switchMap, tap } from 'rxjs/operators';
 import { AuthApi } from '../api/auth.api';
@@ -8,11 +8,12 @@ import {
   TokenResponse,
   UserResponse,
 } from '../models';
-import { TokenStorageService } from './token-storage.service';
+import { REFRESH_TOKEN_STORAGE_KEY, TokenStorageService } from './token-storage.service';
 
 @Injectable({ providedIn: 'root' })
-export class AuthService {
+export class AuthService implements OnDestroy {
   private readonly currentUserSubject = new BehaviorSubject<UserResponse | null>(null);
+  private readonly onStorage = (event: StorageEvent): void => this.handleStorageEvent(event);
 
   readonly currentUser$: Observable<UserResponse | null> =
     this.currentUserSubject.asObservable();
@@ -20,10 +21,32 @@ export class AuthService {
   constructor(
     private readonly authApi: AuthApi,
     private readonly tokenStorage: TokenStorageService,
-  ) {}
+  ) {
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', this.onStorage);
+    }
+  }
+
+  ngOnDestroy(): void {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('storage', this.onStorage);
+    }
+  }
 
   get currentUserSnapshot(): UserResponse | null {
     return this.currentUserSubject.value;
+  }
+
+  isLoggedIn(): boolean {
+    return this.currentUserSubject.value !== null;
+  }
+
+  isAdmin(user: UserResponse | null = this.currentUserSubject.value): boolean {
+    if (user?.role === 'ADMIN') {
+      return true;
+    }
+    const role = this.tokenStorage.decodeAccessToken()?.role;
+    return role === 'ADMIN' || role === 'ROLE_ADMIN';
   }
 
   login(email: string, password: string, rememberMe: boolean): Observable<UserResponse> {
@@ -73,5 +96,21 @@ export class AuthService {
   private persistTokens(tokens: TokenResponse, rememberMe: boolean): void {
     this.tokenStorage.setAccessToken(tokens.accessToken);
     this.tokenStorage.setRefreshToken(tokens.refreshToken, rememberMe);
+  }
+
+  /**
+   * Başka sekmede localStorage refresh silinince bu sekmedeki oturumu düşür.
+   * (sessionStorage sekmeler arası paylaşılmaz — tarayıcı davranışı.)
+   */
+  private handleStorageEvent(event: StorageEvent): void {
+    if (event.key !== null && event.key !== REFRESH_TOKEN_STORAGE_KEY) {
+      return;
+    }
+    // key === null → clear(); veya refresh silindi
+    if (event.key === REFRESH_TOKEN_STORAGE_KEY && event.newValue !== null) {
+      return;
+    }
+    this.tokenStorage.setAccessToken(null);
+    this.currentUserSubject.next(null);
   }
 }

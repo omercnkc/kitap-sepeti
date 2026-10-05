@@ -108,4 +108,25 @@ describe('AuthService', () => {
     httpMock.expectOne('/api/me').flush(user);
     expect(auth.currentUserSnapshot).toEqual(user);
   });
+
+  it('storage event clears in-memory session when refresh removed in another tab', () => {
+    tokenStorage.setAccessToken('access');
+    tokenStorage.setRefreshToken('refresh', true);
+    auth.loadCurrentUser().subscribe();
+    httpMock.expectOne('/api/me').flush(user);
+    expect(auth.currentUserSnapshot).toEqual(user);
+
+    localStorage.removeItem('kitapsepeti.refreshToken');
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key: 'kitapsepeti.refreshToken',
+        oldValue: 'refresh',
+        newValue: null,
+        storageArea: localStorage,
+      }),
+    );
+
+    expect(tokenStorage.getAccessToken()).toBeNull();
+    expect(auth.currentUserSnapshot).toBeNull();
+  });
 });

@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, TemplateRef } from '@angular/core';
+import { Router } from '@angular/router';
 import { NgbOffcanvas } from '@ng-bootstrap/ng-bootstrap';
 import { Observable } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
@@ -16,6 +17,7 @@ export class HeaderComponent {
   constructor(
     private readonly offcanvas: NgbOffcanvas,
     private readonly auth: AuthService,
+    private readonly router: Router,
   ) {}
 
   openMenu(content: TemplateRef<unknown>): void {
@@ -27,6 +29,11 @@ export class HeaderComponent {
 
   logout(): void {
     this.auth.logout();
+    void this.router.navigateByUrl('/books');
+  }
+
+  isAdmin(user: UserResponse): boolean {
+    return this.auth.isAdmin(user);
   }
 
   displayName(user: UserResponse): string {

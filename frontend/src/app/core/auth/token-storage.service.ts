@@ -1,7 +1,9 @@
 import { Injectable } from '@angular/core';
 import { JwtPayload } from '../models';
 
-const REFRESH_KEY = 'kitapsepeti.refreshToken';
+/** Refresh token storage anahtarı (sekmeler arası `storage` event için). */
+export const REFRESH_TOKEN_STORAGE_KEY = 'kitapsepeti.refreshToken';
+const REFRESH_KEY = REFRESH_TOKEN_STORAGE_KEY;
 
 /**
  * Access token yalnızca bellekte; refresh rememberMe'ye göre local/session storage.

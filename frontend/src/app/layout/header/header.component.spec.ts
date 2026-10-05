@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { Router } from '@angular/router';
 import { RouterTestingModule } from '@angular/router/testing';
 import { NgbModule } from '@ng-bootstrap/ng-bootstrap';
 import { BehaviorSubject } from 'rxjs';
@@ -9,9 +10,14 @@ import { HeaderComponent } from './header.component';
 describe('HeaderComponent', () => {
   let fixture: ComponentFixture<HeaderComponent>;
   let currentUser$: BehaviorSubject<UserResponse | null>;
+  let logoutSpy: jasmine.Spy;
+  let isAdminSpy: jasmine.Spy;
+  let router: Router;
 
   beforeEach(async () => {
     currentUser$ = new BehaviorSubject<UserResponse | null>(null);
+    logoutSpy = jasmine.createSpy('logout');
+    isAdminSpy = jasmine.createSpy('isAdmin').and.returnValue(false);
     await TestBed.configureTestingModule({
       imports: [RouterTestingModule, NgbModule],
       declarations: [HeaderComponent],
@@ -20,12 +26,15 @@ describe('HeaderComponent', () => {
           provide: AuthService,
           useValue: {
             currentUser$,
-            logout: jasmine.createSpy('logout'),
+            logout: logoutSpy,
+            isAdmin: isAdminSpy,
           },
         },
       ],
     }).compileComponents();
 
+    router = TestBed.inject(Router);
+    spyOn(router, 'navigateByUrl').and.resolveTo(true);
     fixture = TestBed.createComponent(HeaderComponent);
     fixture.detectChanges();
   });
@@ -41,7 +50,7 @@ describe('HeaderComponent', () => {
     expect(el.querySelector('a[routerLink="/register"]')).toBeTruthy();
   });
 
-  it('should show user name when logged in', () => {
+  it('should show account menu when logged in', () => {
     currentUser$.next({
       id: 'u1',
       email: 'a@b.com',
@@ -55,6 +64,32 @@ describe('HeaderComponent', () => {
 
     const el = fixture.nativeElement as HTMLElement;
     expect(el.textContent).toContain('Ali Veli');
+    expect(el.querySelector('a[routerLink="/account"]')).toBeTruthy();
+    expect(el.querySelector('a[routerLink="/orders"]')).toBeTruthy();
+    expect(el.querySelector('a[routerLink="/admin"]')).toBeFalsy();
     expect(el.querySelector('a[routerLink="/login"]')).toBeFalsy();
+  });
+
+  it('should show admin link for ADMIN', () => {
+    isAdminSpy.and.returnValue(true);
+    currentUser$.next({
+      id: 'u1',
+      email: 'admin@b.com',
+      firstName: 'Ada',
+      lastName: 'Min',
+      phone: null,
+      role: 'ADMIN',
+      status: 'ACTIVE',
+    });
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('a[routerLink="/admin"]')).toBeTruthy();
+  });
+
+  it('logout clears session and navigates home', () => {
+    fixture.componentInstance.logout();
+    expect(logoutSpy).toHaveBeenCalled();
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/books');
   });
 });

@@ -1,14 +1,14 @@
 # Frontend (Kitap Sepeti UI)
 
-## Durum (UI-3 Adım 1–6)
+## Durum (UI-3 tamam)
 
 - Angular 13 NgModule iskeleti, global SCSS (Bootstrap kaynak), layout (Shell/Header/Footer/NotFound)
 - Lazy feature modülleri: catalog, auth (login/register), cart, checkout, orders, account, notifications, admin
 - Geliştirme proxy: `/api` → `http://localhost:8080` (API Gateway)
 - Locale: `tr-TR` (`LOCALE_ID` + `registerLocaleData`)
 - UI-2: models, CatalogApi, Toast, ErrorInterceptor, Spinner/EmptyState/FieldError; `/books` liste denemesi
-- UI-3.1–6: AuthApi/TokenStorage/AuthService, Login/Register, APP_INITIALIZER, AuthInterceptor (single-flight refresh), Header
-- Sırada: Guard
+- UI-3: AuthApi/TokenStorage/AuthService, Login/Register, APP_INITIALIZER, AuthInterceptor, Auth/Guest/AdminGuard, Header menü
+- Sırada: UI-4 Katalog UI
 
 ## Auth katmanı
 
@@ -17,11 +17,13 @@
 | Modeller | `core/models/auth.ts` | OpenAPI birebir |
 | AuthApi | `core/api/auth.api.ts` | register/login/refresh/getMe — Bearer yok (interceptor) |
 | TokenStorage | `core/auth/token-storage.service.ts` | Access bellek; refresh rememberMe → local/session |
-| AuthService | `core/auth/auth.service.ts` | `currentUser$`; login/register/logout/refresh |
+| AuthService | `core/auth/auth.service.ts` | `currentUser$`; logout; `storage` event (çoklu sekme) |
 | APP_INITIALIZER | `core/auth/auth.initializer.ts` | refresh varsa → access + getMe; yok/hata → sessiz logout |
-| AuthInterceptor | `core/interceptors/auth.interceptor.ts` | Bearer; public auth skip; 401 → tek refresh + retry; Error’dan önce |
-| LoginPage | `features/auth/login-page/` | Reactive Forms |
-| RegisterPage | `features/auth/register-page/` | Reactive Forms; phone opsiyonel |
+| AuthInterceptor | `core/interceptors/auth.interceptor.ts` | Bearer; public auth skip; 401 → tek refresh + retry |
+| AuthGuard | `core/guards/auth.guard.ts` | cart/checkout/orders/account/notifications |
+| GuestGuard | `core/guards/guest.guard.ts` | login/register |
+| AdminGuard | `core/guards/admin.guard.ts` | canActivate + canLoad `/admin/**` |
+| LoginPage / RegisterPage | `features/auth/` | Reactive Forms |
 
 ## Ortam
 
