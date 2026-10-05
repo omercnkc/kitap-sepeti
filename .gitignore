@@ -28,3 +28,7 @@ secrets/
 .settings
 .springBeans
 .sts4-cache
+
+### IDE / Agent Config ###
+.agents/
+.cursor/
