@@ -1,0 +1,51 @@
+<form [formGroup]="form" (ngSubmit)="onSubmit()" novalidate>
+  <div class="mb-3">
+    <label class="form-label" for="admin-entity-name">Ad</label>
+    <input
+      id="admin-entity-name"
+      type="text"
+      class="form-control"
+      formControlName="name"
+      autocomplete="off"
+      [class.is-invalid]="form.get('name')?.invalid && form.get('name')?.touched"
+    />
+    <app-field-error [errors]="fieldErrors" field="name"></app-field-error>
+    <div
+      class="invalid-feedback d-block"
+      *ngIf="form.get('name')?.invalid && form.get('name')?.touched && !fieldErrors.length"
+    >
+      Ad gerekli.
+    </div>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label" for="admin-entity-slug">Kısa ad (slug)</label>
+    <input
+      id="admin-entity-slug"
+      type="text"
+      class="form-control"
+      formControlName="slug"
+      autocomplete="off"
+      placeholder="Boş bırakılırsa addan üretilir"
+      [class.is-invalid]="form.get('slug')?.invalid && form.get('slug')?.touched"
+    />
+    <div class="form-text">Küçük harf, rakam ve tire; örn. orhan-pamuk</div>
+    <app-field-error [errors]="fieldErrors" field="slug"></app-field-error>
+    <div
+      class="invalid-feedback d-block"
+      *ngIf="form.get('slug')?.invalid && form.get('slug')?.touched"
+    >
+      Geçerli bir slug girin.
+    </div>
+  </div>
+
+  <div class="d-flex justify-content-end gap-2">
+    <button type="button" class="btn btn-outline-secondary" (click)="onCancel()" [disabled]="submitting">
+      Vazgeç
+    </button>
+    <button type="submit" class="btn btn-primary" [disabled]="!canSave">
+      <span *ngIf="submitting" class="spinner-border spinner-border-sm me-1" role="status"></span>
+      {{ submitLabel }}
+    </button>
+  </div>
+</form>

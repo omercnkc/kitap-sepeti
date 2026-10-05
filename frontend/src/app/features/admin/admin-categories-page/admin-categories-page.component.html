@@ -1,0 +1,158 @@
+<section class="admin-categories">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <h2 class="h4 mb-0">Kategoriler</h2>
+    <button
+      type="button"
+      class="btn btn-primary btn-sm"
+      *ngIf="pageState === 'ready' || pageState === 'empty'"
+      (click)="openCreate()"
+    >
+      Kategori ekle
+    </button>
+  </div>
+
+  <app-spinner *ngIf="pageState === 'loading'" label="Kategoriler yükleniyor…"></app-spinner>
+
+  <app-empty-state
+    *ngIf="pageState === 'empty'"
+    title="Henüz kategori yok"
+    message="İlk kategoriyi ekleyerek ağacı oluşturmaya başlayın."
+  ></app-empty-state>
+
+  <div *ngIf="pageState === 'empty'" class="text-center mb-3">
+    <button type="button" class="btn btn-primary btn-sm" (click)="openCreate()">
+      Kategori ekle
+    </button>
+  </div>
+
+  <app-empty-state
+    *ngIf="pageState === 'error'"
+    title="Kategoriler yüklenemedi"
+    message="Liste alınamadı. Lütfen biraz sonra tekrar deneyin."
+  ></app-empty-state>
+
+  <ng-container *ngIf="pageState === 'ready'">
+    <ng-template #nodeTpl let-nodes>
+      <ul class="list-unstyled admin-categories__list mb-0">
+        <li *ngFor="let node of nodes; trackBy: trackById" class="admin-categories__item">
+          <div
+            class="admin-categories__row d-flex flex-wrap align-items-center justify-content-between gap-2 border rounded p-2 p-lg-3"
+          >
+            <div class="min-w-0">
+              <div class="fw-semibold">{{ node.name }}</div>
+              <div class="font-monospace small text-muted">{{ node.slug }}</div>
+            </div>
+            <div class="d-flex flex-wrap gap-1">
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-secondary"
+                (click)="openCreate(node.id)"
+                [disabled]="busyId === node.id"
+              >
+                Alt kategori
+              </button>
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-secondary"
+                (click)="openEdit(node)"
+                [disabled]="busyId === node.id"
+              >
+                Düzenle
+              </button>
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-danger"
+                (click)="onDelete(node)"
+                [disabled]="busyId === node.id"
+              >
+                Sil
+              </button>
+            </div>
+          </div>
+          <div class="admin-categories__children ms-3 ms-lg-4 mt-2" *ngIf="node.children.length">
+            <ng-container
+              *ngTemplateOutlet="nodeTpl; context: { $implicit: node.children }"
+            ></ng-container>
+          </div>
+        </li>
+      </ul>
+    </ng-template>
+
+    <ng-container *ngTemplateOutlet="nodeTpl; context: { $implicit: tree }"></ng-container>
+  </ng-container>
+</section>
+
+<ng-template #entityModal>
+  <div class="modal-header">
+    <h3 class="modal-title h5 mb-0">
+      {{ editing ? 'Kategoriyi düzenle' : 'Kategori ekle' }}
+    </h3>
+    <button
+      type="button"
+      class="btn-close"
+      aria-label="Kapat"
+      (click)="onFormCancel()"
+      [disabled]="saving"
+    ></button>
+  </div>
+  <div class="modal-body">
+    <form [formGroup]="form" (ngSubmit)="onFormSubmit()" novalidate>
+      <div class="mb-3">
+        <label class="form-label" for="category-name">Ad</label>
+        <input
+          id="category-name"
+          type="text"
+          class="form-control"
+          formControlName="name"
+          autocomplete="off"
+          [class.is-invalid]="form.get('name')?.invalid && form.get('name')?.touched"
+        />
+        <app-field-error [errors]="fieldErrors" field="name"></app-field-error>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label" for="category-slug">Kısa ad (slug)</label>
+        <input
+          id="category-slug"
+          type="text"
+          class="form-control"
+          formControlName="slug"
+          autocomplete="off"
+          placeholder="Boş bırakılırsa addan üretilir"
+        />
+        <app-field-error [errors]="fieldErrors" field="slug"></app-field-error>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label" for="category-parent">Üst kategori</label>
+        <select id="category-parent" class="form-select" formControlName="parentId">
+          <option value="">(Kök)</option>
+          <option *ngFor="let opt of parentOptions" [value]="opt.id">{{ opt.label }}</option>
+        </select>
+        <div class="form-text">
+          Düzenlerken üst kategoriyi değiştirmek kategoriyi taşır.
+        </div>
+        <app-field-error [errors]="fieldErrors" field="parentId"></app-field-error>
+      </div>
+
+      <div class="d-flex justify-content-end gap-2">
+        <button
+          type="button"
+          class="btn btn-outline-secondary"
+          (click)="onFormCancel()"
+          [disabled]="saving"
+        >
+          Vazgeç
+        </button>
+        <button type="submit" class="btn btn-primary" [disabled]="!canSave">
+          <span
+            *ngIf="saving"
+            class="spinner-border spinner-border-sm me-1"
+            role="status"
+          ></span>
+          {{ editing ? 'Güncelle' : 'Ekle' }}
+        </button>
+      </div>
+    </form>
+  </div>
+</ng-template>

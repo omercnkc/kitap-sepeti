@@ -1,19 +1,24 @@
 # Frontend (Kitap Sepeti UI)
 
-## Durum (UI-9 adım 1–2)
+## Durum (UI-9 adım 3–4)
 
 - Angular 13 NgModule; lazy features; proxy `/api` → Gateway 8080
-- UI-9.1–2: Admin shell + AdminCatalogApi
-- Sırada: Admin CRUD listeleri; `q` arama (B1); Notifications
+- UI-9.3–4: Admin yayınevi / yazar / kategori CRUD
+- Sırada: Admin kitap listesi/form; `q` arama (B1); Notifications
 
 ## Admin
 
 | Parça | Yol | Not |
 | --- | --- | --- |
 | Shell | `features/admin/admin-shell/` | yan menü; lg altı NgbOffcanvas |
-| Placeholder | `features/admin/admin-placeholder-page/` | publishers/authors/categories/books |
+| Publishers | `features/admin/admin-publishers-page/` | sayfalı liste; modal CRUD; ConfirmDialog sil |
+| Authors | `features/admin/admin-authors-page/` | publishers ile aynı kalıp |
+| Categories | `features/admin/admin-categories-page/` | ağaç; parent taşıma PUT; sil |
+| NameSlugForm | `features/admin/admin-name-slug-form/` | name + opsiyonel slug modal formu |
+| Placeholder | `features/admin/admin-placeholder-page/` | yalnız books (sonraki) |
 | Modeller | `core/models/admin-catalog.ts` | OpenAPI admin create/update/list |
 | AdminCatalogApi | `core/api/admin-catalog.api.ts` | `/api/admin/**` CRUD + publish/archive/stock |
+| Hata mesajları | `core/interceptors/error-messages.ts` | RESOURCE_IN_USE, CATEGORY_CYCLE → toast |
 | Guard | `core/guards/admin.guard.ts` | canActivate + canLoad → `/books` |
 | Header | `layout/header/` | Admin linki yalnız `ADMIN` |
 

@@ -137,6 +137,36 @@ describe('ErrorInterceptor', () => {
     expect(toast.error).toHaveBeenCalledWith('Kitap satışa uygun değil.');
   });
 
+  it('409 RESOURCE_IN_USE should toast in-use message', () => {
+    http.delete('/api/admin/publishers/p1').subscribe({
+      next: () => fail('expected error'),
+      error: () => undefined,
+    });
+
+    httpMock.expectOne('/api/admin/publishers/p1').flush(
+      { title: 'Conflict', status: 409, code: 'RESOURCE_IN_USE' },
+      { status: 409, statusText: 'Conflict' },
+    );
+
+    expect(toast.error).toHaveBeenCalledWith('Bu kayıt kullanımda olduğu için silinemez.');
+  });
+
+  it('409 CATEGORY_CYCLE should toast cycle message', () => {
+    http.put('/api/admin/categories/c1/parent', { parentId: 'c2' }).subscribe({
+      next: () => fail('expected error'),
+      error: () => undefined,
+    });
+
+    httpMock.expectOne('/api/admin/categories/c1/parent').flush(
+      { title: 'Conflict', status: 409, code: 'CATEGORY_CYCLE' },
+      { status: 409, statusText: 'Conflict' },
+    );
+
+    expect(toast.error).toHaveBeenCalledWith(
+      'Bir kategoriyi kendi altına veya alt kategorisine taşıyamazsınız.',
+    );
+  });
+
   it('401 should not toast (auth deferred) and rethrow', () => {
     let caught: ProblemDetail | undefined;
     http.get('/api/me').subscribe({
