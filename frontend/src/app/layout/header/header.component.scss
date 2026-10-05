@@ -1,5 +1,3 @@
-@import 'styles/variables';
-
 .app-header {
   position: sticky;
   top: 0;
@@ -12,6 +10,6 @@
 }
 
 .nav-link.active {
-  color: $primary !important;
+  color: var(--bs-primary) !important;
   font-weight: 600;
 }

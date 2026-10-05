@@ -1,7 +1,6 @@
 import { NgModule } from '@angular/core';
 import { RouterModule, Routes } from '@angular/router';
 import { ShellComponent } from './layout/shell/shell.component';
-import { PlaceholderPageComponent } from './layout/placeholder-page/placeholder-page.component';
 import { NotFoundComponent } from './layout/not-found/not-found.component';
 
 const routes: Routes = [
@@ -12,18 +11,44 @@ const routes: Routes = [
       { path: '', pathMatch: 'full', redirectTo: 'books' },
       {
         path: 'books',
-        component: PlaceholderPageComponent,
-        data: { title: 'Kitaplar' },
-      },
-      {
-        path: 'cart',
-        component: PlaceholderPageComponent,
-        data: { title: 'Sepet' },
+        loadChildren: () =>
+          import('./features/catalog/catalog.module').then((m) => m.CatalogModule),
       },
       {
         path: 'login',
-        component: PlaceholderPageComponent,
-        data: { title: 'Giriş' },
+        loadChildren: () => import('./features/auth/login.module').then((m) => m.LoginModule),
+      },
+      {
+        path: 'register',
+        loadChildren: () =>
+          import('./features/auth/register.module').then((m) => m.RegisterModule),
+      },
+      {
+        path: 'cart',
+        loadChildren: () => import('./features/cart/cart.module').then((m) => m.CartModule),
+      },
+      {
+        path: 'checkout',
+        loadChildren: () =>
+          import('./features/checkout/checkout.module').then((m) => m.CheckoutModule),
+      },
+      {
+        path: 'orders',
+        loadChildren: () => import('./features/orders/orders.module').then((m) => m.OrdersModule),
+      },
+      {
+        path: 'account',
+        loadChildren: () =>
+          import('./features/account/account.module').then((m) => m.AccountModule),
+      },
+      {
+        path: 'notifications',
+        loadChildren: () =>
+          import('./features/notifications/notifications.module').then((m) => m.NotificationsModule),
+      },
+      {
+        path: 'admin',
+        loadChildren: () => import('./features/admin/admin.module').then((m) => m.AdminModule),
       },
       { path: '**', component: NotFoundComponent },
     ],

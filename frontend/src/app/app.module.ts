@@ -1,4 +1,4 @@
-import { NgModule } from '@angular/core';
+import { LOCALE_ID, NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
 
 import { AppRoutingModule } from './app-routing.module';
@@ -9,7 +9,7 @@ import { LayoutModule } from './layout/layout.module';
 @NgModule({
   declarations: [AppComponent],
   imports: [BrowserModule, CoreModule.forRoot(), LayoutModule, AppRoutingModule],
-  providers: [],
+  providers: [{ provide: LOCALE_ID, useValue: 'tr-TR' }],
   bootstrap: [AppComponent],
 })
 export class AppModule {}
