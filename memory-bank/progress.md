@@ -209,6 +209,8 @@
   6a'dan kalan paid+held sipariş Catalog rezervasyon süresi dolduğu için lost + ERROR STOCK_COMMIT_LOST oldu; Adım 5 kalıntısı
   failed+held sipariş released oldu; yeni kullanıcıyla checkout -> paid -> committed döngüsü saniyeler içinde tamamlandı ve
   Catalog stoku 3'ten 2'ye düştü; ret yolu (.99 kuruş) katalog verisi değiştirilemeyeceği için atlandı; lost sorgusu 1 döndü.
+- Order Adım 9 YAPILDI (COMMIT EDİLMEDİ): GET /api/orders sayfalı liste ucu, PageResponse<OrderSummaryResponse>, JPQL constructor projection + skaler alt sorgu ile tek SQL'de itemCount, backward index scan (filesort yok), 14 test, toplam 657 test yeşil.
+- Order Adım 10 YAPILDI (COMMIT EDİLMEDİ): docs/api/order.openapi.json (OpenAPI 3.1.0), drift testi (OpenApiContractTest), required/nullable alanlar testi (OpenApiRequiredFieldsTest); docs/events/ altında order-paid.md, order-failed.md, cart-checked-out.md olay belgeleri; OrderEventsProducerContractTest, PaymentEventsConsumerContractTest ve CartCheckedOutContractTest (Cart'ın Order kodu derleme bağımlılığı kaldırıldı, doğrudan markdown'daki JSON örneğinden okur); OrderLogHygieneTest tek testte tüm akışları çalıştırarak UUID, tutar, adres test değerleri, Bearer ve internal API anahtarı hijyenini doğrular.
 - Gateway fazı: docs/Swagger'ı (dört servis) dışarıya kapatmak.
 - order-service (catalog rezervasyon istemcisi).
 - Search için: yayınevi/yazar/kategori yeniden adlandırması yayındaki kitaplar için olay üretmiyor → yeniden indeksleme gerekecek.
