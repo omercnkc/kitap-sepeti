@@ -727,12 +727,49 @@
   - `OrderErrorCode.ORDER_UNAVAILABLE` (503 SERVICE_UNAVAILABLE, WARN).
   - `OrderErrorCode.CHECKOUT_INTERRUPTED` (503 SERVICE_UNAVAILABLE, WARN).
 
-### Adım 8 Pending Uzlaştırma Planı (Plan Değişikliği)
-Eskimiş `pending` siparişlerde:
-1. `held` ise: Payment'a aynı initiate isteğini atar (dönen succeeded/failed → olayla aynı geçiş; kaybolan RabbitMQ olaylarını da kapatır).
-2. `requested` ise: `CHECKOUT_INTERRUPTED` + Catalog release yapar.
-3. 10 dk sonunda: `ORDER_EXPIRED` + Catalog release yapar.
-(Adım 5'te scheduler/job YOKTUR; yalnızca Adım 5'in bıraktığı kalıntılar Adım 8 tarafından tutarlı biçimde toplanacak durumdadır).
+### Bekleyen sipariş uzlaştırma (`PendingReconciliationJob`, Order Adım 8 — UYGULANDI)
+- Ayarlar `app.pending-reconcile.*`: enabled true, interval 30s, initial-delay 15s, min-age 60s, expire-after 10m, batch 50.
+- Seçim (kilitsiz): `status = 'pending' AND created_at < now − min-age`, `created_at ASC`, `LIMIT batch`; `ix_orders_status_created`
+  (EXPLAIN testi, filesort yok). Payment çağrısı TX dışında; her geçiş `findByIdForUpdate` ile yeniden okur, `TransitionResult` ile
+  idempotent (tüketiciyle aynı siparişe eşzamanlı dokunabilir; testle kanıtlı: tek paid, tek OrderPaid, tek commit).
+- Payment isteği checkout'takiyle aynı (orderId, userId, totalAmount, currency); Payment orderId'ye idempotent → mevcut ödemenin durumu döner.
+- Karar tablosu ("eski" = yaş ≥ expire-after):
+
+| Stok | Payment sonucu | Yaş | Aksiyon |
+|---|---|---|---|
+| requested | (çağrı yok) | ≥ min-age | failed `CHECKOUT_INTERRUPTED` + OrderFailed + release dispatch |
+| held | Initiated(succeeded) | farketmez | tüketiciyle AYNI geçiş (`OrderTransactions.succeed`): paid + OrderPaid + CartCheckedOut + commit dispatch |
+| held | Initiated(failed) | farketmez | failed (Payment failureCode, geçersiz/yoksa `PAYMENT_FAILED`) + OrderFailed + release dispatch |
+| held | Initiated(initiated) | genç | paymentId null ise bağla (ATTACHED), bekle |
+| held | Initiated(initiated) | eski | (gerekirse bağla) + failed `ORDER_EXPIRED` + OrderFailed + release dispatch |
+| held | NotPerformed / Unknown / Rejected (ERROR log) | genç | değişiklik yok (WAITING) |
+| held | NotPerformed / Unknown / Rejected | eski | failed `ORDER_EXPIRED` + OrderFailed + release dispatch |
+| held | (circuit açık görüldü, çağrı yok) | genç / eski | WAITING / `ORDER_EXPIRED` |
+
+- İlk NotPerformed'dan sonra o tur Payment çağrılmaz; yalnız requested ve süresi dolanlar işlenir. Kilit altında sipariş artık pending
+  değilse veya stok seçimdekinden farklıysa dokunulmaz (SKIPPED). Hata (ör. kilit zaman aşımı) → WARN, sonraki tur.
+- Tur sonu INFO `Pending reconcile round completed: processed=N, counts=[...]` yalnız WAITING dışı sonuç varsa; id/tutar yok.
+- Expire sonrası Payment başarısı gelirse (tüketici veya görev): `recordLatePayment` → `late_payment_at` (sipariş failed kalır,
+  ERROR `LATE_PAYMENT_SUCCESS`; başka ödeme bağlıysa ayrıca ERROR `PAYMENT_ID_CONFLICT`, bağlı ödeme değişmez). v1'de iade YOK.
+  İade listesi şablonu:
+  ```sql
+  SELECT id, user_id, payment_id, total_amount, currency, failure_code, late_payment_at
+  FROM orders
+  WHERE status = 'failed' AND late_payment_at IS NOT NULL
+  ORDER BY late_payment_at DESC;
+  ```
+- Tek instance varsayımı (StockSyncJob gibi; çoklu instance'ta distributed lock gerekir).
+
+### Order kalıntıları → hangi görev kapatır
+
+| Kalıntı | Nasıl oluşur | Kapatan |
+|---|---|---|
+| pending + requested | checkout rezervasyon sonucu yazılamadı (kesinti, DB hatası) | PendingReconciliationJob → failed CHECKOUT_INTERRUPTED + release |
+| pending + held (ödemesiz/ödemeli) | Payment Unknown, attachPayment hatası, ödeme olayı kayboldu | PendingReconciliationJob → Payment'a sor; sonuç yoksa 10 dk'da ORDER_EXPIRED |
+| paid + held | commit dispatch atlandı / NotPerformed / Unknown | StockSyncJob → commit (AlreadyReleased → lost) |
+| failed + requested / held | release dispatch atlandı / NotPerformed / Unknown | StockSyncJob → release |
+| paid + lost | rezervasyon commit'ten önce doldu | kapanmaz; admin lost listesi |
+| failed + late_payment_at | süre dolduktan / başarısızlıktan sonra ödeme başarılı | kapanmaz; admin iade listesi (v1 iade yok) |
 
 ### RabbitMQ consumer kalıbı + Payment sonucu (Order Adım 6a)
 - Consumer kendi durable kuyruğunu ve binding'lerini tanımlar; producer yalnızca ortak durable topic exchange'i tanımlar. Ortak saf
@@ -747,7 +784,7 @@ Eskimiş `pending` siparişlerde:
   error logu kapalı; listener/recoverer yalnızca tip+sonuç/reason+süre içeren güvenli satırlar yazar.
   DİKKAT: container error handler'ı FIRLATMAMALI (no-op). Fırlatırsa `AbstractMessageListenerContainer.invokeErrorHandler` ERROR +
   stack trace yazar; container özgün istisnayı zaten yeniden fırlatır, `defaultRequeueRejected=false` + recoverer'ın
-  `AmqpRejectAndDontRequeueException`'ı ile mesaj requeue'suz DLX'e gider. Cart böyle; Order'ın handler'ı hâlâ fırlatıyor (backlog).
+  `AmqpRejectAndDontRequeueException`'ı ile mesaj requeue'suz DLX'e gider. Cart ve Order (Adım 8'den beri) böyle.
 - Cart topolojisi (Cart Adım 7): `cart.checkouts` ← `cart.checked-out`; `kitapsepeti.dlx` → `cart.checkouts.dlq`, key `cart.checkouts.dead`.
   Ortak exchange tanımı common `amqp.EventsExchange.create(name)` (outbox ve consumer-only servisler aynı tanımı kullanır).
 - Poison: JSON parse, bilinmeyen AMQP type, eventVersion≠1, zorunlu/geçersiz alan, order yok, amount/currency uyuşmazlığı.

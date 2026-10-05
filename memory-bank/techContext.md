@@ -157,18 +157,26 @@
   `user_db`'ye dokunmaz).
 
 ## Hız kuralları (KULLANICI KURALI, Cart Adım 7'den itibaren kalıcı)
-- Geliştirme sırasında yalnızca değişen modülün testleri: `.\mvnw.cmd -pl <modül> -am verify`.
+- Geliştirme sırasında yalnızca değiştirilen/eklenen test sınıfları koşulur:
+  `.\mvnw.cmd -pl <modül> -am verify "-Dtest=<Sınıf1>,<Sınıf2>" "-Dsurefire.failIfNoSpecifiedTests=false"`.
+- Modülün tam verify'ı (`.\mvnw.cmd -pl <modül> -am verify`) adım başına EN FAZLA 2 kez (biri adım sonunda).
 - Kökten `.\mvnw.cmd clean verify` YALNIZCA: common değiştiyse, birden fazla modül değiştiyse ya da faz sonu adımında.
 - Testcontainers reuse: kişisel ayar `~/.testcontainers.properties` içinde `testcontainers.reuse.enable=true` (repo'ya COMMIT
   EDİLMEZ; yoksa reuse kapalı, testler yine çalışır, her bağlam kendi konteynerini açar). Paylaşılan konteyner tanımlarında
   `.withReuse(true)`; MySQL'de modüle özgü `withDatabaseName("<modül>_test")` ŞART (reuse hash'i ayarlardan hesaplanır; aynı ayarlı
   iki modül aynı DB'yi ve Flyway geçmişini paylaşır). Boot 4.1.1 reuse'lu konteyneri bağlam kapanınca durdurmaz → tüm bağlamlar ve
   koşular aynı konteyneri kullanır, veri/kuyruk içeriği kalır (testler önceki veriye dayanıklı olmalı). Temizlik:
-  `docker ps --filter "label=org.testcontainers.hash"` ile bulunur, `docker rm -f <id>`. Şu an yalnızca cart-service'te açık
-  (diğer modüller kendi adımlarında geçirilecek).
+  `docker ps --filter "label=org.testcontainers.hash"` ile bulunur, `docker rm -f <id>`. Şu an cart-service (`cart_test`) ve
+  order-service'te (`order_test`; Order Adım 8) açık, diğer modüller kendi adımlarında geçirilecek. Aynı ayarlı RabbitMQ tanımları da
+  aynı hash'i üretir: ikinci modül ayırt edici bir etiket ekler (Order: `withLabel("com.kitapsepeti.test-module", "order")`).
+  Aynı tabanı kullanan iki test sınıfı birebir aynı `@TestPropertySource`'u taşırsa bağlam paylaşılır (Order
+  `PaymentResultListenerIT` + `PendingReconciliationJobIT`).
 - Spring test bağlamı sayısı az tutulur: farklı `@MockitoSpyBean` / `@DynamicPropertySource` / `@TestPropertySource` kombinasyonu
   yeni bağlam açar; mümkünse ortak test tabanında toplanır. Cart ölçümü (Adım 7): 8 bağlam (CartServiceApplicationTests/ApiTestSupport,
   CatalogConnectionRefusedTest, CatalogDownCircuitBreakerTest, RabbitDownReadinessTest, CartCheckedOutListenerIT, CartLockingTest,
   CartSchemaConstraintsTest, JwksOutageTest). Reuse'suz 8 MySQL + 4 RabbitMQ başlatılıyordu; reuse ile 1 + 1.
+  Order ölçümü (Adım 8): 7 bağlam (ApiTestSupport tabanı, PaymentResultListenerIT/PendingReconciliationJobIT, StockDispatcherIT,
+  OrderLockingTest, OrderRepositoryTest, OrderSchemaConstraintsTest, StartupLogHygieneTest'in kendi uygulaması); reuse ile 6 MySQL +
+  3 Rabbit başlatması mevcut konteyneri kullanır, yalnız StartupLogHygieneTest'in kasıtlı ayrı MySQL'i yeni. Modül süresi 2:38 → 1:35.
 - E2E her adımda hafif (adımın tek ana senaryosu); geniş e2e Adım 8 ve 11'de.
 - Rapor sonunda süre dökümü: derleme+test, docker build, e2e (dk).

@@ -1334,7 +1334,7 @@
     tek consumer, toplam 3 deneme (1s/2s, 4s tavan), poison retry'sız DLQ. Test profilinde consumer kapalı (`app.cart-checkouts.enabled=false`).
   - FARK (Order'dan): container error handler'ı fırlatmıyor (no-op). Fırlatınca Spring AMQP her DLQ mesajında
     "error handler threw an exception" ERROR + stack trace yazıyor; container özgün istisnayı zaten yeniden fırlattığı için reject
-    (requeue yok) aynı. Order'da bu gürültü hâlâ var (Order koduna dokunulmadı; backlog).
+    (requeue yok) aynı. Order'da da Adım 8'de aynı no-op'a geçildi.
   - İşleme (`CartTransactions.checkOut`, READ_COMMITTED, `findByIdForUpdate(cartId)`): sepet yok → poison CART_NOT_FOUND (WARN DLQ);
     userId farklı → poison CART_OWNER_MISMATCH (ERROR DLQ); active → `checkout(clock)` (updated_at = Clock) INFO CHECKED_OUT;
     checked_out → ack DEBUG; abandoned → ack WARN, durum değişmez. Satır silinmez; sonraki ekleme yeni aktif sepet açar
@@ -1357,6 +1357,40 @@
     (`ck_users_role`), JWT `role` claim'i = enum adı; common `JwtRoleConverters` → `ROLE_<role>`; catalog `/api/admin/**`
     `hasRole("ADMIN")`. Admin atayan seed/env/uç YOK; tek yol DB'de `role='ADMIN'` güncellemesi (B3, kullanıcı onayıyla). Rol token'a
     giriş/refresh'te yazılır → değişiklikten sonra yeniden giriş gerekir.
+- **Order Adım 8 (YAPILDI, COMMIT EDİLMEDİ): PendingReconciliationJob + geç ödeme kaydı + temizlik.**
+  - Temizlik: (a) `PaymentResultsConsumerConfig` error handler'ı no-op (Cart kalıbı) → DLQ'da ERROR + stack trace yok, reject/DLX
+    aynı (test: zehirli mesajda `"\tat "`/`Caused by` yok). (b) Order Testcontainers reuse: MySQL `withDatabaseName("order_test")
+    .withReuse(true)`, RabbitMQ `withLabel("com.kitapsepeti.test-module","order").withReuse(true)` (Cart'ın aynı ayarlı Rabbit'iyle
+    reuse hash'i çakışmasın diye etiket; Cart koduna dokunulmadı). Bağlam sayısı 7 (değişmedi); tam koşuda 6 MySQL + 3 Rabbit
+    başlatması reuse, yalnızca StartupLogHygiene'in kendi MySQL'i (kasıtlı) yeni. Order modül süresi 2:38 → 1:35 (44 test fazlasıyla).
+  - Flyway `V3__late_payment.sql`: `orders.late_payment_at DATETIME(6) NULL` (failure_code'dan sonra) + `ck_orders_late_payment_failed`
+    (`late_payment_at IS NULL OR status = 'failed'`). V1/V2'ye dokunulmadı.
+  - Domain `Order.recordLatePayment(paymentId, clock)`: yalnız FAILED; null ise set (+ paymentId null ise bağla) → APPLIED; zaten set →
+    ALREADY_IN_STATE; FAILED değil → CONFLICTING_FINAL. Başka ödeme bağlıysa yine kaydeder, paymentId DEĞİŞMEZ.
+  - `OrderTransactions`: ortak özel `succeed(order, paymentId)` (tüketici `applyPaymentSucceeded` + görev `reconcilePaymentSucceeded`;
+    markPaid + OrderPaid + CartCheckedOut + commit dispatch; failed'da recordLatePayment) ve `fail(...)` (`applyPaymentFailed` +
+    `reconcilePaymentFailed`; markFailed + OrderFailed + release dispatch). Yeni `failPendingAndReleaseStock(orderId, expectedStock,
+    code)`: kilit altında pending ama stok seçimdekinden farklıysa dokunmaz. Yeni çıktı `LATE_PAYMENT_ID_CONFLICT`.
+  - Tüketici: failed siparişe PaymentSucceeded → late_payment_at + ERROR `LATE_PAYMENT_SUCCESS` (+ farklı ödeme ise ERROR
+    `PAYMENT_ID_CONFLICT`), ack, outbox yok; tekrar → ALREADY_IN_STATE, tek kayıt.
+  - Payment istemcisi: `PaymentResponse.failureCode` (sözleşmede required+nullable → DTO `required = true`) ve
+    `PaymentInitiationResult.Initiated.failureCode` (2 argümanlı kurucu korunur). Ret kodu doğrulaması `OrderReasons.paymentFailureCode`
+    (geçersiz/yok → PAYMENT_FAILED; tüketici ve görev ortak).
+  - `PendingReconciliationJob` (`app.pending-reconcile.*`: enabled true, interval 30s, initial-delay 15s, min-age 60s, expire-after 10m,
+    batch 50; test profilinde kapalı, IT'de elle kurulur). Karar tablosu systemPatterns "Bekleyen sipariş uzlaştırma"da.
+    Seçim `findPendingReconcileCandidates` (status=pending AND created_at < now−min-age, created_at sırası, LIMIT; `ix_orders_status_created`,
+    filesort yok — EXPLAIN testi). Tek instance varsayımı. Tur sonu INFO `Pending reconcile round completed: processed=N, counts=[...]`
+    yalnız WAITING dışı bir sonuç varsa; id/tutar yok.
+  - Testler: `PendingReconciliationJobIT` (22; `PaymentResultListenerIT` ile birebir aynı `@TestPropertySource` → bağlam paylaşılır,
+    gerçek tüketici açık: yarış ve "expire sonrası geç ödeme" uçtan uca), `PaymentResultListenerIT` 19 (+geç ödeme/tekrar, farklı ödeme,
+    zehirli mesajda stack trace yok), `OrderTransitionsTest` 106, `OrderSchemaConstraintsTest` 122 (V3 kabul/ret), `PaymentGatewayTest` 19.
+    `.\mvnw -pl order-service -am verify`: common 69, order 643 (önceki 599).
+  - Yerel E2E: açılışta V3 uygulandı; Adım 4'ten kalan (pending+held+ödemeli, >10 dk) sipariş ilk uzlaştırma turunda Payment'tan
+    "succeeded" alıp paid oldu, CartCheckedOut ile o kullanıcının sepeti kapandı (engel kalktı). Stok commit'i StockSyncJob turunu
+    beklemeden ödeme geçişinin dispatcher'ından hemen denendi: rezervasyon süresi dolmuştu → AlreadyReleased → lost + ERROR
+    STOCK_COMMIT_LOST. Başka pending kalıntı yoktu. Yeni checkout → paid (~2 sn) → committed → sepet kapandı. Order log'unda stack trace yok.
+  - İade listesi (admin sorgu şablonu, v1'de iade mekanizması YOK, yalnızca kayıt):
+    `SELECT id, user_id, payment_id, total_amount, currency, failure_code, late_payment_at FROM orders WHERE status = 'failed' AND late_payment_at IS NOT NULL ORDER BY late_payment_at DESC;`
 
 ## Sonraki adımlar
 - PROJE KARARI (Ekim 2026, UI paralel): UI (Angular 13) Order ile PARALEL başlıyor — ayrı agent, ayrı worktree
@@ -1381,10 +1415,10 @@
   - Stok commit/release Catalog internal HTTP ile (`/internal/stock/reservations/{orderId}/commit|release`).
 - Order planı: 0a common sertleştirme (YAPILDI) → 0b outbox → common (YAPILDI, push'landı) → 1 modül/db (YAPILDI, push'landı) → 2 domain (YAPILDI) → 3a Order istemcileri + CB (YAPILDI) → 3b Cart→Catalog CB (YAPILDI) → 4 checkout mutlu yol +
   GET {id} (YAPILDI) → 5 hata yolları/telafi (YAPILDI) → 6a Payment sonucu consumer+Order olayları (YAPILDI) → 6b stok
-  commit/release+StockSyncJob+V2 lost (YAPILDI) → 7 Cart CartCheckedOut tüketicisi (YAPILDI) → 8 timeout görevi → 9 liste →
-  10 OpenAPI/olay belgeleri → 11 Docker.
+  commit/release+StockSyncJob+V2 lost (YAPILDI) → 7 Cart CartCheckedOut tüketicisi (YAPILDI) → 8 timeout görevi
+  (PendingReconciliationJob + late_payment, YAPILDI) → 9 liste → 10 OpenAPI/olay belgeleri → 11 Docker.
 - (KAPANDI, Cart Adım 7) CartConcurrencyTest 500 flake'i: ilk sepet INSERT deadlock'u (1213) artık bir kez yeniden deneniyor.
-- Backlog (Order): consumer error handler'ı fırlattığı için her DLQ mesajında Spring AMQP ERROR + stack trace (Cart'ta no-op ile giderildi).
+- (KAPANDI, Order Adım 8) Order consumer DLQ gürültüsü: error handler no-op, DLQ'da stack trace yok.
 - Veri Değiştirme Kuralı: Catalog ve User verisi YALNIZCA ilgili servisin API'siyle değiştirilir; doğrudan SQL ile yazma KESİNLİKLE YOKTUR (root yalnızca okuma). Admin token yoksa DUR ve sor. Raporda id, başlık, token, tutar ASLA YAZILMAZ.
 - order-service eklenirken: `RequestPathMasker` bean'i (`/api/orders/{orderId}` vb.) ve `InternalAuthConfig` (gerekirse) — common
   politika aynen geçerli.
