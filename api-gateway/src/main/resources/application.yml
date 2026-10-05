@@ -43,3 +43,10 @@ management:
   endpoint:
     health:
       show-details: never
+
+app:
+  jwt:
+    jwks-url: ${JWKS_URL:http://localhost:8081/.well-known/jwks.json}
+    cache-ttl-seconds: ${JWT_CACHE_TTL_SECONDS:300}
+    protected-paths:
+      - /api/protected/**
