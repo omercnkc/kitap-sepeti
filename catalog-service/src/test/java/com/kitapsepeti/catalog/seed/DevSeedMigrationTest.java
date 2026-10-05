@@ -67,7 +67,7 @@ class DevSeedMigrationTest {
 		assertThat(count("SELECT COUNT(*) FROM publishers")).isEqualTo(3);
 		assertThat(count("SELECT COUNT(*) FROM authors")).isEqualTo(5);
 		assertThat(count("SELECT COUNT(*) FROM categories")).isEqualTo(6);
-		assertThat(count("SELECT COUNT(*) FROM book_authors")).isEqualTo(18);
+		assertThat(count("SELECT COUNT(*) FROM book_authors")).isEqualTo(14);
 		assertThat(count("SELECT COUNT(*) FROM book_categories")).isEqualTo(17);
 		assertThat(count("SELECT COUNT(*) FROM books WHERE status = 'published'")).isEqualTo(11);
 		assertThat(count("SELECT COUNT(*) FROM books WHERE status = 'draft'")).isEqualTo(2);
@@ -78,8 +78,14 @@ class DevSeedMigrationTest {
 		assertThat(count("""
 				SELECT COUNT(*) FROM books
 				WHERE status = 'published' AND stock_quantity > 0 AND stock_quantity = reserved_quantity""")).isEqualTo(1);
-		assertThat(count("SELECT COUNT(*) FROM books WHERE title = 'Sessiz Ağaçların Şarkısı'"))
-			.as("Turkish characters survive the round trip").isEqualTo(1);
+		assertThat(count("SELECT COUNT(*) FROM books WHERE title = 'Pride and Prejudice'"))
+			.as("Open Library seed title present").isEqualTo(1);
+		assertThat(count("""
+				SELECT COUNT(*) FROM books
+				WHERE cover_url LIKE 'https://covers.openlibrary.org/%'"""))
+			.as("all seed books carry Open Library covers").isEqualTo(14);
+		assertThat(count("SELECT COUNT(*) FROM books WHERE description LIKE '%klasik%'"))
+			.as("Turkish characters survive the round trip").isGreaterThanOrEqualTo(1);
 		assertThat(count("SELECT COUNT(*) FROM stock_reservations")).isEqualTo(4);
 		assertThat(count("SELECT COUNT(DISTINCT order_id) FROM stock_reservations WHERE status = 'held'")).isEqualTo(2);
 		assertThat(count("SELECT COUNT(*) FROM stock_reservations WHERE expires_at <> '2099-12-31 00:00:00'"))

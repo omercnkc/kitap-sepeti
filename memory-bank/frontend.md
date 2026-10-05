@@ -26,6 +26,7 @@
 - İstemci: `isbnValidator` (checksum), `httpUrlValidator` (mutlak http/https)
 - `toUpdateBody`: boş `isbn`/`coverUrl`/`description` → `""` (temizle); dolu ISBN normalize; fiyat `roundMoney2`
 - **Legacy ISBN:** seed’deki checksum’sız ISBN yüklenince validator kabul eder; PATCH’te değişmediyse `isbn` alanı **gönderilmez** (BE Bean Validation tekrarlamasın). Sarı uyarı: `hasLegacyInvalidIsbn`
+- ISBN lookup: OL alanları forma yazılır; eşleşen yazar/yayınevi seçilir; eşleşmeyen → soft muted hint (error toast yok); success her zaman
 - 400 `errors[]` → `fieldErrors` + interceptor toast “Girdiğiniz bilgileri kontrol edin.”
 - `toCreateBody`: boş isbn/cover hiç gönderilmez
 - 400 `errors[]` → `fieldErrors` + interceptor toast “Girdiğiniz bilgileri kontrol edin.”
@@ -63,6 +64,7 @@
 | Header rozet | `layout/header/` | `cartCount$` badge |
 | CartPage | `features/cart/cart-page/` | adet/sil/boşalt; UNAVAILABLE bandı; priceChanged/available |
 | ConfirmDialog | `shared/components/confirm-dialog/` | NgbModal; sepeti boşalt onayı |
+| Toast | `toast-container/` | `position-fixed bottom-0 end-0`; max-width min(360px, 90vw); header üstünü örtmez |
 
 ## Katalog UI
 

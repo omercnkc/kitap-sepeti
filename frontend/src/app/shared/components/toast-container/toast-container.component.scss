@@ -1,3 +1,16 @@
+// Sağ alt — sticky header / profil-sepet butonlarıyla çakışmasın
 .toast-container {
   z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+  max-width: min(360px, 90vw);
+  pointer-events: none;
+}
+
+.toast-container__toast {
+  width: 100%;
+  max-width: min(360px, 90vw);
+  pointer-events: auto;
 }

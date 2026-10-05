@@ -4,7 +4,7 @@
 -- Not: Dosyadan çıkarılan bir bağ (kitap-yazar/kategori) yeniden çalıştırmada silinmez.
 --
 -- İçerik: 3 yayınevi, 5 yazar, kategori ağacı (Edebiyat > Roman, Öykü; Bilim > Popüler Bilim; Çocuk),
--- 14 kitap: 11 published (ikisi stoksuz: biri stock = reserved, biri stock = 0), 2 draft, 1 archived.
+-- 14 kitap (Open Library ISBN + kapak URL): 11 published (ikisi stoksuz/rezervli), 2 draft, 1 archived.
 -- Kitaplardaki her rezerv, toplamı reserved_quantity'ye eşit 'held' rezervasyon satırlarıyla karşılanır
 -- (değişmez: reserved_quantity = SUM(quantity WHERE status = 'held')). Bu satırlar 2099'a kadar geçerlidir;
 -- süre dolumu görevi bunları bırakmaz. Yeniden çalıştırma kitapları ve seed rezervasyonlarını birlikte seed
@@ -17,11 +17,11 @@ INSERT INTO publishers (id, name, slug) VALUES
 ON DUPLICATE KEY UPDATE name = new.name, slug = new.slug;
 
 INSERT INTO authors (id, name, slug) VALUES
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000201'), 'Ayşe Yılmaz', 'ayse-yilmaz'),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000202'), 'Mehmet Öztürk', 'mehmet-ozturk'),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000203'), 'Zeynep Çelik', 'zeynep-celik'),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000204'), 'Can Güneş', 'can-gunes'),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000205'), 'Elif Şahin', 'elif-sahin') AS new
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000201'), 'Jane Austen', 'jane-austen'),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000202'), 'George Orwell', 'george-orwell'),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000203'), 'Harper Lee', 'harper-lee'),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000204'), 'F. Scott Fitzgerald', 'f-scott-fitzgerald'),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000205'), 'Herman Melville', 'herman-melville') AS new
 ON DUPLICATE KEY UPDATE name = new.name, slug = new.slug;
 
 -- Önce kökler, sonra alt kategoriler (parent FK).
@@ -37,49 +37,64 @@ INSERT INTO categories (id, parent_id, name, slug) VALUES
     (UUID_TO_BIN('01920000-0000-7000-8000-000000000305'), UUID_TO_BIN('01920000-0000-7000-8000-000000000304'), 'Popüler Bilim', 'populer-bilim') AS new
 ON DUPLICATE KEY UPDATE parent_id = new.parent_id, name = new.name, slug = new.slug;
 
+-- Kapaklar Open Library Books API / covers.openlibrary.org (ISBN lookup ile aynı kaynak).
 INSERT INTO books (id, isbn, title, description, publisher_id, page_count, cover_url, price_amount, currency,
                    stock_quantity, reserved_quantity, status, published_at) VALUES
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000401'), '9786050000011', 'Sessiz Ağaçların Şarkısı',
-     'Bir köyün unutulmuş hikâyesi.', UUID_TO_BIN('01920000-0000-7000-8000-000000000101'), 320, NULL,
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000401'), '9780141439518', 'Pride and Prejudice',
+     'Jane Austen''ın klasik aşk ve sınıf romanı.', UUID_TO_BIN('01920000-0000-7000-8000-000000000101'), 435,
+     'https://covers.openlibrary.org/b/id/12645114-L.jpg',
      145.00, 'TRY', 10, 0, 'published', '2024-03-12 09:00:00.000000'),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000402'), '9786050000028', 'Gölgedeki Işık',
-     'İki yazarın ortak romanı.', UUID_TO_BIN('01920000-0000-7000-8000-000000000101'), 280, NULL,
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000402'), '9780141187761', 'Nineteen Eighty-Four',
+     'George Orwell''ın distopik başyapıtı.', UUID_TO_BIN('01920000-0000-7000-8000-000000000101'), 384,
+     'https://covers.openlibrary.org/b/id/108160-L.jpg',
      120.50, 'TRY', 3, 3, 'published', '2024-06-01 09:00:00.000000'),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000403'), '9786050000035', 'Öykülerle İstanbul',
-     'Şehrin semtlerinden kısa öyküler.', UUID_TO_BIN('01920000-0000-7000-8000-000000000102'), 190, NULL,
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000403'), '9780141439600', 'A Tale of Two Cities',
+     'Dickens''ın Fransız Devrimi romanı.', UUID_TO_BIN('01920000-0000-7000-8000-000000000102'), 489,
+     'https://covers.openlibrary.org/b/id/8493695-L.jpg',
      89.90, 'TRY', 0, 0, 'published', '2023-11-20 09:00:00.000000'),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000404'), '9786050000042', 'Kısa Öyküler ve Uzun Yollar',
-     'Hem öykü hem roman sayılabilecek bir seçki.', UUID_TO_BIN('01920000-0000-7000-8000-000000000102'), 240, NULL,
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000404'), '9780743273565', 'The Great Gatsby',
+     'Jazz çağı ve Amerikan rüyası.', UUID_TO_BIN('01920000-0000-7000-8000-000000000102'), 208,
+     'https://covers.openlibrary.org/b/id/14314120-L.jpg',
      99.00, 'TRY', 7, 2, 'published', '2025-01-15 09:00:00.000000'),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000405'), '9786050000059', 'Yıldızların Dili',
-     'Gökyüzünü okumaya giriş.', UUID_TO_BIN('01920000-0000-7000-8000-000000000102'), 260, NULL,
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000405'), '9780061120084', 'To Kill a Mockingbird',
+     'Harper Lee''nin adalet ve çocukluk romanı.', UUID_TO_BIN('01920000-0000-7000-8000-000000000102'), 323,
+     'https://covers.openlibrary.org/b/id/15162569-L.jpg',
      175.00, 'TRY', 20, 0, 'published', '2024-09-05 09:00:00.000000'),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000406'), '9786050000066', 'Kuantum Dünyasına Giriş',
-     'Parçacıkların tuhaf davranışları.', UUID_TO_BIN('01920000-0000-7000-8000-000000000101'), 350, NULL,
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000406'), '9780553213119', 'Moby-Dick',
+     'Melville''in beyaz balina destanı.', UUID_TO_BIN('01920000-0000-7000-8000-000000000101'), 670,
+     'https://covers.openlibrary.org/b/id/8742857-L.jpg',
      210.00, 'TRY', 4, 1, 'published', '2025-04-22 09:00:00.000000'),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000407'), '9786050000073', 'Çınar Ağacının Sırrı',
-     'Meraklı bir çocuğun macerası.', UUID_TO_BIN('01920000-0000-7000-8000-000000000103'), 96, NULL,
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000407'), '9780140449266', 'The Count of Monte Cristo',
+     'İntikam ve adalet üzerine klasik macera.', UUID_TO_BIN('01920000-0000-7000-8000-000000000103'), 1276,
+     'https://covers.openlibrary.org/b/id/14564134-L.jpg',
      65.00, 'TRY', 15, 0, 'published', '2024-04-23 09:00:00.000000'),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000408'), '9786050000080', 'Uçan Şemsiye',
-     'Çocuklar için resimli öyküler.', UUID_TO_BIN('01920000-0000-7000-8000-000000000103'), 64, NULL,
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000408'), '9780142437230', 'Don Quixote',
+     'Cervantes''in şövalye parodisi.', UUID_TO_BIN('01920000-0000-7000-8000-000000000103'), 1023,
+     'https://covers.openlibrary.org/b/id/12137158-L.jpg',
      55.50, 'TRY', 8, 0, 'published', '2025-02-10 09:00:00.000000'),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000409'), '9786050000097', 'Deniz Fenerinin Bekçisi',
-     'Bir adada geçen yalnızlık romanı.', UUID_TO_BIN('01920000-0000-7000-8000-000000000101'), 300, NULL,
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000409'), '9780140449136', 'Crime and Punishment',
+     'Dostoyevski''nin suç ve vicdan romanı.', UUID_TO_BIN('01920000-0000-7000-8000-000000000101'), 671,
+     'https://covers.openlibrary.org/b/id/14935910-L.jpg',
      135.00, 'TRY', 6, 0, 'published', '2023-08-30 09:00:00.000000'),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000410'), '9786050000103', 'Beyin ve Düşünce',
-     'Zihnin nasıl çalıştığına dair.', UUID_TO_BIN('01920000-0000-7000-8000-000000000102'), 230, NULL,
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000410'), '9780140449105', 'Utopia',
+     'Thomas More''un ideal toplum metni.', UUID_TO_BIN('01920000-0000-7000-8000-000000000102'), 176,
+     'https://covers.openlibrary.org/b/id/104340-L.jpg',
      160.00, 'TRY', 2, 0, 'published', '2025-06-18 09:00:00.000000'),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000411'), '9786050000110', 'Küçük Prensesin Bahçesi',
-     'Bahçede büyüyen bir dostluk.', UUID_TO_BIN('01920000-0000-7000-8000-000000000103'), 80, NULL,
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000411'), '9780316769488', 'The Catcher in the Rye',
+     'Salinger''ın ergenlik klasiği.', UUID_TO_BIN('01920000-0000-7000-8000-000000000103'), 277,
+     'https://covers.openlibrary.org/b/id/15172531-L.jpg',
      70.00, 'TRY', 12, 0, 'published', '2025-05-05 09:00:00.000000'),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000412'), '9786050000127', 'Taslak: Rüzgârın Öte Yanı',
-     'Henüz yayımlanmadı.', UUID_TO_BIN('01920000-0000-7000-8000-000000000101'), NULL, NULL,
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000412'), '9781503290563', 'Pride and Prejudice (Taslak)',
+     'Henüz yayımlanmadı.', UUID_TO_BIN('01920000-0000-7000-8000-000000000101'), 320,
+     'https://covers.openlibrary.org/b/id/8097807-L.jpg',
      100.00, 'TRY', 0, 0, 'draft', NULL),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000413'), '9786050000134', 'Taslak: Yarım Kalan Öykü',
-     'Henüz yayımlanmadı.', UUID_TO_BIN('01920000-0000-7000-8000-000000000102'), NULL, NULL,
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000413'), '9781503280786', 'Moby Dick (Taslak)',
+     'Henüz yayımlanmadı.', UUID_TO_BIN('01920000-0000-7000-8000-000000000102'), 378,
+     'https://covers.openlibrary.org/b/isbn/9781503280786-L.jpg',
      80.00, 'TRY', 5, 0, 'draft', NULL),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000414'), '9786050000141', 'Gece Yolculuğu (Eski Baskı)',
-     'Satıştan kaldırıldı.', UUID_TO_BIN('01920000-0000-7000-8000-000000000101'), 210, NULL,
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000414'), '9780142437247', 'Moby-Dick, or, The Whale',
+     'Satıştan kaldırıldı.', UUID_TO_BIN('01920000-0000-7000-8000-000000000101'), 720,
+     'https://covers.openlibrary.org/b/id/110556-L.jpg',
      95.00, 'TRY', 0, 0, 'archived', '2022-02-14 09:00:00.000000') AS new
 ON DUPLICATE KEY UPDATE isbn = new.isbn, title = new.title, description = new.description,
     publisher_id = new.publisher_id, page_count = new.page_count, cover_url = new.cover_url,
@@ -99,36 +114,30 @@ INSERT INTO stock_reservations (id, book_id, order_id, quantity, status, expires
 ON DUPLICATE KEY UPDATE book_id = new.book_id, order_id = new.order_id, quantity = new.quantity,
     status = new.status, expires_at = new.expires_at;
 
--- Birden çok yazarlı: 402, 404, 406, 408.
 INSERT INTO book_authors (book_id, author_id) VALUES
     (UUID_TO_BIN('01920000-0000-7000-8000-000000000401'), UUID_TO_BIN('01920000-0000-7000-8000-000000000201')),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000402'), UUID_TO_BIN('01920000-0000-7000-8000-000000000201')),
     (UUID_TO_BIN('01920000-0000-7000-8000-000000000402'), UUID_TO_BIN('01920000-0000-7000-8000-000000000202')),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000403'), UUID_TO_BIN('01920000-0000-7000-8000-000000000203')),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000404'), UUID_TO_BIN('01920000-0000-7000-8000-000000000202')),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000404'), UUID_TO_BIN('01920000-0000-7000-8000-000000000203')),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000405'), UUID_TO_BIN('01920000-0000-7000-8000-000000000204')),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000406'), UUID_TO_BIN('01920000-0000-7000-8000-000000000204')),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000403'), UUID_TO_BIN('01920000-0000-7000-8000-000000000204')),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000404'), UUID_TO_BIN('01920000-0000-7000-8000-000000000204')),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000405'), UUID_TO_BIN('01920000-0000-7000-8000-000000000203')),
     (UUID_TO_BIN('01920000-0000-7000-8000-000000000406'), UUID_TO_BIN('01920000-0000-7000-8000-000000000205')),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000407'), UUID_TO_BIN('01920000-0000-7000-8000-000000000205')),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000407'), UUID_TO_BIN('01920000-0000-7000-8000-000000000202')),
     (UUID_TO_BIN('01920000-0000-7000-8000-000000000408'), UUID_TO_BIN('01920000-0000-7000-8000-000000000205')),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000408'), UUID_TO_BIN('01920000-0000-7000-8000-000000000203')),
     (UUID_TO_BIN('01920000-0000-7000-8000-000000000409'), UUID_TO_BIN('01920000-0000-7000-8000-000000000202')),
     (UUID_TO_BIN('01920000-0000-7000-8000-000000000410'), UUID_TO_BIN('01920000-0000-7000-8000-000000000204')),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000411'), UUID_TO_BIN('01920000-0000-7000-8000-000000000205')),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000411'), UUID_TO_BIN('01920000-0000-7000-8000-000000000203')),
     (UUID_TO_BIN('01920000-0000-7000-8000-000000000412'), UUID_TO_BIN('01920000-0000-7000-8000-000000000201')),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000413'), UUID_TO_BIN('01920000-0000-7000-8000-000000000203')),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000414'), UUID_TO_BIN('01920000-0000-7000-8000-000000000202')) AS new
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000413'), UUID_TO_BIN('01920000-0000-7000-8000-000000000205')),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000414'), UUID_TO_BIN('01920000-0000-7000-8000-000000000205')) AS new
 ON DUPLICATE KEY UPDATE author_id = new.author_id;
 
--- Birden çok kategorili: 404 (Roman + Öykü), 406 (Popüler Bilim + Bilim), 408 (Çocuk + Öykü).
 INSERT INTO book_categories (book_id, category_id) VALUES
     (UUID_TO_BIN('01920000-0000-7000-8000-000000000401'), UUID_TO_BIN('01920000-0000-7000-8000-000000000302')),
     (UUID_TO_BIN('01920000-0000-7000-8000-000000000402'), UUID_TO_BIN('01920000-0000-7000-8000-000000000302')),
     (UUID_TO_BIN('01920000-0000-7000-8000-000000000403'), UUID_TO_BIN('01920000-0000-7000-8000-000000000303')),
     (UUID_TO_BIN('01920000-0000-7000-8000-000000000404'), UUID_TO_BIN('01920000-0000-7000-8000-000000000302')),
     (UUID_TO_BIN('01920000-0000-7000-8000-000000000404'), UUID_TO_BIN('01920000-0000-7000-8000-000000000303')),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000405'), UUID_TO_BIN('01920000-0000-7000-8000-000000000305')),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000405'), UUID_TO_BIN('01920000-0000-7000-8000-000000000302')),
     (UUID_TO_BIN('01920000-0000-7000-8000-000000000406'), UUID_TO_BIN('01920000-0000-7000-8000-000000000305')),
     (UUID_TO_BIN('01920000-0000-7000-8000-000000000406'), UUID_TO_BIN('01920000-0000-7000-8000-000000000304')),
     (UUID_TO_BIN('01920000-0000-7000-8000-000000000407'), UUID_TO_BIN('01920000-0000-7000-8000-000000000306')),

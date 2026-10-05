@@ -32,6 +32,7 @@ import { httpUrlValidator } from '../../../shared/validators/http-url.validator'
 import { isValidIsbnOptional, normalizeIsbn } from '../../../shared/validators/isbn';
 import { isbnValidator } from '../../../shared/validators/isbn.validator';
 import { buildCreateBookBody, buildUpdateBookBody, roundMoney2 } from './admin-book-form-body';
+import { buildIsbnLookupApply, namesEqualTr } from './admin-book-isbn-lookup';
 
 const LOOKUP_SIZE = 100;
 
@@ -460,65 +461,18 @@ export class AdminBookFormPageComponent implements OnInit, OnDestroy {
   }
 
   private applyIsbnMetadata(meta: IsbnMetadataResponse): void {
-    const patch: Record<string, unknown> = {
-      isbn: meta.isbn || this.form.get('isbn')?.value,
-    };
-    if (meta.title) {
-      patch['title'] = meta.title;
-    }
-    if (meta.description) {
-      patch['description'] = meta.description;
-    }
-    if (meta.coverUrl) {
-      patch['coverUrl'] = meta.coverUrl;
-    }
-    if (meta.pageCount != null) {
-      patch['pageCount'] = meta.pageCount;
-    }
-
-    const hints: string[] = [];
-    const matchedAuthorIds: string[] = [];
-    const unmatchedAuthors: string[] = [];
-    for (const name of meta.authors ?? []) {
-      const match = this.authors.find((a) => this.namesEqual(a.name, name));
-      if (match) {
-        matchedAuthorIds.push(match.id);
-      } else {
-        unmatchedAuthors.push(name);
-      }
-    }
-    if (matchedAuthorIds.length) {
-      patch['authorIds'] = matchedAuthorIds;
-    }
-    if (unmatchedAuthors.length) {
-      hints.push(`yazar bulunamadı: ${unmatchedAuthors.join(', ')}`);
-    }
-
-    const publisherName = (meta.publishers ?? [])[0];
-    if (publisherName) {
-      const pub = this.publishers.find((p) => this.namesEqual(p.name, publisherName));
-      if (pub) {
-        patch['publisherId'] = pub.id;
-      } else {
-        hints.push(`yayınevi bulunamadı: ${publisherName}`);
-      }
-    }
-
+    const { patch, hints } = buildIsbnLookupApply(
+      meta,
+      this.authors,
+      this.publishers,
+      this.form.get('isbn')?.value,
+      namesEqualTr,
+    );
     this.form.patchValue(patch);
     this.form.markAsDirty();
     this.isbnLookupHints = hints;
-    if (hints.length) {
-      this.toast.error(
-        'Bazı yazar/yayınevi eşleşmedi — önce admin’den ekleyin veya elle seçin.',
-      );
-    } else {
-      this.toast.success('ISBN bilgileri forma yazıldı. Kontrol edip kaydedin.');
-    }
+    this.toast.success('ISBN bilgileri forma yazıldı.');
     this.cdr.markForCheck();
-  }
-
-  private namesEqual(a: string, b: string): boolean {
-    return a.trim().toLocaleLowerCase('tr-TR') === b.trim().toLocaleLowerCase('tr-TR');
   }
 
   private resetCreateForm(): void {

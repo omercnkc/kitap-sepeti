@@ -175,10 +175,9 @@
             Kayıttaki ISBN kontrol basamağı geçersiz. Değiştirmezseniz korunur; geçerli bir
             ISBN girin veya boşaltıp kaydederek silin.
           </div>
-          <div *ngIf="isbnLookupHints.length" class="form-text">
-            Open Library:
+          <div *ngIf="isbnLookupHints.length" class="form-text text-muted">
             <span *ngFor="let hint of isbnLookupHints; let last = last">
-              {{ hint }}<span *ngIf="!last">; </span>
+              {{ hint }}<span *ngIf="!last"> · </span>
             </span>
           </div>
           <app-field-error [errors]="fieldErrors" field="isbn"></app-field-error>

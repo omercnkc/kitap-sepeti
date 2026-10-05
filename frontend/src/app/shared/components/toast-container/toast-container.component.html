@@ -1,9 +1,13 @@
-<div class="toast-container position-fixed top-0 end-0 p-3" aria-live="polite" aria-atomic="true">
+<div
+  class="toast-container position-fixed bottom-0 end-0 p-3"
+  aria-live="polite"
+  aria-atomic="true"
+>
   <ngb-toast
     *ngFor="let toast of toasts$ | async"
     [autohide]="true"
     [delay]="toast.delay"
-    class="text-white"
+    class="text-white toast-container__toast"
     [class.bg-success]="toast.kind === 'success'"
     [class.bg-danger]="toast.kind === 'error'"
     [class.bg-primary]="toast.kind === 'info'"
