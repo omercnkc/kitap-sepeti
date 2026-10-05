@@ -1,6 +1,7 @@
 package com.kitapsepeti.user.dto.request;
 
 import com.kitapsepeti.user.validation.NullOrNotBlank;
+import com.kitapsepeti.user.validation.TrMobilePhone;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Size;
 
@@ -15,7 +16,8 @@ public record UpdateProfileRequest(
 		@NullOrNotBlank @Size(min = 1, max = 80) String firstName,
 		@Schema(description = "Soyad; gönderildiyse boş olamaz.", example = "Yılmaz")
 		@NullOrNotBlank @Size(min = 1, max = 80) String lastName,
-		@Schema(description = "Telefon; \"\" gönderilirse silinir.", example = "5559998877")
-		@Size(max = 32) String phone) {
+		@Schema(description = "TR cep; \"\" gönderilirse silinir. Kabul: 05… / 5… / +905…; saklanan format 5xxxxxxxxx.",
+				example = "5559998877")
+		@Size(max = 32) @TrMobilePhone String phone) {
 
 }

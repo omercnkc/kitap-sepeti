@@ -1,6 +1,7 @@
 package com.kitapsepeti.user.dto.request;
 
 import com.kitapsepeti.user.validation.NullOrNotBlank;
+import com.kitapsepeti.user.validation.TrMobilePhone;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -18,8 +19,9 @@ public record UpdateAddressRequest(
 		@Size(max = 40) String label,
 		@Schema(description = "Alıcının adı soyadı; gönderildiyse boş olamaz.", example = "Ali Veli")
 		@NullOrNotBlank @Size(max = 120) String recipientName,
-		@Schema(description = "Alıcının telefonu; gönderildiyse boş olamaz.", example = "5551112233")
-		@NullOrNotBlank @Size(max = 32) String phone,
+		@Schema(description = "Alıcının TR cep telefonu; gönderildiyse boş olamaz. Kabul: 05… / 5… / +905…; "
+				+ "saklanan format 5xxxxxxxxx.", example = "5551112233")
+		@NullOrNotBlank @Size(max = 32) @TrMobilePhone String phone,
 		@Schema(description = "Adres satırı 1; gönderildiyse boş olamaz.", example = "Büyükdere Cad. No:100")
 		@NullOrNotBlank @Size(max = 200) String line1,
 		@Schema(description = "Adres satırı 2; \"\" gönderilirse silinir.", example = "")

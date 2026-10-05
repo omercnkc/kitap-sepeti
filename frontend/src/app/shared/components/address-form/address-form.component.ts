@@ -16,6 +16,8 @@ import { takeUntil } from 'rxjs/operators';
 import { TrAddressDataService } from '../../../core/geo/tr-address-data.service';
 import { TrIl, TrIlce, TrMahalle } from '../../../core/geo/tr-address.models';
 import { AddressResponse, CreateAddressRequest, FieldError } from '../../../core/models';
+import { normalizeTrPhone } from '../../validators/tr-phone';
+import { trPhoneValidator } from '../../validators/tr-phone.validator';
 
 /** AddressForm kaydet çıktısı — create/update istek gövdesine dönüştürülür. */
 export type AddressFormSaveValue = CreateAddressRequest;
@@ -58,7 +60,7 @@ export class AddressFormComponent implements OnInit, OnChanges, OnDestroy {
   readonly form: FormGroup = this.fb.group({
     label: [''],
     recipientName: ['', [Validators.required]],
-    phone: ['', [Validators.required]],
+    phone: ['', [Validators.required, trPhoneValidator()]],
     sehirId: [''],
     ilceId: [''],
     mahalleId: [''],
@@ -179,7 +181,7 @@ export class AddressFormComponent implements OnInit, OnChanges, OnDestroy {
 
     const body: AddressFormSaveValue = {
       recipientName: raw.recipientName.trim(),
-      phone: raw.phone.trim(),
+      phone: normalizeTrPhone(raw.phone)!,
       line1: raw.line1.trim(),
       city: raw.city.trim(),
       country: (raw.country || 'TR').trim().toUpperCase(),

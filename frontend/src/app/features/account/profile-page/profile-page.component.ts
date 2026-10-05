@@ -13,6 +13,8 @@ import { messageForErrorCode } from '../../../core/interceptors/error-messages';
 import { toProblemDetail } from '../../../core/interceptors/error.interceptor';
 import { FieldError, UpdateProfileRequest, UserResponse } from '../../../core/models';
 import { ToastService } from '../../../core/services/toast.service';
+import { normalizeTrPhone } from '../../../shared/validators/tr-phone';
+import { trPhoneValidator } from '../../../shared/validators/tr-phone.validator';
 
 @Component({
   selector: 'app-profile-page',
@@ -26,7 +28,7 @@ export class ProfilePageComponent implements OnInit, OnDestroy {
   readonly form: FormGroup = this.fb.group({
     firstName: ['', [Validators.required]],
     lastName: ['', [Validators.required]],
-    phone: [''],
+    phone: ['', [trPhoneValidator()]],
   });
 
   loading = true;
@@ -81,11 +83,12 @@ export class ProfilePageComponent implements OnInit, OnDestroy {
       phone: string;
     };
 
-    // Kısmi PATCH: gönderilen alanlar uygulanır; phone "" = sil.
+    // Kısmi PATCH: gönderilen alanlar uygulanır; phone "" = sil; doluysa kanonik 5xxxxxxxxx.
+    const phoneRaw = (raw.phone ?? '').trim();
     const body: UpdateProfileRequest = {
       firstName: raw.firstName.trim(),
       lastName: raw.lastName.trim(),
-      phone: (raw.phone ?? '').trim(),
+      phone: phoneRaw ? normalizeTrPhone(phoneRaw)! : '',
     };
 
     this.submitting = true;

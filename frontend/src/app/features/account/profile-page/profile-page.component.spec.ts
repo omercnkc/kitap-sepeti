@@ -80,6 +80,22 @@ describe('ProfilePageComponent', () => {
     expect(fixture.componentInstance.form.value.phone).toBe('');
   });
 
+  it('rejects invalid phone and normalizes valid before save', () => {
+    fixture.detectChanges();
+    fixture.componentInstance.form.patchValue({ phone: 'abcdef' });
+    expect(fixture.componentInstance.form.get('phone')!.hasError('trPhone')).toBeTrue();
+    fixture.componentInstance.onSubmit();
+    expect(updateProfileSpy).not.toHaveBeenCalled();
+
+    fixture.componentInstance.form.patchValue({ phone: '05551112233' });
+    fixture.componentInstance.onSubmit();
+    expect(updateProfileSpy).toHaveBeenCalledWith({
+      firstName: 'Ali',
+      lastName: 'Veli',
+      phone: '5551112233',
+    });
+  });
+
   it('maps field errors from problem detail', () => {
     fixture.detectChanges();
     updateProfileSpy.and.returnValue(

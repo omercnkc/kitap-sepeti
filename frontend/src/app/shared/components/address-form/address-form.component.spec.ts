@@ -5,6 +5,7 @@ import { TrAddressDataService } from '../../../core/geo/tr-address-data.service'
 import { TrIl, TrIlce, TrMahalle } from '../../../core/geo/tr-address.models';
 import { AddressResponse } from '../../../core/models';
 import { FieldErrorComponent } from '../field-error/field-error.component';
+import { TrPhoneInputDirective } from '../../directives/tr-phone-input.directive';
 import { AddressFormComponent } from './address-form.component';
 
 describe('AddressFormComponent', () => {
@@ -71,7 +72,7 @@ describe('AddressFormComponent', () => {
 
     await TestBed.configureTestingModule({
       imports: [ReactiveFormsModule],
-      declarations: [AddressFormComponent, FieldErrorComponent],
+      declarations: [AddressFormComponent, FieldErrorComponent, TrPhoneInputDirective],
       providers: [{ provide: TrAddressDataService, useValue: geoStub }],
     }).compileComponents();
 
@@ -181,4 +182,34 @@ describe('AddressFormComponent', () => {
     component.onCancel();
     expect(cancelSpy).toHaveBeenCalled();
   });
+
+  it('blocks save for invalid phone and normalizes on submit', fakeAsync(() => {
+    const saveSpy = jasmine.createSpy('save');
+    component.save.subscribe(saveSpy);
+
+    component.form.patchValue({
+      recipientName: 'Ali Veli',
+      phone: '123',
+      sehirId: '34',
+    });
+    tick();
+    component.form.patchValue({ ilceId: '1103' });
+    tick();
+    component.form.patchValue({ mahalleId: '1' });
+    tick();
+    fixture.detectChanges();
+
+    expect(component.form.get('phone')!.hasError('trPhone')).toBeTrue();
+    expect(component.canSave).toBeFalse();
+    component.onSubmit();
+    expect(saveSpy).not.toHaveBeenCalled();
+
+    component.form.patchValue({ phone: '05551112233' });
+    fixture.detectChanges();
+    expect(component.canSave).toBeTrue();
+    component.onSubmit();
+    expect(saveSpy).toHaveBeenCalledWith(
+      jasmine.objectContaining({ phone: '5551112233' }),
+    );
+  }));
 });

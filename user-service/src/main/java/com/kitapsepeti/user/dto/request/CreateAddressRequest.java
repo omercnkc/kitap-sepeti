@@ -1,5 +1,6 @@
 package com.kitapsepeti.user.dto.request;
 
+import com.kitapsepeti.user.validation.TrMobilePhone;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -15,8 +16,9 @@ public record CreateAddressRequest(
 		@Size(max = 40) String label,
 		@Schema(description = "Alıcının adı soyadı.", example = "Ali Veli")
 		@NotBlank @Size(max = 120) String recipientName,
-		@Schema(description = "Alıcının telefonu.", example = "5551112233")
-		@NotBlank @Size(max = 32) String phone,
+		@Schema(description = "Alıcının TR cep telefonu. Kabul: 05… / 5… / +905…; saklanan format 5xxxxxxxxx.",
+				example = "5551112233")
+		@NotBlank @Size(max = 32) @TrMobilePhone String phone,
 		@Schema(description = "Adres satırı 1.", example = "Atatürk Cad. No:1")
 		@NotBlank @Size(max = 200) String line1,
 		@Schema(description = "Adres satırı 2 (opsiyonel).", example = "Daire 5")

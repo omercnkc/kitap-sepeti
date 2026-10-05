@@ -5,6 +5,7 @@ import com.kitapsepeti.user.dto.request.UpdateAddressRequest;
 import com.kitapsepeti.user.dto.response.AddressResponse;
 import com.kitapsepeti.user.entity.Address;
 import com.kitapsepeti.user.entity.User;
+import com.kitapsepeti.user.validation.TrPhones;
 
 /**
  * {@link Address} ↔ DTO dönüşümleri. Varsayılan adres ({@code isDefault}) kuralları burada DEĞİL,
@@ -24,8 +25,8 @@ public final class AddressMapper {
 	}
 
 	public static Address toEntity(User user, CreateAddressRequest request) {
-		Address address = new Address(user, request.recipientName(), request.phone(), request.line1(),
-				request.city());
+		Address address = new Address(user, request.recipientName(), TrPhones.toCanonicalOrNull(request.phone()),
+				request.line1(), request.city());
 		address.setLabel(blankToNull(request.label()));
 		address.setLine2(blankToNull(request.line2()));
 		address.setDistrict(blankToNull(request.district()));
@@ -44,7 +45,7 @@ public final class AddressMapper {
 			address.setRecipientName(request.recipientName());
 		}
 		if (request.phone() != null) {
-			address.setPhone(request.phone());
+			address.setPhone(TrPhones.toCanonicalOrNull(request.phone()));
 		}
 		if (request.line1() != null) {
 			address.setLine1(request.line1());

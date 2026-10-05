@@ -39,8 +39,11 @@
       type="tel"
       class="form-control"
       formControlName="phone"
-      maxlength="32"
+      appTrPhoneInput
+      maxlength="16"
+      inputmode="tel"
       autocomplete="tel"
+      placeholder="05xx xxx xx xx"
       [class.is-invalid]="form.get('phone')!.touched && form.get('phone')!.invalid"
     />
     <div
@@ -48,6 +51,12 @@
       class="invalid-feedback d-block"
     >
       Telefon gerekli.
+    </div>
+    <div
+      *ngIf="form.get('phone')!.touched && form.get('phone')!.hasError('trPhone')"
+      class="invalid-feedback d-block"
+    >
+      Geçerli bir cep telefonu girin (05xx xxx xx xx).
     </div>
     <app-field-error [errors]="fieldErrors" field="phone"></app-field-error>
   </div>

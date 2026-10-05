@@ -12,6 +12,7 @@ import { PaginationComponent } from './components/pagination/pagination.componen
 import { ConfirmDialogComponent } from './components/confirm-dialog/confirm-dialog.component';
 import { AddressFormComponent } from './components/address-form/address-form.component';
 import { OrderStatusPipe } from './pipes/order-status.pipe';
+import { TrPhoneInputDirective } from './directives/tr-phone-input.directive';
 
 /**
  * Ortak sunum parçaları (pipe, presentational component) burada export edilir.
@@ -28,6 +29,7 @@ import { OrderStatusPipe } from './pipes/order-status.pipe';
     ConfirmDialogComponent,
     AddressFormComponent,
     OrderStatusPipe,
+    TrPhoneInputDirective,
   ],
   imports: [CommonModule, RouterModule, NgbModule, ReactiveFormsModule],
   exports: [
@@ -44,6 +46,7 @@ import { OrderStatusPipe } from './pipes/order-status.pipe';
     ConfirmDialogComponent,
     AddressFormComponent,
     OrderStatusPipe,
+    TrPhoneInputDirective,
   ],
 })
 export class SharedModule {}

@@ -163,6 +163,29 @@ class AuthControllerTest {
 	}
 
 	@Test
+	void invalidPhoneIsValidationError() throws Exception {
+		perform("/api/auth/register", """
+				{"email":"tel@kitapsepeti.com","password":"%s","firstName":"Ali","lastName":"Veli","phone":"123"}
+				""".formatted(PASSWORD))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+			.andExpect(jsonPath("$.errors[*].field", hasItem("phone")));
+
+		assertThat(count("users")).isZero();
+	}
+
+	@Test
+	void registerNormalizesPhoneToCanonical() throws Exception {
+		perform("/api/auth/register", """
+				{"email":"cep@kitapsepeti.com","password":"%s","firstName":"Ali","lastName":"Veli","phone":"+905551112233"}
+				""".formatted(PASSWORD))
+			.andExpect(status().isCreated());
+
+		assertThat(jdbc.queryForObject("SELECT phone FROM users WHERE email = ?", String.class, "cep@kitapsepeti.com"))
+			.isEqualTo("5551112233");
+	}
+
+	@Test
 	void loginReturnsAccessTokenWithUserIdAndRole() throws Exception {
 		register("giris@kitapsepeti.com");
 		String userId = userIdOf("giris@kitapsepeti.com");

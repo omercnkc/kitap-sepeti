@@ -3,6 +3,7 @@ package com.kitapsepeti.user.mapper;
 import com.kitapsepeti.user.dto.request.UpdateProfileRequest;
 import com.kitapsepeti.user.dto.response.UserResponse;
 import com.kitapsepeti.user.entity.User;
+import com.kitapsepeti.user.validation.TrPhones;
 
 /** {@link User} ↔ DTO dönüşümleri. */
 public final class UserMapper {
@@ -15,7 +16,7 @@ public final class UserMapper {
 				user.getPhone(), user.getRole(), user.getStatus());
 	}
 
-	/** null alanlar değiştirilmez; {@code phone == ""} telefonu siler. */
+	/** null alanlar değiştirilmez; {@code phone == ""} telefonu siler; doluysa kanonik 5xxxxxxxxx. */
 	public static void applyUpdate(User user, UpdateProfileRequest request) {
 		if (request.firstName() != null) {
 			user.setFirstName(request.firstName());
@@ -24,7 +25,7 @@ public final class UserMapper {
 			user.setLastName(request.lastName());
 		}
 		if (request.phone() != null) {
-			user.setPhone(request.phone().isBlank() ? null : request.phone());
+			user.setPhone(TrPhones.toCanonicalOrNull(request.phone()));
 		}
 	}
 

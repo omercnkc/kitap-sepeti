@@ -77,6 +77,23 @@ class MeControllerTest extends ApiTestSupport {
 	}
 
 	@Test
+	void invalidPhoneIsRejectedAndValidIsNormalized() throws Exception {
+		String token = registerAndGetAccessToken(EMAIL);
+
+		patchMe(token, "{\"phone\":\"abcdef\"}")
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+			.andExpect(jsonPath("$.errors[*].field", hasItem("phone")));
+
+		assertThat(jdbc.queryForObject("SELECT phone FROM users WHERE email = ?", String.class, EMAIL))
+			.isEqualTo("5551112233");
+
+		patchMe(token, "{\"phone\":\"05559998877\"}")
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.phone").value("5559998877"));
+	}
+
+	@Test
 	void suspendedUserWithValidTokenGets403() throws Exception {
 		String token = registerAndGetAccessToken(EMAIL);
 		jdbc.update("UPDATE users SET status = 'suspended' WHERE email = ?", EMAIL);

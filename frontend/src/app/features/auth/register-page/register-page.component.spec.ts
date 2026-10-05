@@ -123,6 +123,41 @@ describe('RegisterPageComponent', () => {
     });
   });
 
+  it('normalizes +90 phone before register and rejects invalid', () => {
+    component.form.setValue({
+      firstName: 'Ali',
+      lastName: 'Veli',
+      email: 'a@b.com',
+      password: 'Secret123',
+      phone: '123',
+      rememberMe: false,
+    });
+    expect(component.form.get('phone')!.hasError('trPhone')).toBeTrue();
+    component.onSubmit();
+    httpMock.expectNone(() => true);
+
+    component.form.patchValue({ phone: '+905551112233' });
+    expect(component.form.get('phone')!.valid).toBeTrue();
+    component.onSubmit();
+    const req = httpMock.expectOne('/api/auth/register');
+    expect(req.request.body.phone).toBe('5551112233');
+    req.flush({
+      accessToken: 'access',
+      refreshToken: 'refresh',
+      tokenType: 'Bearer',
+      expiresIn: 900,
+    });
+    httpMock.expectOne('/api/me').flush({
+      id: 'u1',
+      email: 'a@b.com',
+      firstName: 'Ali',
+      lastName: 'Veli',
+      phone: '5551112233',
+      role: 'USER',
+      status: 'ACTIVE',
+    });
+  });
+
   it('should show error on EMAIL_ALREADY_EXISTS', () => {
     component.form.setValue({
       firstName: 'Ali',

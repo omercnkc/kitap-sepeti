@@ -7,6 +7,8 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { messageForErrorCode } from '../../../core/interceptors/error-messages';
 import { toProblemDetail } from '../../../core/interceptors/error.interceptor';
 import { FieldError, RegisterRequest } from '../../../core/models';
+import { normalizeTrPhone } from '../../../shared/validators/tr-phone';
+import { trPhoneValidator } from '../../../shared/validators/tr-phone.validator';
 
 @Component({
   selector: 'app-register-page',
@@ -22,7 +24,7 @@ export class RegisterPageComponent implements OnDestroy {
     lastName: ['', [Validators.required]],
     email: ['', [Validators.required, Validators.email]],
     password: ['', [Validators.required, Validators.minLength(8), Validators.maxLength(72)]],
-    phone: [''],
+    phone: ['', [trPhoneValidator()]],
     rememberMe: [false],
   });
 
@@ -67,7 +69,7 @@ export class RegisterPageComponent implements OnDestroy {
       email: raw.email.trim(),
       password: raw.password,
     };
-    const phone = (raw.phone ?? '').trim();
+    const phone = normalizeTrPhone(raw.phone);
     if (phone) {
       request.phone = phone;
     }

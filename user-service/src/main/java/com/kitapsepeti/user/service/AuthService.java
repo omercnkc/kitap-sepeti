@@ -20,6 +20,7 @@ import com.kitapsepeti.user.exception.InvalidCredentialsException;
 import com.kitapsepeti.user.repository.UserRepository;
 import com.kitapsepeti.user.security.JwtProperties;
 import com.kitapsepeti.user.service.event.UserRegisteredEvent;
+import com.kitapsepeti.user.validation.TrPhones;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -78,7 +79,7 @@ public class AuthService {
 
 		User user = new User(email, passwordEncoder.encode(request.password()), request.firstName(),
 				request.lastName());
-		user.setPhone(request.phone());
+		user.setPhone(TrPhones.toCanonicalOrNull(request.phone()));
 		try {
 			user = userRepository.saveAndFlush(user);
 		}

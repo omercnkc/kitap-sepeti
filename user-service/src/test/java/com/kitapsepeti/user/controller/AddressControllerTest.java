@@ -2,6 +2,7 @@ package com.kitapsepeti.user.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -161,6 +162,27 @@ class AddressControllerTest extends ApiTestSupport {
 			.andExpect(jsonPath("$.errors[*].field", containsInAnyOrder("recipientName", "country")));
 
 		assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM addresses", Integer.class)).isZero();
+	}
+
+	@Test
+	void invalidPhoneIsRejectedAndValidIsNormalized() throws Exception {
+		String token = registerAndGetAccessToken("ceptel@kitapsepeti.com");
+
+		createAddress(token, """
+				{"recipientName":"Ali Veli","phone":"123","line1":"Cadde 1","city":"İstanbul","country":"TR"}
+				""")
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+			.andExpect(jsonPath("$.errors[*].field", hasItem("phone")));
+
+		assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM addresses", Integer.class)).isZero();
+
+		String id = createAndGetId(token, """
+				{"recipientName":"Ali Veli","phone":"+905550000000","line1":"Cadde 1","city":"İstanbul","country":"TR"}
+				""");
+
+		assertThat(jdbc.queryForObject("SELECT phone FROM addresses WHERE id = UUID_TO_BIN(?)", String.class, id))
+			.isEqualTo("5550000000");
 	}
 
 	private ResultActions createAddress(String token, String json) throws Exception {

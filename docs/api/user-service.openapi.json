@@ -906,7 +906,7 @@
           },
           "phone": {
             "type": "string",
-            "description": "Alıcının telefonu.",
+            "description": "Alıcının TR cep telefonu. Kabul: 05… / 5… / +905…; saklanan format 5xxxxxxxxx.",
             "example": "5551112233",
             "maxLength": 32,
             "minLength": 0
@@ -1095,7 +1095,7 @@
           },
           "phone": {
             "type": "string",
-            "description": "Telefon (opsiyonel).",
+            "description": "TR cep (opsiyonel). Kabul: 05… / 5… / +905…; saklanan format 5xxxxxxxxx.",
             "example": "5551112233",
             "maxLength": 32,
             "minLength": 0
@@ -1188,7 +1188,7 @@
           },
           "phone": {
             "type": "string",
-            "description": "Alıcının telefonu; gönderildiyse boş olamaz.",
+            "description": "Alıcının TR cep telefonu; gönderildiyse boş olamaz. Kabul: 05… / 5… / +905…; saklanan format 5xxxxxxxxx.",
             "example": "5551112233",
             "maxLength": 32,
             "minLength": 0,
@@ -1233,7 +1233,7 @@
           },
           "phone": {
             "type": "string",
-            "description": "Telefon; \"\" gönderilirse silinir.",
+            "description": "TR cep; \"\" gönderilirse silinir. Kabul: 05… / 5… / +905…; saklanan format 5xxxxxxxxx.",
             "example": "5559998877",
             "maxLength": 32,
             "minLength": 0

@@ -1,5 +1,6 @@
 package com.kitapsepeti.user.dto.request;
 
+import com.kitapsepeti.user.validation.TrMobilePhone;
 import com.kitapsepeti.user.validation.Utf8MaxBytes;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
@@ -18,8 +19,9 @@ public record RegisterRequest(
 		@NotBlank @Size(max = 80) String firstName,
 		@Schema(description = "Soyad.", example = "Veli")
 		@NotBlank @Size(max = 80) String lastName,
-		@Schema(description = "Telefon (opsiyonel).", example = "5551112233")
-		@Size(max = 32) String phone) {
+		@Schema(description = "TR cep (opsiyonel). Kabul: 05… / 5… / +905…; saklanan format 5xxxxxxxxx.",
+				example = "5551112233")
+		@Size(max = 32) @TrMobilePhone String phone) {
 
 	/** Parola loglara veya hata mesajlarına düşmesin. */
 	@Override
