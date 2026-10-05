@@ -1451,12 +1451,26 @@
   - `RequestIdGlobalFilter`: `GlobalFilter`, `Ordered.HIGHEST_PRECEDENCE`. Gelen `X-Request-Id` varsa korur, yoksa `UUID.randomUUID()` üretir; hem downstream istek header'ına hem de istemci yanıt header'ına ekler.
   - `CorsConfig`: `CorsWebFilter` reaktif bean'i ile Angular UI (`http://localhost:4200`, `http://127.0.0.1:4200`, `http://localhost:3000`) için CORS desteği. `GET, POST, PUT, DELETE, PATCH, OPTIONS`, allowCredentials=true, exposedHeaders (`X-Request-Id`, `Authorization`, `Location`), maxAge=3600s.
   - Testler: `RequestIdGlobalFilterTest` ve `CorsConfigurationTest` (toplam 17 test).
-- **Gateway Adım 4 (YAPILDI, COMMIT EDİLMEDİ): Reaktif JWT Doğrulama ve JWKS Önbellekleme (Faz 10).**
+- **Gateway Adım 4 (YAPILDI, push edildi - commit a9dd623): Reaktif JWT Doğrulama ve JWKS Önbellekleme (Faz 10).**
   - `JwtProperties`: `app.jwt` ön ekiyle `jwks-url` (`http://localhost:8081/.well-known/jwks.json`), `cache-ttl-seconds` (300) ve `protected-paths` yapılandırması.
   - `JwksKeyProvider`: `WebClient` ile reaktif JWKS çekme, `AtomicReference` ile önbellekleme (TTL süresince tekrarlı istek yok), kesinti anında stale cache fallback desteği.
   - `JwtAuthGlobalFilter`: `GlobalFilter`, `Ordered.HIGHEST_PRECEDENCE + 10`. Bearer token doğrulaması, süre dolumu kontrolü (`TOKEN_EXPIRED`), RSA imza doğrulaması (`INVALID_TOKEN`), eksik token kontrolü (`AUTHENTICATION_REQUIRED`). RFC 7807 `ProblemDetail` standardında hata yanıtları. Başarılı doğrulamada downstream'e `X-User-Id` ve `X-User-Role` başlıklarını ekler.
   - Testler: `JwtAuthFilterTest` (geçerli token ile downstream header iletimi, eksik token 401 ProblemDetail, süresi dolmuş token 401 ProblemDetail, sahte/geçersiz imza 401 ProblemDetail, JWKS cache round-trip optimizasyonu, korumasız yol geçişi).
   - api-gateway modülü toplam 23 test yeşil.
+- **Gateway Adım 5, 6 & 8 (YAPILDI, COMMIT EDİLMEDİ): Public vs Protected Yollar, Rol Kontrolü, Internal Path Engelleme & Webhook Yönlendirmesi (Faz 10).**
+  - **Adım 5 (Public/Protected/Admin):**
+    - `JwtAuthGlobalFilter` güncellendi. Public yollar (`GET /api/books/**`, `GET /api/categories/**`, `/api/auth/**`, `/api/search/**`, `/api/suggest/**`, `/actuator/health`, `/webhooks/**`) tokensız geçer.
+    - Korumalı yollar (`/api/me/**`, `/api/cart/**`, `/api/orders/**`, `/api/wishlist/**`, `/api/notifications/**`, `/api/preferences/**`) geçerli Bearer token zorunlu (yoksa 401 `AUTHENTICATION_REQUIRED`).
+    - Admin yolları (`/api/admin/**`, kitap ve kategori için yazma işlemleri `POST/PUT/DELETE/PATCH /api/books/**`, `/api/categories/**`): `ROLE_ADMIN` rolü zorunlu. Normal kullanıcı (`ROLE_CUSTOMER`) ile istek atıldığında HTTP 403 `FORBIDDEN` / `ACCESS_DENIED` ProblemDetail döner.
+  - **Adım 6 (Internal Path Engelleme):**
+    - `InternalPathFilter`: WebFlux `WebFilter` (`Ordered.HIGHEST_PRECEDENCE + 1`).
+    - Dış dünyadan `/internal/**`, `/api/internal/**` veya herhangi bir alt yolda `/internal/` kalıbı içeren istek geldiğinde downstream'e iletilmeden doğrudan HTTP 404 `NOT_FOUND` ProblemDetail (`application/problem+json`) döner.
+    - `RequestIdGlobalFilter`: Hem `GlobalFilter` hem `WebFilter` (`Ordered.HIGHEST_PRECEDENCE`) implement ederek erken dönen 404/403/401 yanıtlarında dahi `X-Request-Id` başlığının istemciye iletilmesini garanti eder.
+  - **Adım 8 (Payment Webhook Route):**
+    - `application.yml` route listesine `payment-webhook` (`/webhooks/**`, `/api/webhooks/**` -> `${PAYMENT_SERVICE_URL:http://localhost:8085}`) eklendi.
+    - Webhook rotası harici ödeme sağlayıcıları için JWT filtresinden tamamen muaf (bypass) tutuldu.
+  - Testler: `PublicAndProtectedPathsTest` (9 test), `InternalPathBlockingTest` (3 test), `WebhookRouteTest` (2 test).
+  - api-gateway modülü toplam 8 test sınıfında 37 test yeşil. **Faz 10 (API Gateway) tamamlandı.**
 - Order planı: 0a common sertleştirme (YAPILDI) → 0b outbox → common (YAPILDI, push'landı) → 1 modül/db (YAPILDI, push'landı) → 2 domain (YAPILDI) → 3a Order istemcileri + CB (YAPILDI) → 3b Cart→Catalog CB (YAPILDI) → 4 checkout mutlu yol +
   GET {id} (YAPILDI) → 5 hata yolları/telafi (YAPILDI) → 6a Payment sonucu consumer+Order olayları (YAPILDI) → 6b stok
   commit/release+StockSyncJob+V2 lost (YAPILDI) → 7 Cart CartCheckedOut tüketicisi (YAPILDI) → 8 timeout görevi

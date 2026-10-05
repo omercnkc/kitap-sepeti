@@ -22,6 +22,7 @@ import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.server.PathContainer;
@@ -39,6 +40,33 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
 	private static final Logger log = LoggerFactory.getLogger(JwtAuthGlobalFilter.class);
 	private static final String BEARER_PREFIX = "Bearer ";
 
+	private static final List<String> PUBLIC_ANY_PATTERNS = List.of(
+			"/api/auth",
+			"/api/auth/**",
+			"/api/search",
+			"/api/search/**",
+			"/api/suggest",
+			"/api/suggest/**",
+			"/actuator/health",
+			"/actuator/health/**",
+			"/webhooks",
+			"/webhooks/**",
+			"/api/webhooks",
+			"/api/webhooks/**"
+	);
+
+	private static final List<String> PUBLIC_GET_PATTERNS = List.of(
+			"/api/books",
+			"/api/books/**",
+			"/api/categories",
+			"/api/categories/**"
+	);
+
+	private static final List<String> ADMIN_PATTERNS = List.of(
+			"/api/admin",
+			"/api/admin/**"
+	);
+
 	private final JwtProperties jwtProperties;
 	private final JwksKeyProvider jwksKeyProvider;
 	private final JsonMapper jsonMapper;
@@ -54,25 +82,33 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
 
 	@Override
 	public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+		if (!this.jwtProperties.isEnabled()) {
+			return chain.filter(exchange);
+		}
+
 		String path = exchange.getRequest().getPath().value();
-		boolean protectedPath = isProtected(path);
+		HttpMethod method = exchange.getRequest().getMethod();
+
+		boolean isPublicPath = isPublic(method, path);
+		boolean isAdminPath = isAdminRequired(method, path);
+
 		String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
 
 		if (authHeader == null || !authHeader.startsWith(BEARER_PREFIX)) {
-			if (protectedPath) {
-				return onError(exchange, HttpStatus.UNAUTHORIZED, "AUTHENTICATION_REQUIRED",
-						"Kimlik doğrulaması gerekli", "Kimlik doğrulaması için geçerli bir Bearer token sağlanmalıdır.");
+			if (isPublicPath) {
+				return chain.filter(exchange);
 			}
-			return chain.filter(exchange);
+			return onError(exchange, HttpStatus.UNAUTHORIZED, "AUTHENTICATION_REQUIRED",
+					"Kimlik doğrulaması gerekli", "Kimlik doğrulaması için geçerli bir Bearer token sağlanmalıdır.");
 		}
 
 		String token = authHeader.substring(BEARER_PREFIX.length()).trim();
 		if (token.isEmpty()) {
-			if (protectedPath) {
-				return onError(exchange, HttpStatus.UNAUTHORIZED, "AUTHENTICATION_REQUIRED",
-						"Kimlik doğrulaması gerekli", "Bearer token boş olamaz.");
+			if (isPublicPath) {
+				return chain.filter(exchange);
 			}
-			return chain.filter(exchange);
+			return onError(exchange, HttpStatus.UNAUTHORIZED, "AUTHENTICATION_REQUIRED",
+					"Kimlik doğrulaması gerekli", "Bearer token boş olamaz.");
 		}
 
 		SignedJWT signedJwt;
@@ -122,6 +158,12 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
 
 						String role = extractRole(claims);
 
+						if (isAdminPath && !hasAdminRole(role)) {
+							log.warn("Access denied for user {} with role {} to admin path {}", userId, role, path);
+							return onError(exchange, HttpStatus.FORBIDDEN, "FORBIDDEN",
+									"Erişim engellendi", "Bu işlem için yönetici yetkisi gereklidir.");
+						}
+
 						ServerHttpRequest.Builder reqBuilder = exchange.getRequest().mutate();
 						if (userId != null && !userId.isBlank()) {
 							reqBuilder.header("X-User-Id", userId);
@@ -144,10 +186,44 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
 				});
 	}
 
-	private boolean isProtected(String path) {
+	private boolean isPublic(HttpMethod method, String path) {
 		PathContainer container = PathContainer.parsePath(path);
-		for (String pattern : this.jwtProperties.getProtectedPaths()) {
+		if (matchesAny(container, PUBLIC_ANY_PATTERNS)) {
+			return true;
+		}
+		if (HttpMethod.GET.equals(method) && matchesAny(container, PUBLIC_GET_PATTERNS)) {
+			return true;
+		}
+		return false;
+	}
+
+	private boolean isAdminRequired(HttpMethod method, String path) {
+		PathContainer container = PathContainer.parsePath(path);
+		if (matchesAny(container, ADMIN_PATTERNS)) {
+			return true;
+		}
+		if (!HttpMethod.GET.equals(method) && matchesAny(container, PUBLIC_GET_PATTERNS)) {
+			return true;
+		}
+		return false;
+	}
+
+	private boolean matchesAny(PathContainer container, List<String> patterns) {
+		for (String pattern : patterns) {
 			if (this.pathPatternParser.parse(pattern).matches(container)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private boolean hasAdminRole(String role) {
+		if (role == null || role.isBlank()) {
+			return false;
+		}
+		for (String part : role.split(",")) {
+			String trimmed = part.trim();
+			if ("ROLE_ADMIN".equalsIgnoreCase(trimmed) || "ADMIN".equalsIgnoreCase(trimmed)) {
 				return true;
 			}
 		}

@@ -9,9 +9,18 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "app.jwt")
 public class JwtProperties {
 
+	private boolean enabled = true;
 	private String jwksUrl = "http://localhost:8081/.well-known/jwks.json";
 	private int cacheTtlSeconds = 300;
 	private List<String> protectedPaths = new ArrayList<>(List.of("/api/protected/**"));
+
+	public boolean isEnabled() {
+		return enabled;
+	}
+
+	public void setEnabled(boolean enabled) {
+		this.enabled = enabled;
+	}
 
 	public String getJwksUrl() {
 		return jwksUrl;
