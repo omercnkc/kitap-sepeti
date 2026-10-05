@@ -22,6 +22,7 @@ export const ERROR_CODE_MESSAGES: Readonly<Record<string, string>> = {
   BOOK_NOT_AVAILABLE: 'Kitap satışa uygun değil.',
   CART_LINE_LIMIT_EXCEEDED: 'Sepetteki farklı kitap sayısı sınırına ulaşıldı.',
   CART_QUANTITY_LIMIT_EXCEEDED: 'Bu kitap için sepet adet sınırına ulaşıldı.',
+  DEFAULT_ADDRESS_REQUIRED: 'Önce başka bir adresi varsayılan yapın.',
   CATALOG_UNAVAILABLE: 'Katalog şu an kullanılamıyor; biraz sonra tekrar deneyin.',
   AUTHENTICATION_UNAVAILABLE: 'Kimlik doğrulama şu an kullanılamıyor; biraz sonra tekrar deneyin.',
   INTERNAL_ERROR: 'Beklenmeyen bir hata oluştu.',

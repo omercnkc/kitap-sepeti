@@ -1,0 +1,180 @@
+<form [formGroup]="form" (ngSubmit)="onSubmit()" novalidate class="address-form">
+  <div class="mb-3">
+    <label class="form-label" for="address-label">Etiket <span class="text-muted">(opsiyonel)</span></label>
+    <input
+      id="address-label"
+      type="text"
+      class="form-control"
+      formControlName="label"
+      maxlength="40"
+      autocomplete="organization"
+    />
+    <app-field-error [errors]="fieldErrors" field="label"></app-field-error>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label" for="address-recipientName">Alıcı adı soyadı</label>
+    <input
+      id="address-recipientName"
+      type="text"
+      class="form-control"
+      formControlName="recipientName"
+      maxlength="120"
+      autocomplete="name"
+      [class.is-invalid]="form.get('recipientName')!.touched && form.get('recipientName')!.invalid"
+    />
+    <div
+      *ngIf="form.get('recipientName')!.touched && form.get('recipientName')!.hasError('required')"
+      class="invalid-feedback d-block"
+    >
+      Alıcı adı gerekli.
+    </div>
+    <app-field-error [errors]="fieldErrors" field="recipientName"></app-field-error>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label" for="address-phone">Telefon</label>
+    <input
+      id="address-phone"
+      type="tel"
+      class="form-control"
+      formControlName="phone"
+      maxlength="32"
+      autocomplete="tel"
+      [class.is-invalid]="form.get('phone')!.touched && form.get('phone')!.invalid"
+    />
+    <div
+      *ngIf="form.get('phone')!.touched && form.get('phone')!.hasError('required')"
+      class="invalid-feedback d-block"
+    >
+      Telefon gerekli.
+    </div>
+    <app-field-error [errors]="fieldErrors" field="phone"></app-field-error>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label" for="address-line1">Adres satırı 1</label>
+    <input
+      id="address-line1"
+      type="text"
+      class="form-control"
+      formControlName="line1"
+      maxlength="200"
+      autocomplete="address-line1"
+      [class.is-invalid]="form.get('line1')!.touched && form.get('line1')!.invalid"
+    />
+    <div
+      *ngIf="form.get('line1')!.touched && form.get('line1')!.hasError('required')"
+      class="invalid-feedback d-block"
+    >
+      Adres satırı gerekli.
+    </div>
+    <app-field-error [errors]="fieldErrors" field="line1"></app-field-error>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label" for="address-line2">Adres satırı 2 <span class="text-muted">(opsiyonel)</span></label>
+    <input
+      id="address-line2"
+      type="text"
+      class="form-control"
+      formControlName="line2"
+      maxlength="200"
+      autocomplete="address-line2"
+    />
+    <app-field-error [errors]="fieldErrors" field="line2"></app-field-error>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-md-6 mb-3">
+      <label class="form-label" for="address-district">İlçe <span class="text-muted">(opsiyonel)</span></label>
+      <input
+        id="address-district"
+        type="text"
+        class="form-control"
+        formControlName="district"
+        maxlength="80"
+        autocomplete="address-level2"
+      />
+      <app-field-error [errors]="fieldErrors" field="district"></app-field-error>
+    </div>
+    <div class="col-md-6 mb-3">
+      <label class="form-label" for="address-city">İl</label>
+      <input
+        id="address-city"
+        type="text"
+        class="form-control"
+        formControlName="city"
+        maxlength="80"
+        autocomplete="address-level1"
+        [class.is-invalid]="form.get('city')!.touched && form.get('city')!.invalid"
+      />
+      <div
+        *ngIf="form.get('city')!.touched && form.get('city')!.hasError('required')"
+        class="invalid-feedback d-block"
+      >
+        İl gerekli.
+      </div>
+      <app-field-error [errors]="fieldErrors" field="city"></app-field-error>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-md-6 mb-3">
+      <label class="form-label" for="address-postalCode">Posta kodu <span class="text-muted">(opsiyonel)</span></label>
+      <input
+        id="address-postalCode"
+        type="text"
+        class="form-control"
+        formControlName="postalCode"
+        maxlength="16"
+        autocomplete="postal-code"
+      />
+      <app-field-error [errors]="fieldErrors" field="postalCode"></app-field-error>
+    </div>
+    <div class="col-md-6 mb-3">
+      <label class="form-label" for="address-country">Ülke</label>
+      <input
+        id="address-country"
+        type="text"
+        class="form-control"
+        formControlName="country"
+        maxlength="2"
+        autocomplete="country"
+        [class.is-invalid]="form.get('country')!.touched && form.get('country')!.invalid"
+      />
+      <div
+        *ngIf="form.get('country')!.touched && form.get('country')!.invalid"
+        class="invalid-feedback d-block"
+      >
+        Ülke kodu 2 büyük harf olmalı (ör. TR).
+      </div>
+      <app-field-error [errors]="fieldErrors" field="country"></app-field-error>
+    </div>
+  </div>
+
+  <div class="form-check mb-3">
+    <input
+      id="address-isDefault"
+      type="checkbox"
+      class="form-check-input"
+      formControlName="isDefault"
+    />
+    <label class="form-check-label" for="address-isDefault">Varsayılan adres</label>
+  </div>
+
+  <div class="d-flex flex-wrap gap-2">
+    <button type="submit" class="btn btn-primary" [disabled]="!canSave">
+      {{ submitting ? 'Kaydediliyor…' : 'Kaydet' }}
+    </button>
+    <button
+      *ngIf="showCancel"
+      type="button"
+      class="btn btn-outline-secondary"
+      [disabled]="submitting"
+      (click)="onCancel()"
+    >
+      Vazgeç
+    </button>
+  </div>
+</form>

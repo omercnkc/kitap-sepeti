@@ -1,10 +1,19 @@
 # Frontend (Kitap Sepeti UI)
 
-## Durum (UI-5 tamam)
+## Durum (UI-6 Adım 1–2)
 
 - Angular 13 NgModule; lazy features; proxy `/api` → Gateway 8080
-- UI-3 auth; UI-4 katalog; UI-5 sepet (API/store/ekle/sayfa)
-- Sırada: UI-6/7 checkout; `q` arama (B1)
+- UI-3…5 tamam; UI-6.1–2: profil PATCH + AddressForm
+- Sırada: AddressListPage (modal CRUD); UI-7 checkout; `q` arama (B1)
+
+## Hesap
+
+| Parça | Yol | Not |
+| --- | --- | --- |
+| Modeller | `core/models/user.ts` | UpdateProfile / Address OpenAPI birebir |
+| AccountApi | `core/api/account.api.ts` | PATCH `/api/me`; addresses CRUD; setDefault=PATCH isDefault |
+| ProfilePage | `features/account/profile-page/` | Reactive Forms; phone `""` = sil |
+| AddressForm | `shared/components/address-form/` | sunum; checkout yeniden kullanır |
 
 ## Sepet
 

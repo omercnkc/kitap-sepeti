@@ -1,11 +1,13 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { BehaviorSubject, Observable, throwError } from 'rxjs';
 import { switchMap, tap } from 'rxjs/operators';
+import { AccountApi } from '../api/account.api';
 import { AuthApi } from '../api/auth.api';
 import {
   LoginRequest,
   RegisterRequest,
   TokenResponse,
+  UpdateProfileRequest,
   UserResponse,
 } from '../models';
 import { REFRESH_TOKEN_STORAGE_KEY, TokenStorageService } from './token-storage.service';
@@ -20,6 +22,7 @@ export class AuthService implements OnDestroy {
 
   constructor(
     private readonly authApi: AuthApi,
+    private readonly accountApi: AccountApi,
     private readonly tokenStorage: TokenStorageService,
   ) {
     if (typeof window !== 'undefined') {
@@ -86,6 +89,12 @@ export class AuthService implements OnDestroy {
 
   getMe(): Observable<UserResponse> {
     return this.loadCurrentUser();
+  }
+
+  updateProfile(body: UpdateProfileRequest): Observable<UserResponse> {
+    return this.accountApi.updateProfile(body).pipe(
+      tap((user) => this.currentUserSubject.next(user)),
+    );
   }
 
   logout(): void {

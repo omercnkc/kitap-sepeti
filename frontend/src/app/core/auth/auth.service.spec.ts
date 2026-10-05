@@ -109,6 +109,16 @@ describe('AuthService', () => {
     expect(auth.currentUserSnapshot).toEqual(user);
   });
 
+  it('updateProfile PATCHes /api/me and updates currentUser$', () => {
+    auth.updateProfile({ firstName: 'Ayşe', phone: '' }).subscribe();
+    const req = httpMock.expectOne('/api/me');
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ firstName: 'Ayşe', phone: '' });
+    req.flush({ ...user, firstName: 'Ayşe', phone: null });
+    expect(auth.currentUserSnapshot?.firstName).toBe('Ayşe');
+    expect(auth.currentUserSnapshot?.phone).toBeNull();
+  });
+
   it('storage event clears in-memory session when refresh removed in another tab', () => {
     tokenStorage.setAccessToken('access');
     tokenStorage.setRefreshToken('refresh', true);

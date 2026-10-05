@@ -1,5 +1,6 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { ReactiveFormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { NgbModule } from '@ng-bootstrap/ng-bootstrap';
 import { ToastContainerComponent } from './components/toast-container/toast-container.component';
@@ -9,6 +10,7 @@ import { FieldErrorComponent } from './components/field-error/field-error.compon
 import { BookCardComponent } from './components/book-card/book-card.component';
 import { PaginationComponent } from './components/pagination/pagination.component';
 import { ConfirmDialogComponent } from './components/confirm-dialog/confirm-dialog.component';
+import { AddressFormComponent } from './components/address-form/address-form.component';
 
 /**
  * Ortak sunum parçaları (pipe, presentational component) burada export edilir.
@@ -23,12 +25,14 @@ import { ConfirmDialogComponent } from './components/confirm-dialog/confirm-dial
     BookCardComponent,
     PaginationComponent,
     ConfirmDialogComponent,
+    AddressFormComponent,
   ],
-  imports: [CommonModule, RouterModule, NgbModule],
+  imports: [CommonModule, RouterModule, NgbModule, ReactiveFormsModule],
   exports: [
     CommonModule,
     RouterModule,
     NgbModule,
+    ReactiveFormsModule,
     ToastContainerComponent,
     SpinnerComponent,
     EmptyStateComponent,
@@ -36,6 +40,7 @@ import { ConfirmDialogComponent } from './components/confirm-dialog/confirm-dial
     BookCardComponent,
     PaginationComponent,
     ConfirmDialogComponent,
+    AddressFormComponent,
   ],
 })
 export class SharedModule {}
