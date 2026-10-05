@@ -4,9 +4,9 @@ Tüm komutlar repo kökünden. Değerler kökteki `.env`'den okunur (şablon: `.
 Compose `env_file` kullanmaz; her servise yalnızca gereken değişkenler `${VAR}` ile verilir.
 
 ```powershell
-docker compose build user-service catalog-service cart-service payment-service order-service api-gateway
+docker compose build user-service catalog-service cart-service payment-service order-service api-gateway frontend
 docker compose up -d
-docker compose ps        # mysql, rabbitmq, user-service, catalog-service, cart-service, payment-service, order-service, api-gateway → healthy
+docker compose ps        # … api-gateway, frontend → healthy
 ```
 
 Volume'ları silen `docker compose down -v` veritabanını ve kuyrukları da siler; durdurmak için `docker compose stop`.
@@ -209,4 +209,25 @@ docker compose build api-gateway
 docker compose up -d api-gateway
 docker compose logs -f api-gateway
 ```
+
+## frontend (Angular UI)
+
+| | |
+|---|---|
+| İmaj | `kitapsepeti/frontend:local` (`frontend/Dockerfile`, build context = `frontend/`) |
+| Container | `kitapsepeti-frontend`, host `http://127.0.0.1:4200` → container `8080` |
+| Runtime | `nginx:alpine`, non-root (`nginx` user), SPA `try_files` |
+| API proxy | nginx `/api/` → `http://api-gateway:8080` (compose DNS) |
+
+Geliştirme (Docker dışı): `frontend/` içinde `npm start` → `ng serve` + `proxy.conf.json` (`/api` → `http://localhost:8080`).
+
+Compose UI:
+
+```powershell
+docker compose build frontend
+docker compose up -d frontend
+docker compose ps frontend
+```
+
+Derin link örneği: `http://127.0.0.1:4200/books/<id>` yenilemesi nginx `try_files` ile SPA'ya düşer (404 değil).
 

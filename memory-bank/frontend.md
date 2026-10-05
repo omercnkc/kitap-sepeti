@@ -91,29 +91,35 @@ Windows (nvm-windows): terminalde `nvm use 14.18.1` — Cursor agent shell PATH�
 ## Komutlar (`frontend/`)
 
 ```powershell
-npm start          # ng serve + proxy.conf.json → :4200
+npm start          # ng serve + proxy.conf.json → :4200 (/api → localhost:8080)
 npm run lint       # ng lint
 npm test           # ng test (CI: --watch=false --browsers=ChromeHeadless)
-npm run build      # production build
-```
-
-## Klasör özeti
-
-```text
-frontend/src/app/
-├── core/           # tekil servisler (CoreModule.forRoot)
-├── shared/         # SharedModule (CommonModule, Router, NgbModule)
-├── layout/         # Shell, Header, Footer, NotFound
-└── features/       # lazy modüller (auth, catalog, cart, …)
+npm run build      # production build → dist/frontend
 ```
 
 ## API / proxy
 
-- `environment.apiUrl`: `''` — geliştirmede istekler göreli `/api/...`
-- `proxy.conf.json`: `/api` → `http://localhost:8080`
-- Backend stack yalnızca monorepo kökünden (`docker compose`); UI agent compose çalıştırmaz
+- `environment.apiUrl`: `''` — istekler göreli `/api/...`
+- Geliştirme: `proxy.conf.json` → `/api` → `http://localhost:8080` (`npm start` kullanır)
+- Compose UI: nginx `/api/` → `http://api-gateway:8080`
 
-## Docker notu
+## Docker (UI)
 
-- Gateway + mikroservisler: ana klasörde `docker compose up -d`
-- UI: `npm start` ile yerel 4200 (Docker dışı)
+| | |
+| --- | --- |
+| Dockerfile | `frontend/Dockerfile` — multi-stage `node:14.18.1-alpine` → `nginx:alpine` (non-root, :8080) |
+| Context | `frontend/` (`docker compose build frontend`) |
+| Compose | `frontend` servisi → `127.0.0.1:4200:8080`, `depends_on: api-gateway` (healthy) |
+| SPA | `try_files $uri $uri/ /index.html` |
+
+```powershell
+# Yerel geliştirme (hot reload) — :4200
+cd frontend; npm start
+
+# Compose production UI — host :4200 (npm start kapalı olmalı)
+docker compose build frontend
+docker compose up -d frontend
+# UI: http://127.0.0.1:4200
+```
+
+Backend stack: monorepo kökünden `docker compose up -d` (gateway + servisler). `docker compose down -v` yasak (volume silmez).

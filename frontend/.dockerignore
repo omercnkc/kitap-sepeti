@@ -1,0 +1,10 @@
+node_modules
+dist
+.angular
+coverage
+*.md
+.git
+.gitignore
+.npmrc.bak
+**/e2e
+**/out-tsc
