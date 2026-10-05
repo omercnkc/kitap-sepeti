@@ -3,6 +3,10 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { convertToParamMap, Router } from '@angular/router';
 import { RouterTestingModule } from '@angular/router/testing';
 import { NgbModule } from '@ng-bootstrap/ng-bootstrap';
+import { of } from 'rxjs';
+import { AuthService } from '../../../core/auth/auth.service';
+import { CartStore } from '../../../core/cart/cart.store';
+import { ToastService } from '../../../core/services/toast.service';
 import { SharedModule } from '../../../shared/shared.module';
 import { BookFiltersComponent } from '../book-filters/book-filters.component';
 import { bookFilterFromParams, BookListPageComponent } from './book-list-page.component';
@@ -38,6 +42,20 @@ describe('BookListPageComponent', () => {
         NgbModule,
       ],
       declarations: [BookListPageComponent, BookFiltersComponent],
+      providers: [
+        {
+          provide: AuthService,
+          useValue: { isLoggedIn: () => false },
+        },
+        {
+          provide: CartStore,
+          useValue: { add: () => of({ itemCount: 1 }) },
+        },
+        {
+          provide: ToastService,
+          useValue: { success: jasmine.createSpy('success') },
+        },
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(BookListPageComponent);

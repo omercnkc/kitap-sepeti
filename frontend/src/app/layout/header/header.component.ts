@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { NgbOffcanvas } from '@ng-bootstrap/ng-bootstrap';
 import { Observable } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
+import { CartStore } from '../../core/cart/cart.store';
 import { UserResponse } from '../../core/models';
 
 @Component({
@@ -13,10 +14,12 @@ import { UserResponse } from '../../core/models';
 })
 export class HeaderComponent {
   readonly currentUser$: Observable<UserResponse | null> = this.auth.currentUser$;
+  readonly cartCount$: Observable<number> = this.cartStore.count$;
 
   constructor(
     private readonly offcanvas: NgbOffcanvas,
     private readonly auth: AuthService,
+    private readonly cartStore: CartStore,
     private readonly router: Router,
   ) {}
 

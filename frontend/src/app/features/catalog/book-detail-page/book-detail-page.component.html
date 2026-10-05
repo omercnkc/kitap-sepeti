@@ -74,12 +74,11 @@
         <button
           type="button"
           class="btn btn-primary"
-          [disabled]="!state.book.inStock"
+          [disabled]="!state.book.inStock || adding"
           (click)="onAddToCart(state.book)"
         >
-          {{ state.book.inStock ? 'Sepete ekle' : 'Tükendi' }}
+          {{ !state.book.inStock ? 'Tükendi' : adding ? 'Ekleniyor…' : 'Sepete ekle' }}
         </button>
-        <!-- TODO(UI-5): gerçek sepete ekleme -->
 
         <div *ngIf="state.book.description" class="mt-4">
           <h2 class="h6">Açıklama</h2>

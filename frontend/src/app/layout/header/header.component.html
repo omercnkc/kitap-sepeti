@@ -19,7 +19,16 @@
           <a class="nav-link" routerLink="/books" routerLinkActive="active">Kitaplar</a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" routerLink="/cart" routerLinkActive="active">Sepet</a>
+          <a class="nav-link position-relative" routerLink="/cart" routerLinkActive="active">
+            Sepet
+            <span
+              *ngIf="(cartCount$ | async) as count"
+              class="badge rounded-pill bg-primary ms-1"
+              [class.d-none]="count < 1"
+            >
+              {{ count }}
+            </span>
+          </a>
         </li>
 
         <ng-container *ngIf="currentUser$ | async as user; else guestLinks">
@@ -81,6 +90,13 @@
         (click)="offcanvas.dismiss()"
       >
         Sepet
+        <span
+          *ngIf="(cartCount$ | async) as count"
+          class="badge rounded-pill bg-primary ms-1"
+          [class.d-none]="count < 1"
+        >
+          {{ count }}
+        </span>
       </a>
 
       <ng-container *ngIf="currentUser$ | async as user; else mobileGuest">

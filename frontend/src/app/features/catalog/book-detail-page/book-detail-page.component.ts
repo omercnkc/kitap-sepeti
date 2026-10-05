@@ -1,10 +1,19 @@
-import { ChangeDetectionStrategy, Component, OnDestroy, OnInit } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import {
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  OnDestroy,
+  OnInit,
+} from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
 import { BehaviorSubject, EMPTY, Subject } from 'rxjs';
 import { catchError, switchMap, takeUntil, tap } from 'rxjs/operators';
 import { CatalogApi } from '../../../core/api/catalog.api';
+import { AuthService } from '../../../core/auth/auth.service';
+import { CartStore } from '../../../core/cart/cart.store';
 import { toProblemDetail } from '../../../core/interceptors/error.interceptor';
 import { BookDetail } from '../../../core/models';
+import { ToastService } from '../../../core/services/toast.service';
 
 type DetailState =
   | { kind: 'loading' }
@@ -23,10 +32,16 @@ export class BookDetailPageComponent implements OnInit, OnDestroy {
   private readonly stateSubject = new BehaviorSubject<DetailState>({ kind: 'loading' });
 
   readonly state$ = this.stateSubject.asObservable();
+  adding = false;
 
   constructor(
     private readonly route: ActivatedRoute,
+    private readonly router: Router,
     private readonly catalogApi: CatalogApi,
+    private readonly auth: AuthService,
+    private readonly cartStore: CartStore,
+    private readonly toast: ToastService,
+    private readonly cdr: ChangeDetectorRef,
   ) {}
 
   ngOnInit(): void {
@@ -76,7 +91,31 @@ export class BookDetailPageComponent implements OnInit, OnDestroy {
     return book.categories.map((c) => c.name).join(', ');
   }
 
-  onAddToCart(_book: BookDetail): void {
-    // TODO(UI-5): CartStore / CartApi
+  onAddToCart(book: BookDetail): void {
+    if (!this.auth.isLoggedIn()) {
+      void this.router.navigate(['/login'], {
+        queryParams: { returnUrl: this.router.url },
+      });
+      return;
+    }
+    if (this.adding || !book.inStock) {
+      return;
+    }
+    this.adding = true;
+    this.cdr.markForCheck();
+    this.cartStore
+      .add(book.id)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.adding = false;
+          this.toast.success('Sepete eklendi');
+          this.cdr.markForCheck();
+        },
+        error: () => {
+          this.adding = false;
+          this.cdr.markForCheck();
+        },
+      });
   }
 }

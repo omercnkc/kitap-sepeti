@@ -4,7 +4,10 @@ import { NgbOffcanvas } from '@ng-bootstrap/ng-bootstrap';
 import { BehaviorSubject, EMPTY, Observable, Subject, of } from 'rxjs';
 import { catchError, map, switchMap, takeUntil, tap } from 'rxjs/operators';
 import { CatalogApi } from '../../../core/api/catalog.api';
+import { AuthService } from '../../../core/auth/auth.service';
+import { CartStore } from '../../../core/cart/cart.store';
 import { BookFilter, BookSummary, CategoryTree, PageResponse } from '../../../core/models';
+import { ToastService } from '../../../core/services/toast.service';
 import { BookFilterChange } from '../book-filters/book-filters.component';
 
 type ListState =
@@ -50,6 +53,9 @@ export class BookListPageComponent implements OnInit, OnDestroy {
     private readonly route: ActivatedRoute,
     private readonly router: Router,
     private readonly offcanvas: NgbOffcanvas,
+    private readonly auth: AuthService,
+    private readonly cartStore: CartStore,
+    private readonly toast: ToastService,
   ) {}
 
   ngOnInit(): void {
@@ -158,8 +164,19 @@ export class BookListPageComponent implements OnInit, OnDestroy {
     });
   }
 
-  onAddToCart(_book: BookSummary): void {
-    // CartStore UI-5
+  onAddToCart(book: BookSummary): void {
+    if (!this.auth.isLoggedIn()) {
+      void this.router.navigate(['/login'], {
+        queryParams: { returnUrl: this.router.url },
+      });
+      return;
+    }
+    this.cartStore
+      .add(book.id)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => this.toast.success('Sepete eklendi'),
+      });
   }
 }
 

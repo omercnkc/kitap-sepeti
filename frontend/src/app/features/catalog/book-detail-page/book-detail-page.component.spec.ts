@@ -1,8 +1,11 @@
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
 import { RouterTestingModule } from '@angular/router/testing';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
+import { AuthService } from '../../../core/auth/auth.service';
+import { CartStore } from '../../../core/cart/cart.store';
+import { ToastService } from '../../../core/services/toast.service';
 import { SharedModule } from '../../../shared/shared.module';
 import { BookDetailPageComponent } from './book-detail-page.component';
 
@@ -10,9 +13,16 @@ describe('BookDetailPageComponent', () => {
   let fixture: ComponentFixture<BookDetailPageComponent>;
   let httpMock: HttpTestingController;
   let paramMap$: BehaviorSubject<ReturnType<typeof convertToParamMap>>;
+  let router: Router;
+  let isLoggedInSpy: jasmine.Spy;
+  let addSpy: jasmine.Spy;
+  let toastSuccessSpy: jasmine.Spy;
 
   beforeEach(async () => {
     paramMap$ = new BehaviorSubject(convertToParamMap({ id: 'b1' }));
+    isLoggedInSpy = jasmine.createSpy('isLoggedIn').and.returnValue(false);
+    addSpy = jasmine.createSpy('add').and.returnValue(of({ itemCount: 1 }));
+    toastSuccessSpy = jasmine.createSpy('success');
     await TestBed.configureTestingModule({
       imports: [HttpClientTestingModule, RouterTestingModule, SharedModule],
       declarations: [BookDetailPageComponent],
@@ -21,9 +31,23 @@ describe('BookDetailPageComponent', () => {
           provide: ActivatedRoute,
           useValue: { paramMap: paramMap$.asObservable() },
         },
+        {
+          provide: AuthService,
+          useValue: { isLoggedIn: isLoggedInSpy },
+        },
+        {
+          provide: CartStore,
+          useValue: { add: addSpy },
+        },
+        {
+          provide: ToastService,
+          useValue: { success: toastSuccessSpy },
+        },
       ],
     }).compileComponents();
 
+    router = TestBed.inject(Router);
+    spyOn(router, 'navigate').and.resolveTo(true);
     fixture = TestBed.createComponent(BookDetailPageComponent);
     httpMock = TestBed.inject(HttpTestingController);
     fixture.detectChanges();
@@ -62,5 +86,65 @@ describe('BookDetailPageComponent', () => {
 
     const el = fixture.nativeElement as HTMLElement;
     expect(el.textContent).toContain('Kitap bulunamadı');
+  });
+
+  it('redirects guests to login with returnUrl on add to cart', () => {
+    httpMock.expectOne('/api/books/b1').flush({
+      id: 'b1',
+      title: 'Detay Kitap',
+      authors: [],
+      publisher: { id: 'p1', name: 'Yayınevi', slug: 'yayinevi' },
+      categories: [],
+      priceAmount: 80,
+      currency: 'TRY',
+      inStock: true,
+    });
+    fixture.detectChanges();
+
+    fixture.componentInstance.onAddToCart({
+      id: 'b1',
+      title: 'Detay Kitap',
+      authors: [],
+      publisher: { id: 'p1', name: 'Yayınevi', slug: 'yayinevi' },
+      categories: [],
+      priceAmount: 80,
+      currency: 'TRY',
+      inStock: true,
+    });
+
+    expect(router.navigate).toHaveBeenCalledWith(
+      ['/login'],
+      jasmine.objectContaining({ queryParams: jasmine.objectContaining({ returnUrl: jasmine.any(String) }) }),
+    );
+    expect(addSpy).not.toHaveBeenCalled();
+  });
+
+  it('adds to cart and toasts when logged in', () => {
+    isLoggedInSpy.and.returnValue(true);
+    httpMock.expectOne('/api/books/b1').flush({
+      id: 'b1',
+      title: 'Detay Kitap',
+      authors: [],
+      publisher: { id: 'p1', name: 'Yayınevi', slug: 'yayinevi' },
+      categories: [],
+      priceAmount: 80,
+      currency: 'TRY',
+      inStock: true,
+    });
+    fixture.detectChanges();
+
+    fixture.componentInstance.onAddToCart({
+      id: 'b1',
+      title: 'Detay Kitap',
+      authors: [],
+      publisher: { id: 'p1', name: 'Yayınevi', slug: 'yayinevi' },
+      categories: [],
+      priceAmount: 80,
+      currency: 'TRY',
+      inStock: true,
+    });
+
+    expect(addSpy).toHaveBeenCalledWith('b1');
+    expect(toastSuccessSpy).toHaveBeenCalledWith('Sepete eklendi');
   });
 });
