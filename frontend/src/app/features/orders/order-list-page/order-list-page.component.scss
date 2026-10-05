@@ -1,0 +1,13 @@
+.order-list__row {
+  cursor: pointer;
+}
+
+.order-list__card {
+  cursor: pointer;
+
+  &:hover,
+  &:focus {
+    border-color: var(--bs-primary) !important;
+    outline: none;
+  }
+}

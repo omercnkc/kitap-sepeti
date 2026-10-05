@@ -12,7 +12,7 @@ import { OrderApi } from '../../../core/api/order.api';
 import { CartStore } from '../../../core/cart/cart.store';
 import { messageForErrorCode } from '../../../core/interceptors/error-messages';
 import { toProblemDetail } from '../../../core/interceptors/error.interceptor';
-import { OrderItemResponse, OrderResponse } from '../../../core/models';
+import { OrderItemResponse, OrderResponse, OrderStatus } from '../../../core/models';
 
 const POLL_INTERVAL_MS = 2000;
 const POLL_MAX_MS = 60_000;
@@ -124,6 +124,20 @@ export class OrderDetailPageComponent implements OnInit, OnDestroy {
       (p): p is string => !!p && p.trim().length > 0,
     );
     return parts.join(', ');
+  }
+
+  statusBadgeClass(status: OrderStatus): string {
+    switch (status) {
+      case 'paid':
+        return 'bg-success';
+      case 'failed':
+        return 'bg-danger';
+      case 'cancelled':
+        return 'bg-secondary';
+      case 'pending':
+      default:
+        return 'bg-warning text-dark';
+    }
   }
 
   private applyOrder(order: OrderResponse): void {

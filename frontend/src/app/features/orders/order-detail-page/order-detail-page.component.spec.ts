@@ -92,8 +92,13 @@ describe('OrderDetailPageComponent', () => {
     fixture.detectChanges();
     expect(fixture.componentInstance.order?.status).toBe('paid');
     expect(loadCartSpy).toHaveBeenCalled();
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Ödeme başarılı');
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Deneme');
+    const paidText = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(paidText).toContain('Ödeme başarılı');
+    expect(paidText).toContain('Deneme');
+    expect(paidText).toContain('Teslimat adresi');
+    expect(paidText.toLowerCase()).toContain('birim');
+    expect(paidText).toContain('Cadde 1');
+    expect(paidText).toContain('Ara toplam');
 
     // polling should stop after paid
     const calls = getByIdSpy.calls.count();
