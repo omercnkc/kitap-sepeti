@@ -1,0 +1,49 @@
+---
+description: Kitap Sepeti frontend (Angular 13 + Bootstrap 5) kuralları. frontend/ altında veya UI işinde uygula.
+globs: frontend/**
+alwaysApply: false
+---
+
+# Frontend: Angular 13 / Node 14 kısıtları
+
+Planlama: workspace dışındaki `kitapSepetiPlanlama` içinden `ui.md` ve `docs/ui-roadmap.md`. Durum: `memory-bank/frontend.md` (yalnızca bu memory bank dosyasını güncelle).
+
+## Sürümler (değiştirme)
+- Node **14.18.1**, npm **6.14.15**, Angular **13.3** + NgModule; TypeScript 4.6, RxJS 7.5, Bootstrap 5.1, ng-bootstrap 12, angular-eslint 13.
+- Yeni paket: Angular 13 / Node 14 uyumlu sürümü sabitle; emin değilsen sor.
+
+## Yasak (Angular 14+ ya da proje kararı)
+- `standalone: true`, `bootstrapApplication`, `provideRouter`, `provideHttpClient`
+- `inject()` → constructor injection
+- Typed forms (`FormControl<string>`, `NonNullableFormBuilder`) → untyped `FormBuilder` / `FormControl`
+- `@if` / `@for` / `@defer`, `signal()`, `computed()`, `input()`, `output()`
+- Fonksiyonel guard/interceptor → class `CanActivate`, `CanLoad`, `HttpInterceptor`
+- `::ng-deep`, `bootstrap.bundle.js`, jQuery, `bypassSecurityTrust*`, kullanıcı verisiyle `innerHTML`
+- `any`
+
+```ts
+// YANLIŞ
+private http = inject(HttpClient);
+// DOĞRU
+constructor(private http: HttpClient) {}
+```
+
+## Mimari
+- NgModule: `core/`, `shared/`, `layout/`, `features/*` (lazy).
+- Component'te `HttpClient` yok; çağrılar `core/api/*.api.ts` içinde.
+- Elle abonelikte `takeUntil(this.destroy$)` + `ngOnDestroy`; iç içe `subscribe` yok; tercihen `async` pipe.
+- Sunum bileşenleri `OnPush`, yalnızca `@Input` / `@Output`.
+
+## Stil
+- Bootstrap CSS `angular.json` `styles` dizisine eklenmez.
+- `styles.scss` üzerinden SCSS import.
+- `bootstrap.bundle.js` yok; UI bileşenleri için ng-bootstrap.
+
+## Backend sözleşmesi
+- DTO'lar `docs/api/*.openapi.json` ile birebir; tahmin yok. Hata: ProblemDetail (`code`, `errors[{field,message}]`).
+- Proxy ile Gateway (8080). `/internal/**` ve `/webhooks/**` çağrılmaz.
+
+## Sınırlar
+- Yalnızca `frontend/`, `memory-bank/frontend.md`, `.cursor/rules/` (bu kural). Backend, compose, `.env` yok; `docker compose` yok.
+- Worktree / yeni branch yok; `main` üzerinde kal.
+- Her adım bitince: `npx ng lint`, `npx ng test --watch=false --browsers=ChromeHeadless`, `npx ng build`; tarayıcıda neyi doğrulayacağını kullanıcıya yaz.

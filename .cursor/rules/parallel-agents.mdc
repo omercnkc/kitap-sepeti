@@ -1,0 +1,25 @@
+---
+description: Tek klasör / main üzerinde backend ve UI işlerinin dosya ve git sınırları
+alwaysApply: true
+---
+
+# Paralel / aynı workspace: backend + UI (worktree yok)
+
+Kurulum: tek klasör (bu monorepo kökü), tek branch: **main**. `git worktree` veya yeni branch oluşturma.
+
+## UI işleri
+- Yalnızca şu yollara dokun: `frontend/`, `memory-bank/frontend.md`, `.cursor/rules/` (UI kuralları; örn. `frontend-angular13.mdc`).
+- Dokunma: backend servis modülleri, `docker-compose.yml`, `docs/api/`, `.env`, secrets, diğer memory-bank dosyaları.
+
+## Backend işleri
+- `frontend/` ve `memory-bank/frontend.md` dosyalarını düzenleme (UI işi değilse).
+
+## Git
+- `git add -A` / `git add .` yasak; yalnızca ilgili yolları stage et.
+- Push yalnızca kullanıcı isterse.
+- Branch değiştirme / yeni branch / `git worktree add` çalıştırma.
+
+## Docker
+- `docker compose down -v` yasak (volume silme yok).
+- Gerekirse yalnızca kendi servisini: `docker compose up -d --build <servis>`.
+- UI işinde `docker compose` çalıştırma; container'lar ortak ortamı bozmasın.
