@@ -8,6 +8,7 @@ import { EmptyStateComponent } from './components/empty-state/empty-state.compon
 import { FieldErrorComponent } from './components/field-error/field-error.component';
 import { BookCardComponent } from './components/book-card/book-card.component';
 import { PaginationComponent } from './components/pagination/pagination.component';
+import { ConfirmDialogComponent } from './components/confirm-dialog/confirm-dialog.component';
 
 /**
  * Ortak sunum parçaları (pipe, presentational component) burada export edilir.
@@ -21,6 +22,7 @@ import { PaginationComponent } from './components/pagination/pagination.componen
     FieldErrorComponent,
     BookCardComponent,
     PaginationComponent,
+    ConfirmDialogComponent,
   ],
   imports: [CommonModule, RouterModule, NgbModule],
   exports: [
@@ -33,6 +35,7 @@ import { PaginationComponent } from './components/pagination/pagination.componen
     FieldErrorComponent,
     BookCardComponent,
     PaginationComponent,
+    ConfirmDialogComponent,
   ],
 })
 export class SharedModule {}

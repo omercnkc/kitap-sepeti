@@ -1,11 +1,10 @@
 # Frontend (Kitap Sepeti UI)
 
-## Durum (UI-5 Adım 1–3)
+## Durum (UI-5 tamam)
 
 - Angular 13 NgModule; lazy features; proxy `/api` → Gateway 8080
-- UI-3 auth; UI-4 katalog liste/filtre/detay
-- UI-5.1–3: CartApi, CartStore, sepete ekle + header rozet
-- Sırada: CartPage (adet/sil/boşalt); `q` arama (B1)
+- UI-3 auth; UI-4 katalog; UI-5 sepet (API/store/ekle/sayfa)
+- Sırada: UI-6/7 checkout; `q` arama (B1)
 
 ## Sepet
 
@@ -16,6 +15,8 @@
 | CartStore | `core/cart/cart.store.ts` | BehaviorSubject; login→load; logout→reset; count$ |
 | Sepete ekle | BookList/Detail | girişsiz → login?returnUrl; toast «Sepete eklendi» |
 | Header rozet | `layout/header/` | `cartCount$` badge |
+| CartPage | `features/cart/cart-page/` | adet/sil/boşalt; UNAVAILABLE bandı; priceChanged/available |
+| ConfirmDialog | `shared/components/confirm-dialog/` | NgbModal; sepeti boşalt onayı |
 
 ## Katalog UI
 

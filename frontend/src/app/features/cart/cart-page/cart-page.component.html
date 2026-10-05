@@ -1,4 +1,177 @@
-<section class="container py-4">
-  <h1 class="h4 mb-2">Sepet</h1>
-  <p class="text-muted mb-0">Sepet içeriği yakında burada olacak.</p>
+<section class="container py-4 cart-page">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <h1 class="h4 mb-0">Sepet</h1>
+    <a routerLink="/books" class="small text-decoration-none">Alışverişe devam</a>
+  </div>
+
+  <app-spinner *ngIf="loading"></app-spinner>
+
+  <ng-container *ngIf="!loading && (cart$ | async) as cart">
+    <div
+      *ngIf="cart.catalogStatus === 'UNAVAILABLE'"
+      class="alert alert-warning"
+      role="status"
+    >
+      Katalog şu an kullanılamıyor. Sepet içeriği görüntüleniyor; fiyat ve stok bilgileri
+      güncel olmayabilir.
+    </div>
+
+    <app-empty-state
+      *ngIf="isEmpty(cart)"
+      title="Sepetiniz boş"
+      message="Beğendiğiniz kitapları sepete ekleyerek alışverişe başlayabilirsiniz."
+      ctaLabel="Alışverişe devam"
+      ctaLink="/books"
+    ></app-empty-state>
+
+    <div *ngIf="!isEmpty(cart)" class="row g-4">
+      <div class="col-lg-8">
+        <ul class="list-unstyled cart-page__lines mb-0">
+          <li
+            *ngFor="let line of cart.items; trackBy: trackByBookId"
+            class="cart-page__line border rounded p-3 mb-3"
+          >
+            <div class="d-flex gap-3">
+              <a [routerLink]="['/books', line.bookId]" class="cart-page__cover-link flex-shrink-0">
+                <img
+                  *ngIf="line.coverUrl; else noCover"
+                  [src]="line.coverUrl"
+                  [alt]="line.title"
+                  class="cart-page__cover"
+                />
+                <ng-template #noCover>
+                  <div class="cart-page__cover cart-page__cover--placeholder" aria-hidden="true"></div>
+                </ng-template>
+              </a>
+
+              <div class="flex-grow-1 min-w-0">
+                <div class="d-flex flex-wrap align-items-start justify-content-between gap-2">
+                  <div>
+                    <a
+                      [routerLink]="['/books', line.bookId]"
+                      class="cart-page__title text-decoration-none text-body fw-semibold"
+                    >
+                      {{ line.title }}
+                    </a>
+                    <div class="d-flex flex-wrap gap-2 mt-1">
+                      <span *ngIf="line.priceChanged" class="badge bg-warning text-dark">
+                        Fiyat değişti
+                      </span>
+                      <span *ngIf="line.available === false" class="badge bg-danger">
+                        Satışta değil
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline-danger"
+                    [disabled]="isBusy(line.bookId)"
+                    (click)="onRemove(line)"
+                  >
+                    Kaldır
+                  </button>
+                </div>
+
+                <p *ngIf="line.available === false" class="small text-danger mb-2 mt-2">
+                  Bu kitap şu an satışa uygun değil; ara toplama dahil edilmeyebilir.
+                </p>
+
+                <div
+                  class="d-flex flex-wrap align-items-center justify-content-between gap-3 mt-3"
+                >
+                  <div>
+                    <div class="small text-muted">Birim fiyat</div>
+                    <div class="fw-semibold">
+                      {{
+                        unitPrice(line)
+                          | currency: (line.currency || 'TRY') : 'symbol' : '1.2-2' : 'tr-TR'
+                      }}
+                    </div>
+                  </div>
+
+                  <div class="cart-page__qty" role="group" aria-label="Adet">
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-outline-secondary"
+                      [disabled]="!canDecrement(line)"
+                      (click)="onDecrement(line)"
+                      aria-label="Adeti azalt"
+                    >
+                      −
+                    </button>
+                    <span class="cart-page__qty-value px-2" aria-live="polite">
+                      {{ line.quantity }}
+                    </span>
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-outline-secondary"
+                      [disabled]="!canIncrement(line)"
+                      (click)="onIncrement(line)"
+                      aria-label="Adeti artır"
+                    >
+                      +
+                    </button>
+                  </div>
+
+                  <div class="text-end">
+                    <div class="small text-muted">Satır toplamı</div>
+                    <div class="fw-semibold">
+                      {{
+                        line.lineTotal
+                          | currency: (line.currency || 'TRY') : 'symbol' : '1.2-2' : 'tr-TR'
+                      }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </li>
+        </ul>
+
+        <button
+          type="button"
+          class="btn btn-outline-secondary btn-sm"
+          [disabled]="clearing || isBusy()"
+          (click)="onClear()"
+        >
+          Sepeti boşalt
+        </button>
+      </div>
+
+      <aside class="col-lg-4">
+        <div class="cart-page__summary border rounded p-3">
+          <h2 class="h6 mb-3">Sipariş özeti</h2>
+          <dl class="row small mb-2">
+            <dt class="col-7 text-muted">Ürün adedi</dt>
+            <dd class="col-5 text-end mb-0">{{ cart.itemCount }}</dd>
+          </dl>
+          <dl class="row mb-2">
+            <dt class="col-7">Ara toplam</dt>
+            <dd class="col-5 text-end mb-0 fw-semibold">
+              <ng-container *ngIf="cart.subtotal !== null; else noSubtotal">
+                {{
+                  cart.subtotal
+                    | currency: (cart.currency || 'TRY') : 'symbol' : '1.2-2' : 'tr-TR'
+                }}
+              </ng-container>
+              <ng-template #noSubtotal>—</ng-template>
+            </dd>
+          </dl>
+          <p class="small text-muted mb-3">
+            Tutarlar gösterim amaçlıdır; ödeme adımında kesinleşir.
+          </p>
+          <a
+            class="btn btn-primary w-100"
+            routerLink="/checkout"
+            [class.disabled]="isEmpty(cart)"
+            [attr.aria-disabled]="isEmpty(cart)"
+            [attr.tabindex]="isEmpty(cart) ? -1 : null"
+            (click)="isEmpty(cart) && $event.preventDefault()"
+          >
+            Siparişe geç
+          </a>
+        </div>
+      </aside>
+    </div>
+  </ng-container>
 </section>
