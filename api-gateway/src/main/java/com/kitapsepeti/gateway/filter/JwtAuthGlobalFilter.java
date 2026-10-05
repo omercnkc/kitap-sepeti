@@ -89,24 +89,23 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
 		String path = exchange.getRequest().getPath().value();
 		HttpMethod method = exchange.getRequest().getMethod();
 
-		boolean isPublicPath = isPublic(method, path);
+		// Public path'ler (auth/refresh/login, books GET, webhooks vb.) JWT doğrulamasından
+		// tamamen muaf: süresi dolmuş/bozuk Bearer header refresh akışını bozmamalı.
+		if (isPublic(method, path)) {
+			return chain.filter(exchange);
+		}
+
 		boolean isAdminPath = isAdminRequired(method, path);
 
 		String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
 
 		if (authHeader == null || !authHeader.startsWith(BEARER_PREFIX)) {
-			if (isPublicPath) {
-				return chain.filter(exchange);
-			}
 			return onError(exchange, HttpStatus.UNAUTHORIZED, "AUTHENTICATION_REQUIRED",
 					"Kimlik doğrulaması gerekli", "Kimlik doğrulaması için geçerli bir Bearer token sağlanmalıdır.");
 		}
 
 		String token = authHeader.substring(BEARER_PREFIX.length()).trim();
 		if (token.isEmpty()) {
-			if (isPublicPath) {
-				return chain.filter(exchange);
-			}
 			return onError(exchange, HttpStatus.UNAUTHORIZED, "AUTHENTICATION_REQUIRED",
 					"Kimlik doğrulaması gerekli", "Bearer token boş olamaz.");
 		}

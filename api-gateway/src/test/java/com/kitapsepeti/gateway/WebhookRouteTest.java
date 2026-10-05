@@ -83,6 +83,32 @@ class WebhookRouteTest {
 	}
 
 	@Test
+	void webhookMockPost_withoutJwt_shouldForwardToPaymentRoute() {
+		wireMock.stubFor(post(urlEqualTo("/webhooks/mock"))
+				.willReturn(aResponse()
+						.withStatus(200)
+						.withHeader("Content-Type", "application/json")
+						.withBody("{\"accepted\":true}")));
+
+		this.webTestClient.post()
+				.uri("/webhooks/mock")
+				.contentType(MediaType.APPLICATION_JSON)
+				.bodyValue("{\"eventId\":\"evt-1\",\"status\":\"succeeded\"}")
+				.exchange()
+				.expectStatus()
+				.isOk()
+				.expectHeader()
+				.exists("X-Request-Id")
+				.expectBody()
+				.jsonPath("$.accepted")
+				.isEqualTo(true);
+
+		List<LoggedRequest> requests = wireMock.findAll(postRequestedFor(urlEqualTo("/webhooks/mock")));
+		assertThat(requests).hasSize(1);
+		assertThat(requests.get(0).getHeader("X-Request-Id")).isNotBlank();
+	}
+
+	@Test
 	void apiWebhookPost_withoutJwt_shouldForwardDirectlyToPaymentService() {
 		wireMock.stubFor(post(urlEqualTo("/api/webhooks/mock"))
 				.willReturn(aResponse()

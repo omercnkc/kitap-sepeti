@@ -1469,8 +1469,12 @@
   - **Adım 8 (Payment Webhook Route):**
     - `application.yml` route listesine `payment-webhook` (`/webhooks/**`, `/api/webhooks/**` -> `${PAYMENT_SERVICE_URL:http://localhost:8085}`) eklendi.
     - Webhook rotası harici ödeme sağlayıcıları için JWT filtresinden tamamen muaf (bypass) tutuldu.
-  - Testler: `PublicAndProtectedPathsTest` (9 test), `InternalPathBlockingTest` (3 test), `WebhookRouteTest` (2 test).
-  - api-gateway modülü toplam 8 test sınıfında 37 test yeşil.
+  - Testler: `PublicAndProtectedPathsTest` (12 test), `InternalPathBlockingTest` (3 test), `WebhookRouteTest` (3 test).
+  - api-gateway modülü toplam 8 test sınıfında 41 test yeşil.
+  - **Faz 10 test/koruma kanıtı (YAPILDI, COMMIT EDİLMEDİ):** `InternalPathFilter` geçici olarak kapatılınca `InternalPathBlockingTest` 3/3 kırıldı; geri alındı.
+    Public path'ler artık JWT doğrulamasından tamamen muaf (süresi dolmuş Bearer ile `POST /api/auth/refresh` downstream'e gider).
+    Ek testler: `/api/me` header iletimi, expired-token refresh, `/webhooks/mock`, erken 401/403/404'te `X-Request-Id`.
+    E2E (8080): health UP, books 200, register 201, cart 200/401, internal 404, Swagger/docs 404. JWKS tamamen yokken hâlâ 401 `INVALID_TOKEN` (Catalog 503 ile hizalı değil; davranış değiştirilmedi).
 - **Gateway Adım 9 & 10 (YAPILDI, COMMIT EDİLMEDİ): Dockerfile, Docker Compose Entegrasyonu & Uçtan Uca (E2E) Doğrulama (Faz 10).**
   - **Adım 10 (Dockerfile):**
     - `api-gateway/Dockerfile`: Multi-stage build (`eclipse-temurin:21-jdk` build + offline cache -> `eclipse-temurin:21-jre` runtime).

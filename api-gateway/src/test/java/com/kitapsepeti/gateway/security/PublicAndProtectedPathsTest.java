@@ -1,12 +1,17 @@
 package com.kitapsepeti.gateway.security;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.findAll;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
+import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import com.github.tomakehurst.wiremock.verification.LoggedRequest;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.JWSSigner;
@@ -18,6 +23,7 @@ import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import java.time.Instant;
 import java.util.Date;
+import java.util.List;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -242,7 +248,7 @@ class PublicAndProtectedPathsTest {
 						.withHeader("Content-Type", "application/json")
 						.withBody("{\"id\":99,\"title\":\"Admin Book\"}")));
 
-		String adminToken = createJwt("admin-1", "ROLE_ADMIN");
+		String adminToken = createJwt("admin-1", "ROLE_ADMIN", Instant.now().plusSeconds(3600));
 
 		this.webTestClient.post()
 				.uri("/api/books")
@@ -257,14 +263,102 @@ class PublicAndProtectedPathsTest {
 				.isEqualTo(99);
 	}
 
+	@Test
+	void protectedMeWithValidToken_shouldForwardUserHeadersToDownstream() throws Exception {
+		wireMock.stubFor(get(urlEqualTo("/api/me"))
+				.willReturn(aResponse()
+						.withStatus(200)
+						.withHeader("Content-Type", "application/json")
+						.withBody("{\"email\":\"user@test.com\"}")));
+
+		String token = createJwt("user-42", "ROLE_CUSTOMER", Instant.now().plusSeconds(3600));
+
+		this.webTestClient.get()
+				.uri("/api/me")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+				.exchange()
+				.expectStatus()
+				.isOk()
+				.expectHeader()
+				.exists("X-Request-Id");
+
+		List<LoggedRequest> requests = wireMock.findAll(getRequestedFor(urlEqualTo("/api/me")));
+		assertThat(requests).hasSize(1);
+		assertThat(requests.get(0).getHeader("X-User-Id")).isEqualTo("user-42");
+		assertThat(requests.get(0).getHeader("X-User-Role")).isEqualTo("ROLE_CUSTOMER");
+	}
+
+	@Test
+	void publicAuthRefreshWithExpiredAccessToken_shouldStillReachDownstream() throws Exception {
+		wireMock.stubFor(post(urlEqualTo("/api/auth/refresh"))
+				.willReturn(aResponse()
+						.withStatus(200)
+						.withHeader("Content-Type", "application/json")
+						.withBody("{\"accessToken\":\"new-token\"}")));
+
+		String expiredAccessToken = createJwt("user-42", "ROLE_CUSTOMER", Instant.now().minusSeconds(60));
+
+		this.webTestClient.post()
+				.uri("/api/auth/refresh")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + expiredAccessToken)
+				.contentType(MediaType.APPLICATION_JSON)
+				.bodyValue("{\"refreshToken\":\"refresh-xyz\"}")
+				.exchange()
+				.expectStatus()
+				.isOk()
+				.expectHeader()
+				.exists("X-Request-Id")
+				.expectBody()
+				.jsonPath("$.accessToken")
+				.isEqualTo("new-token");
+
+		List<LoggedRequest> requests = wireMock.findAll(postRequestedFor(urlEqualTo("/api/auth/refresh")));
+		assertThat(requests).hasSize(1);
+	}
+
+	@Test
+	void earlyAuthErrors_shouldIncludeRequestIdHeader() throws Exception {
+		this.webTestClient.get()
+				.uri("/api/cart")
+				.exchange()
+				.expectStatus()
+				.isUnauthorized()
+				.expectHeader()
+				.exists("X-Request-Id");
+
+		String customerToken = createJwt("customer-1", "ROLE_CUSTOMER", Instant.now().plusSeconds(3600));
+		this.webTestClient.post()
+				.uri("/api/books")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + customerToken)
+				.contentType(MediaType.APPLICATION_JSON)
+				.bodyValue("{\"title\":\"x\"}")
+				.exchange()
+				.expectStatus()
+				.isForbidden()
+				.expectHeader()
+				.exists("X-Request-Id");
+
+		this.webTestClient.get()
+				.uri("/internal/stock/check")
+				.exchange()
+				.expectStatus()
+				.isNotFound()
+				.expectHeader()
+				.exists("X-Request-Id");
+	}
+
 	private String createJwt(String subject, String role) throws Exception {
+		return createJwt(subject, role, Instant.now().plusSeconds(3600));
+	}
+
+	private String createJwt(String subject, String role, Instant expiresAt) throws Exception {
 		JWSSigner signer = new RSASSASigner(rsaKey);
 		JWTClaimsSet claimsSet = new JWTClaimsSet.Builder()
 				.subject(subject)
 				.claim("role", role)
 				.issuer("kitapsepeti-user-service")
 				.issueTime(Date.from(Instant.now()))
-				.expirationTime(Date.from(Instant.now().plusSeconds(3600)))
+				.expirationTime(Date.from(expiresAt))
 				.build();
 
 		SignedJWT signedJWT = new SignedJWT(
