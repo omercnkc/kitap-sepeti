@@ -60,7 +60,12 @@
       {{ formError }}
     </div>
 
-    <button type="submit" class="btn btn-primary w-100" [disabled]="submitting">
+    <button
+      type="submit"
+      class="btn btn-primary w-100"
+      [disabled]="submitting"
+      [attr.aria-busy]="submitting"
+    >
       {{ submitting ? 'Giriş yapılıyor…' : 'Giriş yap' }}
     </button>
   </form>

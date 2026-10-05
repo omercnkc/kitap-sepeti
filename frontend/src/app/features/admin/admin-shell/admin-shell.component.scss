@@ -1,3 +1,14 @@
+.admin-shell {
+  min-width: 0;
+  overflow-x: clip;
+  padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+  padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+}
+
+.admin-shell .row > [class*='col'] {
+  min-width: 0;
+}
+
 .admin-shell__nav {
   position: sticky;
   top: 1rem;

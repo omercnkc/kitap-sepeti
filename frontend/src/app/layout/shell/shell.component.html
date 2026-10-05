@@ -1,6 +1,7 @@
 <div class="app-shell d-flex flex-column min-vh-100">
+  <a class="visually-hidden-focusable skip-link" href="#main-content">İçeriğe atla</a>
   <app-header></app-header>
-  <main class="app-shell__main flex-grow-1">
+  <main id="main-content" class="app-shell__main flex-grow-1" tabindex="-1">
     <router-outlet></router-outlet>
   </main>
   <app-footer></app-footer>

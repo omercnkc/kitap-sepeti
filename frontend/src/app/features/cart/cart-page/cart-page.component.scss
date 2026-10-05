@@ -3,11 +3,16 @@
 }
 
 .cart-page__cover {
-  width: 72px;
-  height: 96px;
+  width: 56px;
+  height: 76px;
   object-fit: cover;
   border-radius: 0.25rem;
   background: #f1f3f5;
+
+  @media (min-width: 576px) {
+    width: 72px;
+    height: 96px;
+  }
 
   &--placeholder {
     display: block;

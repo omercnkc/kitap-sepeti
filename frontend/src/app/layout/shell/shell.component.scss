@@ -1,3 +1,8 @@
 .app-shell__main {
-  padding: 1rem 0 2rem;
+  padding: 0.75rem 0 2rem;
+  min-width: 0;
+
+  @media (min-width: 576px) {
+    padding-top: 1rem;
+  }
 }

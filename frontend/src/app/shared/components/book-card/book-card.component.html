@@ -34,7 +34,10 @@
       type="button"
       class="btn btn-sm btn-outline-primary w-100 mt-2"
       [disabled]="!book.inStock"
+      [attr.aria-label]="'Sepete ekle: ' + book.title"
       (click)="onAddToCart($event)"
+      (keydown.enter)="onAddToCart($event)"
+      (keydown.space)="onAddToCart($event)"
     >
       Sepete ekle
     </button>

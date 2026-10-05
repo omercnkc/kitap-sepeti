@@ -5,7 +5,7 @@
 .book-detail__cover {
   display: block;
   width: 100%;
-  max-width: 280px;
+  max-width: min(280px, 100%);
   aspect-ratio: 3 / 4;
   object-fit: cover;
   background: #f3f4f6;

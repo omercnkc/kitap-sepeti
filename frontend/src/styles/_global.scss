@@ -1,9 +1,46 @@
-// Uygulama geneli tipografi ve yardımcı sınıflar.
+// Uygulama geneli tipografi, taşma ve odak.
+
+html {
+  overflow-x: clip;
+}
 
 body {
   min-height: 100vh;
+  overflow-x: clip;
+}
+
+// Dar ekranda flex/grid çocukları yatay taşmasın
+.min-w-0 {
+  min-width: 0 !important;
 }
 
 .app-page {
   padding: 1.5rem;
+}
+
+// Klavye odağı — fare tıklamasında Bootstrap varsayılan gölgeyi bastırma
+:focus-visible {
+  outline: 2px solid var(--bs-primary);
+  outline-offset: 2px;
+}
+
+.btn:focus:not(:focus-visible),
+.form-control:focus:not(:focus-visible),
+.form-select:focus:not(:focus-visible),
+.form-check-input:focus:not(:focus-visible),
+.nav-link:focus:not(:focus-visible) {
+  box-shadow: none;
+}
+
+// Skip link (Bootstrap visually-hidden-focusable)
+.skip-link:focus {
+  position: fixed;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 2000;
+  padding: 0.5rem 0.75rem;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 0.25rem;
+  text-decoration: none;
 }

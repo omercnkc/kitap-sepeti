@@ -75,6 +75,14 @@
           type="button"
           class="btn btn-primary"
           [disabled]="!state.book.inStock || adding"
+          [attr.aria-busy]="adding"
+          [attr.aria-label]="
+            !state.book.inStock
+              ? 'Tükendi'
+              : adding
+              ? 'Sepete ekleniyor'
+              : 'Sepete ekle: ' + state.book.title
+          "
           (click)="onAddToCart(state.book)"
         >
           {{ !state.book.inStock ? 'Tükendi' : adding ? 'Ekleniyor…' : 'Sepete ekle' }}

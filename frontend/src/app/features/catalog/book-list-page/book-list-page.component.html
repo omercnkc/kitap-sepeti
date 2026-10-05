@@ -4,6 +4,7 @@
     <button
       type="button"
       class="btn btn-outline-secondary btn-sm d-lg-none"
+      aria-label="Filtreleri aç"
       (click)="openFilters(filtersOffcanvas)"
     >
       Filtreler
@@ -22,7 +23,7 @@
       ></app-book-filters>
     </aside>
 
-    <div class="col-lg-9">
+    <div class="col-lg-9 min-w-0">
       <ng-container *ngIf="state$ | async as state">
         <app-spinner *ngIf="state.kind === 'loading'"></app-spinner>
 
@@ -41,7 +42,7 @@
         <div *ngIf="state.kind === 'ready'" class="row g-3">
           <div
             *ngFor="let book of state.page.items"
-            class="col-6 col-sm-4 col-md-3 col-xl-3"
+            class="col-12 col-sm-6 col-md-4 col-xl-3"
           >
             <app-book-card [book]="book" (addToCart)="onAddToCart($event)"></app-book-card>
           </div>

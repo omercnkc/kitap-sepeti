@@ -1,10 +1,10 @@
 # Frontend (Kitap Sepeti UI)
 
-## Durum (UI-9 tamam — adım 7–9)
+## Durum (UI-10 adım 1–2, 6–7)
 
 - Angular 13 NgModule; lazy features; proxy `/api` → Gateway 8080
-- UI-9.7–9: publish / archive / stock-adjust + dar ekran kart listeler
-- Sırada: UI-10 Docker; `q` arama (B1); Notifications
+- UI-10: responsive/a11y cila, production budgets, E2E checklist; Docker UI hazır
+- Sırada: Notifications (UI-8); `q` arama (B1)
 
 ## Admin
 
@@ -123,3 +123,59 @@ docker compose up -d frontend
 ```
 
 Backend stack: monorepo kökünden `docker compose up -d` (gateway + servisler). `docker compose down -v` yasak (volume silmez).
+
+## Production budgets (`angular.json`)
+
+| Tip | Warning | Error | Gerekçe |
+| --- | --- | --- | --- |
+| `initial` | **600kb** | 1mb | Bootstrap 5 + Angular 13 main ~580kb; 500kb uyarısı sürekliydi |
+| `anyComponentStyle` | 2kb | 4kb | Değişmedi |
+
+`ng build --configuration production` uyarısız geçmeli.
+
+## UI-10 responsive / a11y notları
+
+- `html/body`: `overflow-x: clip`; `:focus-visible` outline
+- Skip link → `#main-content`
+- Header brand + kullanıcı adı ellipsis (dar nav)
+- `/books`: 280px tek sütun (`col-12 col-sm-6…`); filtre butonu `aria-label`
+- BookCard / detay: «Sepete ekle» `aria-label` + klavye (button native Enter/Space)
+- Login: label↔input; submit `aria-busy`
+- Cart: kapak 56px (xs) / 72px (sm+)
+- Admin shell: `min-width: 0`, safe-area padding; listeler lg tablo / dar kart
+
+## E2E kontrol listesi (elle)
+
+İşaretleyin: `[ ]` → `[x]`
+
+### Ortam
+
+- [ ] Gateway + servisler ayakta (`docker compose ps` healthy)
+- [ ] **A)** `cd frontend; npm start` → http://localhost:4200 **veya**
+- [ ] **B)** Compose UI: `npm start` kapalıyken `docker compose up -d frontend` → http://127.0.0.1:4200
+- [ ] Port notu: host **4200** ng serve ile compose frontend arasında paylaşılamaz
+
+### Mutlu yol (USER)
+
+- [ ] Kayıt ol (veya mevcut USER ile giriş)
+- [ ] Katalog `/books` — liste + filtre (dar: Filtreler offcanvas)
+- [ ] Kitap detay → Sepete ekle (klavye: Tab → Enter)
+- [ ] `/cart` — adet / sil
+- [ ] Adres ekle (`/account/addresses` veya checkout’ta)
+- [ ] `/checkout` → sipariş oluştur
+- [ ] Mock ödeme → paid (veya polling)
+- [ ] `/orders/:id` özet görünür
+
+### Admin
+
+- [ ] ADMIN ile giriş; header’da Admin linki
+- [ ] `/admin/books/new` — yayınevi/yazar/kategori seç → oluştur (taslak)
+- [ ] Yayınla → `/books` vitrinde görünür
+- [ ] Arşivle → vitrinden kalkar
+- [ ] Stok düzelt (opsiyonel) → Tükendi / stok güncellenir
+
+### Compose SPA
+
+- [ ] `/books` açılır
+- [ ] Derin link `/books/<id>` yenile → 404 değil (nginx `try_files`)
+- [ ] `/api/books` proxy → gateway 200
