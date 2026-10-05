@@ -11,10 +11,11 @@
 | Parça | Yol | Not |
 | --- | --- | --- |
 | Shell | `features/admin/admin-shell/` | yan menü; lg altı NgbOffcanvas |
+| Header Sepet | `layout/header/` | **Kural A:** `role===ADMIN` iken Sepet+rozet her yerde gizli; USER/misafir aynı |
 | Publishers / Authors | `admin-*-page/` | lg tablo / dar kart; modal CRUD |
 | Categories | `admin-categories-page/` | ağaç; parent taşıma; sil |
-| Books list | `admin-books-page/` | status filter; Yayınla/Arşivle/Stok |
-| Book form | `admin-book-form-page/` | create/edit; lifecycle + stok modal |
+| Books list | `admin-books-page/` | status filter; Yayınla/Arşivle/Stok; taslak≠vitrin yardım metni |
+| Book form | `admin-book-form-page/` | create/edit; lifecycle + stok; taslak/vitrin notu |
 | AdminCatalogApi | `core/api/admin-catalog.api.ts` | publish/archive/stock-adjustments |
 | Hata mesajları | `error-messages.ts` | STOCK_BELOW_RESERVED, BOOK_NOT_PUBLISHABLE |
 | Guard | `admin.guard.ts` | canActivate + canLoad → `/books` |

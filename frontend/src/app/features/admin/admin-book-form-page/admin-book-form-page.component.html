@@ -30,9 +30,14 @@
       </button>
     </div>
 
+    <p *ngIf="isCreate" class="small text-muted mb-3">
+      Kayıt <strong>taslak</strong> olarak oluşur; vitrinde görünmez. Vitrinde görmek için kayıt
+      sonrası <strong>Yayınla</strong> kullanın (<a routerLink="/admin/books">Kitaplar</a>).
+    </p>
+
     <div
       *ngIf="!isCreate && book"
-      class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3"
+      class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2"
     >
       <div class="d-flex flex-wrap gap-3 small text-muted">
         <span>
@@ -73,6 +78,14 @@
         </button>
       </div>
     </div>
+
+    <p
+      *ngIf="!isCreate && book && book.status === 'draft'"
+      class="small text-muted mb-3"
+    >
+      Bu kitap taslak; vitrinde (<a routerLink="/books">/books</a>) görünmez. Vitrinde görmek için
+      <strong>Yayınla</strong> gerekir.
+    </p>
 
     <form [formGroup]="form" (ngSubmit)="onSubmit()" novalidate class="admin-book-form__form">
       <input type="hidden" formControlName="version" />

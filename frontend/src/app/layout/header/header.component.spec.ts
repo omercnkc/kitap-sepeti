@@ -86,6 +86,42 @@ describe('HeaderComponent', () => {
     expect(badge?.textContent?.trim()).toBe('3');
   });
 
+  it('should hide cart for ADMIN (rule A)', () => {
+    isAdminSpy.and.returnValue(true);
+    cartCount$.next(3);
+    currentUser$.next({
+      id: 'u1',
+      email: 'admin@b.com',
+      firstName: 'Ada',
+      lastName: 'Min',
+      phone: null,
+      role: 'ADMIN',
+      status: 'ACTIVE',
+    });
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('a[routerLink="/cart"]')).toBeFalsy();
+    expect(el.querySelector('a[routerLink="/admin"]')).toBeTruthy();
+  });
+
+  it('should show cart for USER', () => {
+    isAdminSpy.and.returnValue(false);
+    currentUser$.next({
+      id: 'u1',
+      email: 'a@b.com',
+      firstName: 'Ali',
+      lastName: 'Veli',
+      phone: null,
+      role: 'USER',
+      status: 'ACTIVE',
+    });
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('a[routerLink="/cart"]')).toBeTruthy();
+  });
+
   it('should show admin link for ADMIN', () => {
     isAdminSpy.and.returnValue(true);
     currentUser$.next({

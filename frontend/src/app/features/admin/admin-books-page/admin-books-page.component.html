@@ -1,10 +1,15 @@
 <section class="admin-books">
-  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
     <h2 class="h4 mb-0">Kitaplar</h2>
     <button type="button" class="btn btn-primary btn-sm" (click)="openCreate()">
       Yeni kitap
     </button>
   </div>
+  <p class="small text-muted mb-3">
+    Yeni kitaplar <strong>taslak</strong> olarak oluşur; vitrinde (<a routerLink="/books">/books</a>)
+    görünmez. Vitrinde görmek için <strong>Yayınla</strong> gerekir. Tüm durumlar bu listede
+    (taslak / yayında / arşiv) filtrelenir.
+  </p>
 
   <div class="row g-2 align-items-end mb-3">
     <div class="col-12 col-sm-6 col-md-4 col-lg-3">

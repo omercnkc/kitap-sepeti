@@ -18,7 +18,7 @@
         <li class="nav-item">
           <a class="nav-link" routerLink="/books" routerLinkActive="active">Kitaplar</a>
         </li>
-        <li class="nav-item">
+        <li class="nav-item" *ngIf="showCart$ | async">
           <a class="nav-link position-relative" routerLink="/cart" routerLinkActive="active">
             Sepet
             <span
@@ -87,6 +87,7 @@
         Kitaplar
       </a>
       <a
+        *ngIf="showCart$ | async"
         class="nav-link px-0"
         routerLink="/cart"
         routerLinkActive="active"

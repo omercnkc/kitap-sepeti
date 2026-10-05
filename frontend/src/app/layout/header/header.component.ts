@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, TemplateRef } from '@angular/core';
 import { Router } from '@angular/router';
 import { NgbOffcanvas } from '@ng-bootstrap/ng-bootstrap';
 import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { AuthService } from '../../core/auth/auth.service';
 import { CartStore } from '../../core/cart/cart.store';
 import { UserResponse } from '../../core/models';
@@ -15,6 +16,10 @@ import { UserResponse } from '../../core/models';
 export class HeaderComponent {
   readonly currentUser$: Observable<UserResponse | null> = this.auth.currentUser$;
   readonly cartCount$: Observable<number> = this.cartStore.count$;
+  /** Kural A: ADMIN iken Sepet her yerde gizli; USER/misafirde görünür. */
+  readonly showCart$: Observable<boolean> = this.currentUser$.pipe(
+    map((user) => !(user && this.auth.isAdmin(user))),
+  );
 
   constructor(
     private readonly offcanvas: NgbOffcanvas,
