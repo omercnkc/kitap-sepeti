@@ -1,30 +1,130 @@
 <section class="container py-4" style="max-width: 28rem">
   <h1 class="h4 mb-3">Kayıt ol</h1>
 
-  <!--
-    TODO (öğrenme): Reactive Form bağla — LoginPage kalıbını örnek al.
-    Alanlar (OpenAPI RegisterRequest):
-      - firstName
-      - lastName
-      - email
-      - password
-      - phone (opsiyonel)
-    Her alan için app-field-error [field]="..." kullan.
-  -->
+  <form [formGroup]="form" (ngSubmit)="onSubmit()" novalidate>
+    <div class="mb-3">
+      <label class="form-label" for="register-firstName">Ad</label>
+      <input
+        id="register-firstName"
+        type="text"
+        class="form-control"
+        formControlName="firstName"
+        autocomplete="given-name"
+        [class.is-invalid]="form.get('firstName')!.touched && form.get('firstName')!.invalid"
+      />
+      <div
+        *ngIf="form.get('firstName')!.touched && form.get('firstName')!.hasError('required')"
+        class="invalid-feedback d-block"
+      >
+        Ad gerekli.
+      </div>
+      <app-field-error [errors]="fieldErrors" field="firstName"></app-field-error>
+    </div>
 
-  <p class="text-muted small mb-3">
-    Form iskeleti hazır — Reactive Form ve submit’i sen ekleyeceksin.
-  </p>
+    <div class="mb-3">
+      <label class="form-label" for="register-lastName">Soyad</label>
+      <input
+        id="register-lastName"
+        type="text"
+        class="form-control"
+        formControlName="lastName"
+        autocomplete="family-name"
+        [class.is-invalid]="form.get('lastName')!.touched && form.get('lastName')!.invalid"
+      />
+      <div
+        *ngIf="form.get('lastName')!.touched && form.get('lastName')!.hasError('required')"
+        class="invalid-feedback d-block"
+      >
+        Soyad gerekli.
+      </div>
+      <app-field-error [errors]="fieldErrors" field="lastName"></app-field-error>
+    </div>
 
-  <!-- TODO: [formGroup]="form" (ngSubmit)="onSubmit()" -->
-  <form novalidate>
-    <!-- TODO: firstName -->
-    <!-- TODO: lastName -->
-    <!-- TODO: email -->
-    <!-- TODO: password -->
-    <!-- TODO: phone (opsiyonel) -->
-    <!-- TODO: genel formError alert -->
-    <!-- TODO: submit butonu -->
+    <div class="mb-3">
+      <label class="form-label" for="register-email">E-posta</label>
+      <input
+        id="register-email"
+        type="email"
+        class="form-control"
+        formControlName="email"
+        autocomplete="email"
+        [class.is-invalid]="form.get('email')!.touched && form.get('email')!.invalid"
+      />
+      <div
+        *ngIf="form.get('email')!.touched && form.get('email')!.hasError('required')"
+        class="invalid-feedback d-block"
+      >
+        E-posta gerekli.
+      </div>
+      <div
+        *ngIf="form.get('email')!.touched && form.get('email')!.hasError('email')"
+        class="invalid-feedback d-block"
+      >
+        Geçerli bir e-posta girin.
+      </div>
+      <app-field-error [errors]="fieldErrors" field="email"></app-field-error>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label" for="register-password">Parola</label>
+      <input
+        id="register-password"
+        type="password"
+        class="form-control"
+        formControlName="password"
+        autocomplete="new-password"
+        [class.is-invalid]="form.get('password')!.touched && form.get('password')!.invalid"
+      />
+      <div
+        *ngIf="form.get('password')!.touched && form.get('password')!.hasError('required')"
+        class="invalid-feedback d-block"
+      >
+        Parola gerekli.
+      </div>
+      <div
+        *ngIf="form.get('password')!.touched && form.get('password')!.hasError('minlength')"
+        class="invalid-feedback d-block"
+      >
+        Parola en az 8 karakter olmalı.
+      </div>
+      <div
+        *ngIf="form.get('password')!.touched && form.get('password')!.hasError('maxlength')"
+        class="invalid-feedback d-block"
+      >
+        Parola en fazla 72 karakter olabilir.
+      </div>
+      <app-field-error [errors]="fieldErrors" field="password"></app-field-error>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label" for="register-phone">Telefon <span class="text-muted">(opsiyonel)</span></label>
+      <input
+        id="register-phone"
+        type="tel"
+        class="form-control"
+        formControlName="phone"
+        autocomplete="tel"
+      />
+      <app-field-error [errors]="fieldErrors" field="phone"></app-field-error>
+    </div>
+
+    <div class="form-check mb-3">
+      <input
+        id="register-remember"
+        type="checkbox"
+        class="form-check-input"
+        formControlName="rememberMe"
+      />
+      <label class="form-check-label" for="register-remember">Beni hatırla</label>
+    </div>
+
+    <div *ngIf="formError" class="alert alert-danger py-2" role="alert">
+      {{ formError }}
+    </div>
+
+    <button type="submit" class="btn btn-primary w-100" [disabled]="submitting">
+      {{ submitting ? 'Kayıt yapılıyor…' : 'Kayıt ol' }}
+    </button>
   </form>
 
   <p class="mt-3 mb-0 small text-muted">

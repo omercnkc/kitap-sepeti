@@ -1,15 +1,14 @@
 # Frontend (Kitap Sepeti UI)
 
-## Durum (UI-3 Adım 1–5)
+## Durum (UI-3 Adım 1–5 + Register formu)
 
 - Angular 13 NgModule iskeleti, global SCSS (Bootstrap kaynak), layout (Shell/Header/Footer/NotFound)
 - Lazy feature modülleri: catalog, auth (login/register), cart, checkout, orders, account, notifications, admin
 - Geliştirme proxy: `/api` → `http://localhost:8080` (API Gateway)
 - Locale: `tr-TR` (`LOCALE_ID` + `registerLocaleData`)
 - UI-2: models, CatalogApi, Toast, ErrorInterceptor, Spinner/EmptyState/FieldError; `/books` liste denemesi
-- UI-3.1–3: Auth modelleri, AuthApi, TokenStorageService, AuthService
-- UI-3.4–5: LoginPage (tam), RegisterPage (**iskelet — kullanıcı dolduracak**), APP_INITIALIZER, Header currentUser$
-- Sırada: AuthInterceptor, Guard; Register formunu kullanıcı tamamlar
+- UI-3.1–5: AuthApi/TokenStorage/AuthService, LoginPage, RegisterPage (Reactive Forms), APP_INITIALIZER, Header
+- Sırada: AuthInterceptor, Guard
 
 ## Auth katmanı
 
@@ -20,8 +19,8 @@
 | TokenStorage | `core/auth/token-storage.service.ts` | Access bellek; refresh rememberMe → local/session |
 | AuthService | `core/auth/auth.service.ts` | `currentUser$`; login/register/logout/refresh |
 | APP_INITIALIZER | `core/auth/auth.initializer.ts` | refresh varsa → access + getMe; yok/hata → sessiz logout |
-| LoginPage | `features/auth/login-page/` | Reactive Forms örnek kalıp |
-| RegisterPage | `features/auth/register-page/` | **İSKELET ONLY** — FormGroup/submit TODO |
+| LoginPage | `features/auth/login-page/` | Reactive Forms |
+| RegisterPage | `features/auth/register-page/` | Reactive Forms (login kalıbı); phone opsiyonel |
 
 ## Ortam
 
