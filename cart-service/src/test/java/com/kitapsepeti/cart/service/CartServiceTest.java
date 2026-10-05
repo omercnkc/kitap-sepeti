@@ -23,6 +23,7 @@ import com.kitapsepeti.cart.exception.CatalogUnavailableException;
 import org.hibernate.exception.ConstraintViolationException;
 import org.hibernate.exception.ConstraintViolationException.ConstraintKind;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataIntegrityViolationException;
 
 /** {@link CartService}'in akış kuralları: Catalog transaction'dan önce, yalnızca ilk sepet yarışı bir kez yeniden denenir. */
@@ -67,6 +68,39 @@ class CartServiceTest {
 	}
 
 	@Test
+	void firstCartDeadlockIsRetriedOnceInNewTransaction() {
+		CartContents contents = new CartContents(List.of());
+		when(catalog.requireAvailableBook(book.id())).thenReturn(book);
+		when(transactions.addItem(userId, book, 2)).thenThrow(lockFailure(1213)).thenReturn(contents);
+		when(assembler.assemble(contents)).thenReturn(CartResponse.empty());
+
+		assertThat(service.addItem(userId, request)).isSameAs(CartResponse.empty());
+		verify(transactions, times(2)).addItem(userId, book, 2);
+		verify(catalog, times(1)).requireAvailableBook(book.id());
+	}
+
+	@Test
+	void secondDeadlockPropagates() {
+		CannotAcquireLockException second = lockFailure(1213);
+		when(catalog.requireAvailableBook(book.id())).thenReturn(book);
+		when(transactions.addItem(userId, book, 2)).thenThrow(violation("uk_carts_active_user")).thenThrow(second);
+
+		assertThatThrownBy(() -> service.addItem(userId, request)).isSameAs(second);
+		verify(transactions, times(2)).addItem(userId, book, 2);
+		verifyNoInteractions(assembler);
+	}
+
+	@Test
+	void lockWaitTimeoutIsNotRetried() {
+		CannotAcquireLockException timeout = lockFailure(1205);
+		when(catalog.requireAvailableBook(book.id())).thenReturn(book);
+		when(transactions.addItem(userId, book, 2)).thenThrow(timeout);
+
+		assertThatThrownBy(() -> service.addItem(userId, request)).isSameAs(timeout);
+		verify(transactions, times(1)).addItem(userId, book, 2);
+	}
+
+	@Test
 	void otherConstraintViolationsAreNotRetried() {
 		DataIntegrityViolationException other = violation("uk_cart_items_cart_book");
 		when(catalog.requireAvailableBook(book.id())).thenReturn(book);
@@ -96,6 +130,11 @@ class CartServiceTest {
 				new SQLException("db message", "23000", 1062), "insert into t values (?)", ConstraintKind.UNIQUE,
 				constraint);
 		return new DataIntegrityViolationException("could not execute statement", hibernate);
+	}
+
+	private static CannotAcquireLockException lockFailure(int mysqlErrorCode) {
+		return new CannotAcquireLockException("could not execute statement",
+				new SQLException("db message", "40001", mysqlErrorCode));
 	}
 
 }

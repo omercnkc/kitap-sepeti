@@ -37,4 +37,12 @@ public interface CartRepository extends JpaRepository<Cart, UUID> {
 	@Query("select c from Cart c where c.userId = :userId and c.status = :status")
 	Optional<Cart> lockByUserIdAndStatus(@Param("userId") UUID userId, @Param("status") CartStatus status);
 
+	/**
+	 * Durumdan bağımsız, id ile {@code FOR UPDATE} (satırlar yüklenmeden). Aynı kullanıcının sepet yazımlarıyla aynı
+	 * satırda sıraya girer; bekleme üst sınırı {@link #findActiveByUserIdForUpdate} ile aynı.
+	 */
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("select c from Cart c where c.id = :id")
+	Optional<Cart> findByIdForUpdate(@Param("id") UUID id);
+
 }

@@ -26,15 +26,16 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 /**
- * Tam uygulama bağlamı açan testlerin ortak tabanı: MockMvc, Testcontainers MySQL, gerçek HTTP JWKS ucu ve
- * Catalog taklidi ({@link CatalogStub}, {@code app.catalog.base-url}).
+ * Tam uygulama bağlamı açan testlerin ortak tabanı: MockMvc, Testcontainers MySQL ve RabbitMQ (CartCheckedOut
+ * consumer'ı test profilinde kapalı), gerçek HTTP JWKS ucu ve Catalog taklidi ({@link CatalogStub},
+ * {@code app.catalog.base-url}).
  * Token'lar test JVM'inde üretilen anahtarla imzalanır ({@link TestJwt}); bütün alt sınıflar aynı bağlamı,
  * aynı konteyneri ve aynı JWKS sunucusunu paylaşır.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Import({ TestcontainersConfiguration.class, MutableClockConfiguration.class })
+@Import({ TestcontainersConfiguration.class, RabbitTestcontainersConfiguration.class, MutableClockConfiguration.class })
 public abstract class ApiTestSupport {
 
 	private static final JwksServer JWKS = JwksServer.start(TestJwt.publicJwksJson());

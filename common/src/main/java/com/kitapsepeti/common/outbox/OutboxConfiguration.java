@@ -2,6 +2,7 @@ package com.kitapsepeti.common.outbox;
 
 import java.time.Clock;
 
+import com.kitapsepeti.common.amqp.EventsExchange;
 import jakarta.persistence.EntityManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,14 +35,10 @@ public class OutboxConfiguration {
 
 	private static final Logger log = LoggerFactory.getLogger(OutboxConfiguration.class);
 
-	/**
-	 * Exchange'in TEK tanımı (tüm servisler aynı exchange'e yayınlar). Durable, auto-delete değil, argümansız:
-	 * broker yeniden başlasa da, hiç kuyruk bağlı olmasa da kalır. Farklı tanımla declare broker'da
-	 * PRECONDITION_FAILED ile kanalı kapatır.
-	 */
+	/** Tüm servisler aynı exchange'e yayınlar; tanım {@link EventsExchange}'te. */
 	@Bean
 	public TopicExchange eventsExchange(OutboxProperties properties) {
-		return new TopicExchange(properties.exchange(), true, false);
+		return EventsExchange.create(properties.exchange());
 	}
 
 	@Bean

@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import com.kitapsepeti.cart.TestcontainersConfiguration;
 import com.kitapsepeti.cart.entity.Cart;
+import com.kitapsepeti.cart.entity.CartStatus;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -97,6 +98,39 @@ class CartLockingTest {
 		long waitedMillis = waiter.get(10, TimeUnit.SECONDS);
 
 		assertThat(waitedMillis).isGreaterThanOrEqualTo(HOLD_MILLIS / 2).isLessThan(LOCK_TIMEOUT_MILLIS);
+	}
+
+	/**
+	 * CartCheckedOut tüketicisi (id ile kilit) ile kullanıcının eklemesi (kullanıcı + active ile kilit) aynı satırda
+	 * sıraya girer; kapanış commit edilince bekleyen ekleme aktif sepet bulamaz (READ COMMITTED: kilitli okuma son
+	 * commit'i görür) ve servis yeni sepet açar.
+	 */
+	@Test
+	void checkoutByIdBlocksActiveLockAndWaiterThenSeesNoActiveCart() throws Exception {
+		UUID cartId = carts.findByUserIdAndStatus(userId, CartStatus.ACTIVE)
+			.orElseThrow()
+			.getId();
+		CountDownLatch locked = new CountDownLatch(1);
+		CountDownLatch release = new CountDownLatch(1);
+		TransactionTemplate readCommitted = new TransactionTemplate(transactionManager);
+		readCommitted.setIsolationLevel(TransactionTemplate.ISOLATION_READ_COMMITTED);
+		Future<?> holder = pool.submit(() -> readCommitted.executeWithoutResult(status -> {
+			Cart cart = carts.findByIdForUpdate(cartId).orElseThrow();
+			locked.countDown();
+			await(release);
+			cart.checkout(Clock.systemUTC());
+			carts.flush();
+		}));
+		assertThat(locked.await(10, TimeUnit.SECONDS)).isTrue();
+
+		Future<Boolean> waiter = pool.submit(
+				() -> readCommitted.execute(status -> carts.findActiveByUserIdForUpdate(userId).isPresent()));
+		Thread.sleep(HOLD_MILLIS);
+		assertThat(waiter.isDone()).as("user lock waits for the checkout lock").isFalse();
+		release.countDown();
+		holder.get(10, TimeUnit.SECONDS);
+
+		assertThat(waiter.get(10, TimeUnit.SECONDS)).isFalse();
 	}
 
 	@Test

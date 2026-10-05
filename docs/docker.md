@@ -64,14 +64,21 @@ Admin denemesi için Docker'daki user-service'ten (`http://localhost:8081/api/au
 |---|---|
 | `CART_DB_USER`, `CART_DB_PASSWORD` | `cart_db` kullanıcısı (MySQL init script'i `20-cart-db.sh` de aynı değerlerle oluşturur). |
 | `CART_INTERNAL_KEY_ORDER_SHA256` | `ORDER_INTERNAL_API_KEY`'in SHA-256 özeti (64 hex). Catalog'dan farklı olarak boşsa ya da 64 hex değilse cart-service açılmaz. |
+| `RABBITMQ_USER`, `RABBITMQ_PASSWORD` | `CartCheckedOut` olaylarının tüketildiği broker kullanıcısı (diğer servislerle ortak). |
 
 Compose'da sabit verilenler: `CART_DB_HOST=mysql`, `USER_SERVICE_JWKS_URI=http://user-service:8081/.well-known/jwks.json`,
-`CATALOG_BASE_URL=http://catalog-service:8082`. Token issuer'ı (`kitapsepeti-user-service`) uygulama yapılandırmasında sabittir.
+`CATALOG_BASE_URL=http://catalog-service:8082`, `RABBITMQ_HOST=rabbitmq`, `RABBITMQ_PORT=5672`. Token issuer'ı
+(`kitapsepeti-user-service`) uygulama yapılandırmasında sabittir.
 
 Bağımlılıklar:
 
-- Yalnızca `mysql` healthy olmadan başlamaz. Readiness yalnızca DB'ye bakar; Catalog'u ya da user-service'i yoklayan
-  health göstergesi yoktur (Spring Cloud'un `refreshScope`/`discoveryComposite` göstergeleri kapalı).
+- `mysql` ve `rabbitmq` healthy olmadan başlamaz (payment ile aynı; yalnızca başlangıç sırası). Readiness yalnızca DB'ye
+  bakar; Catalog'u ya da user-service'i yoklayan health göstergesi yoktur (Spring Cloud'un `refreshScope`/`discoveryComposite`
+  göstergeleri kapalı). RabbitMQ kapalıyken servis healthy kalır ve sepet uçları çalışır; kök `/actuator/health` `DOWN`
+  görünür, sepet kapatma olayları broker'da bekler.
+- Order'ın `CartCheckedOut` olayını (`cart.checked-out`) durable `cart.checkouts` kuyruğundan tüketir: aktif sepet
+  `checked_out` olur, sonraki ekleme yeni sepet açar. Bozuk/eşleşmeyen mesaj doğrudan, geçici hata 3 denemeden sonra
+  `kitapsepeti.dlx` üzerinden `cart.checkouts.dlq`'ya gider.
 - catalog-service'e başlangıç bağımlılığı yoktur. Catalog kapalıyken cart healthy kalır; `GET /api/cart` ve sepeti
   değiştiren uçlar 200 döner (`catalogStatus: "UNAVAILABLE"`, satırlarda `available`/`currentUnitPrice` null, tutarlar
   sepete eklendiği andaki fiyattan); kitap ekleme 503 `CATALOG_UNAVAILABLE` döner (sepet değişmez). Catalog çağrısının

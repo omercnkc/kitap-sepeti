@@ -135,6 +135,43 @@ public class CartTransactions {
 		return CartContents.EMPTY;
 	}
 
+	/** {@link #checkOut} sonucu; hiçbiri hata değildir (mesaj ack edilir). */
+	public enum CheckoutOutcome {
+		/** active → checked_out. */
+		CHECKED_OUT,
+		/** Zaten checked_out (tekrar teslim); değişiklik yok. */
+		ALREADY_CHECKED_OUT,
+		/** abandoned sepet; durum değişmez. */
+		CART_ABANDONED
+	}
+
+	/**
+	 * Order'ın {@code CartCheckedOut} olayını uygular: sepet id ile {@code FOR UPDATE}, aktifse checked_out
+	 * ({@code updated_at} = Clock). Satırlar silinmez; sepet artık aktif olmadığı için görünümde/snapshot'ta yoktur ve
+	 * kullanıcının sonraki eklemesi yeni aktif sepet açar.
+	 * <p>
+	 * Flush sırası tuzağı burada da geçerli: aynı transaction'da yeni aktif sepet açılmaz.
+	 * @throws PermanentCheckoutException sepet yoksa ({@code CART_NOT_FOUND}) ya da başka kullanıcınınsa
+	 * ({@code CART_OWNER_MISMATCH}); sepet değişmez
+	 */
+	@Transactional(isolation = Isolation.READ_COMMITTED)
+	public CheckoutOutcome checkOut(UUID cartId, UUID userId) {
+		Cart cart = this.carts.findByIdForUpdate(cartId)
+			.orElseThrow(() -> new PermanentCheckoutException(PermanentCheckoutException.Reason.CART_NOT_FOUND));
+		if (!cart.getUserId().equals(userId)) {
+			throw new PermanentCheckoutException(PermanentCheckoutException.Reason.CART_OWNER_MISMATCH);
+		}
+		return switch (cart.getStatus()) {
+			case ACTIVE -> {
+				cart.checkout(this.clock);
+				this.carts.flush();
+				yield CheckoutOutcome.CHECKED_OUT;
+			}
+			case CHECKED_OUT -> CheckoutOutcome.ALREADY_CHECKED_OUT;
+			case ABANDONED -> CheckoutOutcome.CART_ABANDONED;
+		};
+	}
+
 	private static ResourceNotFoundException itemNotFound() {
 		return new ResourceNotFoundException("Book is not in the cart.");
 	}

@@ -9,6 +9,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
+import com.kitapsepeti.cart.RabbitTestcontainersConfiguration;
 import com.kitapsepeti.cart.TestcontainersConfiguration;
 import com.kitapsepeti.cart.exception.CatalogUnavailableException;
 import com.kitapsepeti.cart.support.InternalTestKeys;
@@ -27,7 +28,7 @@ import org.springframework.test.context.DynamicPropertySource;
 /** Catalog adresinde dinleyen yok (ayrı bağlam: kendi Catalog adresi). Bağlantı reddi ya da connect-timeout, hızlıca 503. */
 @SpringBootTest
 @ActiveProfiles("test")
-@Import(TestcontainersConfiguration.class)
+@Import({ TestcontainersConfiguration.class, RabbitTestcontainersConfiguration.class })
 class CatalogConnectionRefusedTest {
 
 	private static final int CLOSED_PORT = JwksServer.freePort();

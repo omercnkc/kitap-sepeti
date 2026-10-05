@@ -142,9 +142,12 @@ services:
     ports:
       - "127.0.0.1:8083:8083"
     # user-service'e ve catalog-service'e bağımlılık yok: JWKS ilk istekte çekilir; Catalog kapalıyken sepet okuma/
-    # değiştirme 200 (catalogStatus UNAVAILABLE), kitap ekleme 503 CATALOG_UNAVAILABLE döner.
+    # değiştirme 200 (catalogStatus UNAVAILABLE), kitap ekleme 503 CATALOG_UNAVAILABLE döner. rabbitmq catalog'daki
+    # gibi yalnızca başlangıç sırası için beklenir; broker sonradan kapanırsa CartCheckedOut mesajları kuyrukta bekler.
     depends_on:
       mysql:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     # .env toplu verilmez (env_file yok); yalnızca gereken değişkenler. Sırlar zorunlu: boşsa compose başlamaz
     # (cart zaten özetsiz açılmaz).
@@ -153,10 +156,14 @@ services:
       CART_DB_PORT: "3306"
       CART_DB_USER: ${CART_DB_USER:?CART_DB_USER .env içinde tanımlı olmalı}
       CART_DB_PASSWORD: ${CART_DB_PASSWORD:?CART_DB_PASSWORD .env içinde tanımlı olmalı}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       USER_SERVICE_JWKS_URI: http://user-service:8081/.well-known/jwks.json
       CATALOG_BASE_URL: http://catalog-service:8082
       CART_INTERNAL_KEY_ORDER_SHA256: ${CART_INTERNAL_KEY_ORDER_SHA256:?CART_INTERNAL_KEY_ORDER_SHA256 .env içinde tanımlı olmalı}
-    # Readiness yalnızca DB'ye bakar; catalog-service veya user-service kapalıyken servis healthy kalır.
+    # Readiness yalnızca DB'ye bakar; RabbitMQ, catalog-service veya user-service kapalıyken servis healthy kalır.
     healthcheck:
       test: ["CMD", "curl", "-fsS", "--max-time", "4", "-o", "/dev/null", "http://localhost:8083/actuator/health/readiness"]
       interval: 10s

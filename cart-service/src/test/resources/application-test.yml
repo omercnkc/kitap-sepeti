@@ -1,7 +1,10 @@
-# Bağlantı bilgisi @ServiceConnection ile Testcontainers'tan gelir; testler .env'deki CART_DB_* değerlerine
-# bağımlı olmamalı (placeholder'lar burada sabit değerle karşılanır).
+# Bağlantı bilgisi @ServiceConnection ile Testcontainers'tan gelir; testler .env'deki CART_DB_* ve RABBITMQ_*
+# değerlerine bağımlı olmamalı (placeholder'lar burada sabit değerle karşılanır).
 spring:
   datasource:
+    username: test
+    password: test
+  rabbitmq:
     username: test
     password: test
   jpa:
@@ -12,6 +15,11 @@ spring:
         # Üretilen SQL'i doğrulayan testler için (ör. FOR UPDATE); kayıt varsayılan kapalı.
         session_factory:
           statement_inspector: com.kitapsepeti.cart.support.SqlCapture
+
+app:
+  # Listener yalnızca gerçek broker entegrasyon testlerinin ayrı bağlamında açılır.
+  cart-checkouts:
+    enabled: false
 
 logging:
   level:

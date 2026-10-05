@@ -27,6 +27,13 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER}
+    password: ${RABBITMQ_PASSWORD}
+    # Broker kapalıyken bağlantı denemesi amqp-client'ın 60 sn'lik varsayılanında asılı kalmasın.
+    connection-timeout: 5s
   security:
     oauth2:
       resourceserver:
@@ -92,11 +99,19 @@ app:
     # DB'deki ck_cart_items_quantity (1–99) bunun üst sınırıdır.
     max-quantity-per-item: 10
     max-lines: 50
+  # Exchange tüm servislerle ortaktır; ad değişirse tüm servislerde birlikte değişmeli.
+  events:
+    exchange: kitapsepeti.events
+  # CartCheckedOut consumer'ı; kuyruk, retry ve DLQ ayarları kodda sözleşme olarak sabittir.
+  cart-checkouts:
+    enabled: true
 
 logging:
   level:
     # SQL hata mesajı kullanıcı verisi içerebilir; WARN satırları kapatılır.
     org.hibernate.orm.jdbc.error: ERROR
+    # INFO "Created new connection ... amqp://<kullanıcı>@host" RabbitMQ kullanıcı adını yazar.
+    org.springframework.amqp.rabbit.connection.CachingConnectionFactory: WARN
 
 server:
   port: 8083
@@ -124,7 +139,8 @@ management:
       group:
         liveness:
           include: livenessState
-        # catalog-service ve user-service (JWKS) bilinçli olarak yok: Catalog kapalıyken sepet okunabilir olmalı,
-        # JWKS kesintisi ayrı bir 503 (AUTHENTICATION_UNAVAILABLE) olarak görünür.
+        # RabbitMQ, catalog-service ve user-service (JWKS) bilinçli olarak yok (diğer servislerle aynı): broker
+        # kapalıyken CartCheckedOut mesajları kuyrukta bekler, sepet API'si çalışır; Catalog kapalıyken sepet okunabilir
+        # olmalı, JWKS kesintisi ayrı bir 503 (AUTHENTICATION_UNAVAILABLE) olarak görünür.
         readiness:
           include: readinessState, db

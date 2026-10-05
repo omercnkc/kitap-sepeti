@@ -9,6 +9,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
+import com.kitapsepeti.cart.RabbitTestcontainersConfiguration;
 import com.kitapsepeti.cart.TestcontainersConfiguration;
 import com.kitapsepeti.cart.exception.CatalogUnavailableException;
 import com.kitapsepeti.cart.support.InternalTestKeys;
@@ -30,7 +31,7 @@ import org.springframework.test.context.DynamicPropertySource;
 /** Catalog adresinde dinleyen yok: bağlantı hataları devreyi açar, açıkken ağa çıkılmaz, readiness UP kalır. */
 @SpringBootTest
 @ActiveProfiles("test")
-@Import(TestcontainersConfiguration.class)
+@Import({ TestcontainersConfiguration.class, RabbitTestcontainersConfiguration.class })
 class CatalogDownCircuitBreakerTest {
 
 	private static final int CLOSED_PORT = JwksServer.freePort();

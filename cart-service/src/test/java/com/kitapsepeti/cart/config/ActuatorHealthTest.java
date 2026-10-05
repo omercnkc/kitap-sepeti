@@ -84,20 +84,26 @@ class ActuatorHealthTest extends ApiTestSupport {
 		assertThat(CATALOG.requests()).isEmpty();
 	}
 
-	/** Yalnızca servisin kendi bileşenleri; Catalog, user-service (JWKS) ya da Spring Cloud kaynaklı gösterge yok. */
+	/**
+	 * Servisin kendi bileşenleri + broker (payment/order ile aynı); Catalog, user-service (JWKS) ya da Spring Cloud
+	 * kaynaklı gösterge yok.
+	 */
 	@Test
 	void healthContributorsAreLocalOnly() {
 		List<String> names = registry.stream().map(HealthContributors.Entry::name).toList();
 
-		assertThat(names).containsExactlyInAnyOrder("db", "diskSpace", "livenessState", "readinessState", "ping", "ssl")
+		assertThat(names)
+			.containsExactlyInAnyOrder("db", "rabbit", "diskSpace", "livenessState", "readinessState", "ping", "ssl")
 			.doesNotContain("refreshScope", "discoveryComposite");
 	}
 
+	/** RabbitMQ diğer servislerdeki gibi readiness'a girmez: broker kapalıyken sepet API'si hizmet verir. */
 	@Test
 	void readinessDependsOnDatabaseOnly() {
 		HealthEndpointGroup readiness = groups.get("readiness");
 		assertThat(readiness.isMember("readinessState")).isTrue();
 		assertThat(readiness.isMember("db")).isTrue();
+		assertThat(readiness.isMember("rabbit")).isFalse();
 
 		HealthEndpointGroup liveness = groups.get("liveness");
 		assertThat(liveness.isMember("livenessState")).isTrue();
