@@ -34,6 +34,7 @@ class OpenLibraryBookMetadataClientTest {
 		assertThat(mapped.pageCount()).isEqualTo(80);
 		assertThat(mapped.authors()).containsExactly("John Miedema");
 		assertThat(mapped.publishers()).containsExactly("Litwin Books");
+		assertThat(mapped.subjects()).isEmpty();
 		assertThat(mapped.coverUrl()).isEqualTo("https://covers.openlibrary.org/b/id/1-L.jpg");
 	}
 
@@ -48,6 +49,67 @@ class OpenLibraryBookMetadataClientTest {
 		assertThat(mapped.coverUrl()).isEqualTo("https://covers.openlibrary.org/b/isbn/9780140328721-L.jpg");
 		assertThat(mapped.authors()).isEmpty();
 		assertThat(mapped.publishers()).isEmpty();
+		assertThat(mapped.subjects()).isEmpty();
+	}
+
+	@Test
+	void mapBookUsesDescriptionNotExcerptAndReadsSubjects() throws Exception {
+		var book = jsonMapper.readTree("""
+				{
+				  "title": "The Invention of Hugo Cabret",
+				  "description": {
+				    "type": "/type/text",
+				    "value": "ORPHAN, CLOCK KEEPER, THIEF."
+				  },
+				  "notes": "Should not win when description present.",
+				  "excerpts": [{"text": "THE STORY I AM ABOUT TO SHARE"}],
+				  "subjects": [
+				    {"name": "Juvenile fiction"},
+				    {"name": "Children"}
+				  ],
+				  "authors": [{"name": "Brian Selznick"}],
+				  "publishers": [{"name": "Scholastic"}],
+				  "works": [{"key": "/works/OL123W"}]
+				}
+				""");
+
+		IsbnMetadataResponse mapped = OpenLibraryBookMetadataClient.mapBook("9788467520446", book);
+
+		assertThat(mapped.title()).isEqualTo("The Invention of Hugo Cabret");
+		assertThat(mapped.description()).isEqualTo("ORPHAN, CLOCK KEEPER, THIEF.");
+		assertThat(mapped.description()).doesNotContain("THE STORY I AM ABOUT TO SHARE");
+		assertThat(mapped.subjects()).containsExactly("Juvenile fiction", "Children");
+		assertThat(mapped.publishers()).containsExactly("Scholastic");
+	}
+
+	@Test
+	void mapBookIgnoresExcerptWhenDescriptionAndNotesMissing() throws Exception {
+		var excerptOnly = jsonMapper.readTree("""
+				{
+				  "title": "E",
+				  "excerpts": [{"text": "THE STORY I AM ABOUT TO SHARE"}]
+				}
+				""");
+		assertThat(OpenLibraryBookMetadataClient.mapBook("9788467520446", excerptOnly).description()).isNull();
+	}
+
+	@Test
+	void mapBookUsesNotesWhenDescriptionMissing() throws Exception {
+		var notesOnly = jsonMapper.readTree("""
+				{ "title": "N", "notes": "From notes.", "excerpts": [{"text": "From excerpt."}] }
+				""");
+		assertThat(OpenLibraryBookMetadataClient.mapBook("9780306406157", notesOnly).description())
+			.isEqualTo("From notes.");
+	}
+
+	@Test
+	void descriptionFieldAcceptsStringOrValueObject() {
+		assertThat(OpenLibraryBookMetadataClient.descriptionField(jsonMapper.valueToTree("Plain")))
+			.isEqualTo("Plain");
+		assertThat(OpenLibraryBookMetadataClient.descriptionField(
+				jsonMapper.createObjectNode().put("value", " Nested ")))
+			.isEqualTo("Nested");
+		assertThat(OpenLibraryBookMetadataClient.descriptionField(null)).isNull();
 	}
 
 }

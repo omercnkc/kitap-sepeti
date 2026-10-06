@@ -1,5 +1,7 @@
 package com.kitapsepeti.catalog.service;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 import com.kitapsepeti.catalog.dto.request.AdminPageRequest;
@@ -8,6 +10,7 @@ import com.kitapsepeti.catalog.dto.request.UpdateAuthorRequest;
 import com.kitapsepeti.catalog.dto.response.AuthorResponse;
 import com.kitapsepeti.catalog.dto.response.PageResponse;
 import com.kitapsepeti.catalog.entity.Author;
+import com.kitapsepeti.catalog.exception.InvalidFieldException;
 import com.kitapsepeti.catalog.exception.SlugAlreadyExistsException;
 import com.kitapsepeti.catalog.mapper.AuthorMapper;
 import com.kitapsepeti.catalog.repository.AuthorRepository;
@@ -17,7 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Yazar yönetimi; {@link PublisherAdminService} ile aynı kurallar. Kitabı olan yazar
- * {@code fk_book_authors_author} ile reddedilir (409 RESOURCE_IN_USE).
+ * {@code fk_book_authors_author} ile reddedilir (409 RESOURCE_IN_USE). Kitap formundan gelen
+ * isimler {@link #ensureByNames} ile find-or-create edilir (mevcut ad global rename edilmez).
  */
 @Service
 @Transactional
@@ -39,6 +43,21 @@ public class AuthorAdminService {
 	@Transactional(readOnly = true)
 	public AuthorResponse get(UUID id) {
 		return AuthorMapper.toResponse(require(id));
+	}
+
+	/**
+	 * İsim listesini sırayla yazar kayıtlarına çevirir: slug (addan, tr-TR uyumlu) ile bulur;
+	 * yoksa oluşturur. Bulunan kaydın {@code name} alanı değiştirilmez.
+	 */
+	public List<Author> ensureByNames(List<String> names) {
+		if (names == null || names.isEmpty()) {
+			return List.of();
+		}
+		List<Author> authors = new ArrayList<>(names.size());
+		for (String name : names) {
+			authors.add(findOrCreateByName(name));
+		}
+		return List.copyOf(authors);
 	}
 
 	public AuthorResponse create(CreateAuthorRequest request) {
@@ -67,6 +86,18 @@ public class AuthorAdminService {
 	public void delete(UUID id) {
 		this.authorRepository.delete(require(id));
 		this.authorRepository.flush();
+	}
+
+	private Author findOrCreateByName(String name) {
+		String slug;
+		try {
+			slug = Slugs.forCreate(null, name, MAX_SLUG_LENGTH);
+		}
+		catch (InvalidFieldException ex) {
+			throw new InvalidFieldException("authorNames", ex.getFieldMessage());
+		}
+		return this.authorRepository.findBySlug(slug)
+			.orElseGet(() -> this.authorRepository.saveAndFlush(new Author(name, slug)));
 	}
 
 	private Author require(UUID id) {

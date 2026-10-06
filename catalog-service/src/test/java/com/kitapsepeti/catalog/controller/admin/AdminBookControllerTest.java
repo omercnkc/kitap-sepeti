@@ -115,7 +115,7 @@ class AdminBookControllerTest extends ApiTestSupport {
 		body.put("pageCount", 180);
 		body.put("coverUrl", "https://cdn.example.com/kapak.jpg");
 		body.put("initialStock", 7);
-		body.put("authorIds", List.of(zeynep.getId(), ahmet.getId()));
+		body.put("authorNames", List.of(zeynep.getName(), ahmet.getName()));
 		body.put("currency", "USD");
 		body.put("status", "published");
 
@@ -140,33 +140,53 @@ class AdminBookControllerTest extends ApiTestSupport {
 		assertThat(result.getResponse().getHeader("Location")).isEqualTo(BASE + "/" + id);
 		assertThat(statusOf(UUID.fromString(id))).isEqualTo("draft");
 		assertThat(outbox()).isEmpty();
+		assertThat(authorRepository.findAll()).hasSize(2);
+	}
+
+	@Test
+	void createFindsOrCreatesAuthorsByNameWithoutRenamingExisting() throws Exception {
+		long authorsBefore = authorRepository.count();
+		Map<String, Object> body = validBook();
+		body.put("authorNames", List.of("ahmet yazar", "Yeni Yazar"));
+
+		MvcResult result = mockMvc.perform(send(post(BASE), body))
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.authors[*].name", containsInAnyOrder("Ahmet Yazar", "Yeni Yazar")))
+			.andReturn();
+
+		assertThat(authorRepository.count()).isEqualTo(authorsBefore + 1);
+		assertThat(authorRepository.findById(ahmet.getId())).get().extracting(Author::getName).isEqualTo("Ahmet Yazar");
+		String bookId = JsonPath.read(result.getResponse().getContentAsString(), "$.id");
+		assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM book_authors WHERE book_id = UUID_TO_BIN(?)", Integer.class,
+				bookId)).isEqualTo(2);
 	}
 
 	@Test
 	void createRejectsMissingOrUnknownReferences() throws Exception {
 		Map<String, Object> missingPublisher = validBook();
-		missingPublisher.remove("publisherId");
-		assertInvalidField(send(post(BASE), missingPublisher), "publisherId");
+		missingPublisher.remove("publisherName");
+		assertInvalidField(send(post(BASE), missingPublisher), "publisherName");
+
+		Map<String, Object> blankPublisher = validBook();
+		blankPublisher.put("publisherName", "   ");
+		assertInvalidField(send(post(BASE), blankPublisher), "publisherName");
 
 		UUID unknown = UUID.randomUUID();
-		Map<String, Object> unknownPublisher = validBook();
-		unknownPublisher.put("publisherId", unknown);
-		assertThat(assertInvalidField(send(post(BASE), unknownPublisher), "publisherId"))
-			.doesNotContain(unknown.toString());
-
-		Map<String, Object> unknownAuthor = validBook();
-		unknownAuthor.put("authorIds", List.of(ahmet.getId(), unknown));
-		assertThat(assertInvalidField(send(post(BASE), unknownAuthor), "authorIds"))
-			.doesNotContain(unknown.toString());
-
 		Map<String, Object> unknownCategory = validBook();
 		unknownCategory.put("categoryIds", List.of(unknown));
 		assertThat(assertInvalidField(send(post(BASE), unknownCategory), "categoryIds"))
 			.doesNotContain(unknown.toString());
 
 		Map<String, Object> tooManyAuthors = validBook();
-		tooManyAuthors.put("authorIds", IntStream.range(0, 21).mapToObj(i -> UUID.randomUUID()).toList());
-		assertInvalidField(send(post(BASE), tooManyAuthors), "authorIds");
+		tooManyAuthors.put("authorNames", IntStream.range(0, 21).mapToObj(i -> "Yazar " + i).toList());
+		assertInvalidField(send(post(BASE), tooManyAuthors), "authorNames");
+
+		Map<String, Object> blankAuthorName = validBook();
+		blankAuthorName.put("authorNames", List.of("Ahmet", "   "));
+		mockMvc.perform(send(post(BASE), blankAuthorName))
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.authors.length()").value(1))
+			.andExpect(jsonPath("$.authors[0].name").value("Ahmet"));
 
 		Map<String, Object> missingTitle = validBook();
 		missingTitle.put("title", "   ");
@@ -175,8 +195,6 @@ class AdminBookControllerTest extends ApiTestSupport {
 		Map<String, Object> missingPrice = validBook();
 		missingPrice.remove("priceAmount");
 		assertInvalidField(send(post(BASE), missingPrice), "priceAmount");
-
-		assertThat(bookCount()).isZero();
 	}
 
 	// --- 3. ISBN
@@ -251,7 +269,7 @@ class AdminBookControllerTest extends ApiTestSupport {
 	@Test
 	void publishRequiresAuthorsCategoriesAndPositivePrice() throws Exception {
 		Map<String, Object> noAuthors = validBook();
-		noAuthors.remove("authorIds");
+		noAuthors.remove("authorNames");
 		assertNotPublishable(create(noAuthors), "at least one author", "category", "price");
 
 		Map<String, Object> noCategories = validBook();
@@ -263,7 +281,7 @@ class AdminBookControllerTest extends ApiTestSupport {
 		assertNotPublishable(create(freeBook), "a price greater than zero", "author", "category");
 
 		Map<String, Object> nothing = validBook();
-		nothing.remove("authorIds");
+		nothing.remove("authorNames");
 		nothing.remove("categoryIds");
 		nothing.put("priceAmount", BigDecimal.ZERO);
 		UUID empty = create(nothing);
@@ -284,7 +302,7 @@ class AdminBookControllerTest extends ApiTestSupport {
 		body.put("pageCount", 180);
 		body.put("coverUrl", "https://cdn.example.com/kapak.jpg");
 		body.put("initialStock", 3);
-		body.put("authorIds", List.of(zeynep.getId(), ahmet.getId()));
+		body.put("authorNames", List.of(zeynep.getName(), ahmet.getName()));
 		UUID id = create(body);
 
 		publish(id).andExpect(status().isOk())
@@ -372,14 +390,14 @@ class AdminBookControllerTest extends ApiTestSupport {
 	@Test
 	void patchOnPublishedBookEmitsEventReplacesSetsAndIgnoresStockFields() throws Exception {
 		Map<String, Object> body = validBook();
-		body.put("authorIds", List.of(ahmet.getId(), zeynep.getId()));
+		body.put("authorNames", List.of(ahmet.getName(), zeynep.getName()));
 		body.put("initialStock", 4);
 		UUID id = createBookAndPublish(body);
 		long version = versionOf(id);
 
 		Map<String, Object> patch = new LinkedHashMap<>();
 		patch.put("version", version);
-		patch.put("authorIds", List.of(zeynep.getId()));
+		patch.put("authorNames", List.of(zeynep.getName()));
 		patch.put("priceAmount", new BigDecimal("99.5"));
 		patch.put("stockQuantity", 999);
 		patch.put("reservedQuantity", 3);
@@ -658,9 +676,9 @@ class AdminBookControllerTest extends ApiTestSupport {
 	private Map<String, Object> validBook() {
 		Map<String, Object> body = new LinkedHashMap<>();
 		body.put("title", "Kırmızı Pazartesi");
-		body.put("publisherId", publisher.getId());
+		body.put("publisherName", publisher.getName());
 		body.put("priceAmount", new BigDecimal("149.90"));
-		body.put("authorIds", List.of(ahmet.getId()));
+		body.put("authorNames", List.of(ahmet.getName()));
 		body.put("categoryIds", List.of(roman.getId()));
 		return body;
 	}

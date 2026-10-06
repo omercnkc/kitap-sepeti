@@ -1,15 +1,26 @@
-import { AuthorResponse, IsbnMetadataResponse, PublisherResponse } from '../../../core/models';
+import { CategoryResponse, IsbnMetadataResponse } from '../../../core/models';
 
 export interface IsbnLookupApplyResult {
   patch: Record<string, unknown>;
   hints: string[];
 }
 
-/** Open Library metadata → form patch + soft hints (yazar create yok). */
+const DESCRIPTION_MAX = 10000;
+
+/** OL subject (en) → bizim kategori adları (seed ile uyumlu). */
+const SUBJECT_TO_CATEGORY_NAMES: ReadonlyArray<{ keys: string[]; names: string[] }> = [
+  { keys: ['romance', 'fiction', 'novels', 'novel'], names: ['Roman', 'Edebiyat'] },
+  { keys: ['science', 'popular science'], names: ['Bilim', 'Popüler Bilim'] },
+  {
+    keys: ['children', 'childrens', "children's", 'juvenile', 'graphic novel', 'picture book'],
+    names: ['Çocuk'],
+  },
+];
+
+/** Open Library metadata → form patch (yazar/yayınevi isimleri; sunucu find-or-create). */
 export function buildIsbnLookupApply(
   meta: IsbnMetadataResponse,
-  authors: Pick<AuthorResponse, 'id' | 'name'>[],
-  publishers: Pick<PublisherResponse, 'id' | 'name'>[],
+  categories: Pick<CategoryResponse, 'id' | 'name' | 'slug'>[],
   currentIsbn: unknown,
   namesEqual: (a: string, b: string) => boolean,
 ): IsbnLookupApplyResult {
@@ -20,7 +31,7 @@ export function buildIsbnLookupApply(
     patch['title'] = meta.title;
   }
   if (meta.description) {
-    patch['description'] = meta.description;
+    patch['description'] = truncateDescription(meta.description);
   }
   if (meta.coverUrl) {
     patch['coverUrl'] = meta.coverUrl;
@@ -29,44 +40,88 @@ export function buildIsbnLookupApply(
     patch['pageCount'] = meta.pageCount;
   }
 
-  const hints: string[] = [];
-  const olAuthors = meta.authors ?? [];
+  const olAuthors = (meta.authors ?? [])
+    .map((name) => String(name || '').trim())
+    .filter((name) => name.length > 0);
   if (olAuthors.length) {
-    const matchedAuthorIds: string[] = [];
-    const unmatchedAuthors: string[] = [];
-    for (const name of olAuthors) {
-      const match = authors.find((a) => namesEqual(a.name, name));
-      if (match) {
-        matchedAuthorIds.push(match.id);
-      } else {
-        unmatchedAuthors.push(name);
-      }
-    }
-    if (matchedAuthorIds.length) {
-      patch['authorIds'] = matchedAuthorIds;
-    }
-    if (unmatchedAuthors.length) {
-      hints.push(
-        `OL yazar: ${unmatchedAuthors.join(', ')} (listede yok — sonra Yazarlar’dan eklenebilir)`,
-      );
-    }
+    patch['authorNames'] = olAuthors;
   }
 
-  const publisherName = (meta.publishers ?? [])[0];
+  const publisherName = String((meta.publishers ?? [])[0] || '').trim();
   if (publisherName) {
-    const pub = publishers.find((p) => namesEqual(p.name, publisherName));
-    if (pub) {
-      patch['publisherId'] = pub.id;
-    } else {
-      hints.push(
-        `OL yayınevi: ${publisherName} (listede yok — sonra Yayınevleri’nden eklenebilir veya elle seçin)`,
-      );
-    }
+    patch['publisherName'] = publisherName;
   }
 
-  return { patch, hints };
+  const matchedCategoryIds = matchCategoryIds(meta.subjects ?? [], categories, namesEqual);
+  if (matchedCategoryIds.length) {
+    patch['categoryIds'] = matchedCategoryIds;
+  }
+
+  return { patch, hints: [] };
 }
 
 export function namesEqualTr(a: string, b: string): boolean {
   return a.trim().toLocaleLowerCase('tr-TR') === b.trim().toLocaleLowerCase('tr-TR');
+}
+
+export function truncateDescription(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length <= DESCRIPTION_MAX) {
+    return trimmed;
+  }
+  return trimmed.slice(0, DESCRIPTION_MAX);
+}
+
+/** Sabit map + name/slug tr-TR eşitlik/contains; eşleşme yoksa []. */
+export function matchCategoryIds(
+  subjects: string[],
+  categories: Pick<CategoryResponse, 'id' | 'name' | 'slug'>[],
+  namesEqual: (a: string, b: string) => boolean,
+): string[] {
+  if (!subjects.length || !categories.length) {
+    return [];
+  }
+  const targets = new Set<string>();
+  for (const raw of subjects) {
+    const subject = String(raw || '').trim();
+    if (!subject) {
+      continue;
+    }
+    const subjectKey = subject.toLocaleLowerCase('tr-TR');
+    targets.add(subjectKey);
+    for (const entry of SUBJECT_TO_CATEGORY_NAMES) {
+      if (entry.keys.some((key) => subjectKey === key || subjectKey.includes(key))) {
+        for (const name of entry.names) {
+          targets.add(name.toLocaleLowerCase('tr-TR'));
+        }
+      }
+    }
+  }
+
+  const ids: string[] = [];
+  for (const category of categories) {
+    const nameKey = category.name.trim().toLocaleLowerCase('tr-TR');
+    const slugKey = category.slug.trim().toLocaleLowerCase('tr-TR');
+    let matched = false;
+    for (const target of targets) {
+      if (
+        namesEqual(category.name, target) ||
+        namesEqual(category.slug, target) ||
+        nameKey === target ||
+        slugKey === target ||
+        (target.length >= 4 && (nameKey.includes(target) || target.includes(nameKey))) ||
+        (target.length >= 4 && (slugKey.includes(target) || target.includes(slugKey)))
+      ) {
+        matched = true;
+        break;
+      }
+    }
+    if (matched && !ids.includes(category.id)) {
+      ids.push(category.id);
+      if (ids.length >= 20) {
+        break;
+      }
+    }
+  }
+  return ids;
 }

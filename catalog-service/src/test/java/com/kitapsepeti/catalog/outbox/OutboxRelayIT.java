@@ -228,8 +228,8 @@ class OutboxRelayIT extends ApiTestSupport {
 	}
 
 	private UUID createPublishedBook() throws Exception {
-		Map<String, Object> body = Map.of("title", "Kırmızı Pazartesi", "publisherId", bookPublisher.getId(),
-				"priceAmount", new BigDecimal("149.90"), "initialStock", 5, "authorIds", List.of(author.getId()),
+		Map<String, Object> body = Map.of("title", "Kırmızı Pazartesi", "publisherName", bookPublisher.getName(),
+				"priceAmount", new BigDecimal("149.90"), "initialStock", 5, "authorNames", List.of(author.getName()),
 				"categoryIds", List.of(category.getId()));
 		MvcResult result = mockMvc.perform(json(post(BASE), body)).andExpect(status().isCreated()).andReturn();
 		UUID id = UUID.fromString(JsonPath.read(result.getResponse().getContentAsString(), "$.id"));

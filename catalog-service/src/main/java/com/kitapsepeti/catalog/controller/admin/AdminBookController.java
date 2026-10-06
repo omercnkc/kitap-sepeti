@@ -68,7 +68,8 @@ public class AdminBookController {
 	@GetMapping("/isbn-lookup")
 	@Operation(operationId = "lookupBookByIsbn", summary = "ISBN ile dış metadata getir",
 			description = "Open Library üzerinden başlık, açıklama, kapak, sayfa, yazar/yayınevi **isimleri**. "
-					+ "Bizim yayınevi/yazar UUID'leri dönmez; form eşleştirir. Geçersiz ISBN → 400.")
+					+ "Bizim yayınevi/yazar UUID'leri dönmez; form yazar isimlerini yazar, kayıtta sunucu find-or-create eder. "
+					+ "Geçersiz ISBN → 400.")
 	@ApiResponse(responseCode = "200", description = "Metadata.")
 	@ApiResponse(responseCode = "404", description = "`BOOK_METADATA_NOT_FOUND`: Open Library'de yok veya sağlayıcıya ulaşılamadı.")
 	public IsbnMetadataResponse lookupByIsbn(
@@ -85,8 +86,8 @@ public class AdminBookController {
 
 	@PostMapping
 	@Operation(operationId = "createBook", summary = "Kitap oluştur",
-			description = "Kitap her zaman `draft` ve `TRY` olarak oluşur; olay yazılmaz. Olmayan yayınevi/yazar/"
-					+ "kategori → 400 `VALIDATION_FAILED` (ilgili alan `errors`'ta).")
+			description = "Kitap her zaman `draft` ve `TRY` olarak oluşur; olay yazılmaz. `publisherName` ve "
+					+ "`authorNames` sunucuda find-or-create edilir. Olmayan kategori → 400 `VALIDATION_FAILED`.")
 	@ApiResponse(responseCode = "201", description = "Oluşturuldu.", headers = @Header(name = "Location",
 			description = "Yeni kitabın yolu.", schema = @Schema(type = "string", format = "uri-reference")))
 	@ApiResponse(responseCode = "409", description = "`ISBN_ALREADY_EXISTS`: ISBN başka bir kitapta kayıtlı.")

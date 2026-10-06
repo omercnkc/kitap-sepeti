@@ -7,3 +7,14 @@
   float: none;
   width: auto;
 }
+
+.admin-book-form__chip {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 500;
+  padding-right: 0.35rem;
+}
+
+.admin-book-form__chip .btn-close {
+  font-size: 0.55rem;
+}

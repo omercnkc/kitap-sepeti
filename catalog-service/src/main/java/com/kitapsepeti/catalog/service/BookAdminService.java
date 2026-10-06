@@ -26,10 +26,8 @@ import com.kitapsepeti.catalog.exception.InvalidFieldException;
 import com.kitapsepeti.catalog.exception.StaleVersionException;
 import com.kitapsepeti.catalog.exception.StockBelowReservedException;
 import com.kitapsepeti.catalog.mapper.AdminBookMapper;
-import com.kitapsepeti.catalog.repository.AuthorRepository;
 import com.kitapsepeti.catalog.repository.BookRepository;
 import com.kitapsepeti.catalog.repository.CategoryRepository;
-import com.kitapsepeti.catalog.repository.PublisherRepository;
 import com.kitapsepeti.catalog.service.event.BookRemovedEvent;
 import com.kitapsepeti.catalog.service.event.BookUpsertedEvent;
 import com.kitapsepeti.common.error.ResourceNotFoundException;
@@ -60,9 +58,9 @@ public class BookAdminService {
 
 	private final BookRepository bookRepository;
 
-	private final PublisherRepository publisherRepository;
+	private final PublisherAdminService publisherAdminService;
 
-	private final AuthorRepository authorRepository;
+	private final AuthorAdminService authorAdminService;
 
 	private final CategoryRepository categoryRepository;
 
@@ -70,12 +68,12 @@ public class BookAdminService {
 
 	private final BookEventFactory eventFactory;
 
-	public BookAdminService(BookRepository bookRepository, PublisherRepository publisherRepository,
-			AuthorRepository authorRepository, CategoryRepository categoryRepository, OutboxService outboxService,
+	public BookAdminService(BookRepository bookRepository, PublisherAdminService publisherAdminService,
+			AuthorAdminService authorAdminService, CategoryRepository categoryRepository, OutboxService outboxService,
 			BookEventFactory eventFactory) {
 		this.bookRepository = bookRepository;
-		this.publisherRepository = publisherRepository;
-		this.authorRepository = authorRepository;
+		this.publisherAdminService = publisherAdminService;
+		this.authorAdminService = authorAdminService;
 		this.categoryRepository = categoryRepository;
 		this.outboxService = outboxService;
 		this.eventFactory = eventFactory;
@@ -97,8 +95,8 @@ public class BookAdminService {
 
 	/** Her zaman DRAFT ve TRY; olay yazılmaz (yayında olmayan kitap dışarıya duyurulmaz). */
 	public AdminBookResponse create(CreateBookRequest request) {
-		Publisher publisher = requirePublisher(request.publisherId());
-		List<Author> authors = requireAll(this.authorRepository, request.authorIds(), "authorIds", "authors");
+		Publisher publisher = this.publisherAdminService.ensureByName(request.publisherName());
+		List<Author> authors = this.authorAdminService.ensureByNames(request.authorNames());
 		List<Category> categories = requireAll(this.categoryRepository, request.categoryIds(), "categoryIds",
 				"categories");
 		Book book = new Book(request.title(), publisher, scaled(request.priceAmount()), request.initialStock());
@@ -120,9 +118,10 @@ public class BookAdminService {
 		if (!book.getVersion().equals(request.version())) {
 			throw new StaleVersionException();
 		}
-		Publisher publisher = (request.publisherId() != null) ? requirePublisher(request.publisherId()) : null;
-		List<Author> authors = (request.authorIds() != null)
-				? requireAll(this.authorRepository, request.authorIds(), "authorIds", "authors") : null;
+		Publisher publisher = (request.publisherName() != null)
+				? this.publisherAdminService.ensureByName(request.publisherName()) : null;
+		List<Author> authors = (request.authorNames() != null)
+				? this.authorAdminService.ensureByNames(request.authorNames()) : null;
 		List<Category> categories = (request.categoryIds() != null)
 				? requireAll(this.categoryRepository, request.categoryIds(), "categoryIds", "categories") : null;
 
@@ -244,11 +243,6 @@ public class BookAdminService {
 
 	private Book requireForUpdate(UUID id) {
 		return this.bookRepository.findForUpdateById(id).orElseThrow(BookAdminService::notFound);
-	}
-
-	private Publisher requirePublisher(UUID publisherId) {
-		return this.publisherRepository.findById(publisherId)
-			.orElseThrow(() -> new InvalidFieldException("publisherId", "publisher does not exist"));
 	}
 
 	/** Kümedeki her id var olmalı; yoksa alanlı 400 (hangi id'nin eksik olduğu söylenmez). */

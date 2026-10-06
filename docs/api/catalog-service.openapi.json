@@ -734,7 +734,7 @@
         ]
       },
       "post": {
-        "description": "Kitap her zaman `draft` ve `TRY` olarak oluşur; olay yazılmaz. Olmayan yayınevi/yazar/kategori → 400 `VALIDATION_FAILED` (ilgili alan `errors`'ta).",
+        "description": "Kitap her zaman `draft` ve `TRY` olarak oluşur; olay yazılmaz. `publisherName` ve `authorNames` sunucuda find-or-create edilir. Olmayan kategori → 400 `VALIDATION_FAILED`.",
         "operationId": "createBook",
         "requestBody": {
           "content": {
@@ -850,7 +850,7 @@
     },
     "/api/admin/books/isbn-lookup": {
       "get": {
-        "description": "Open Library üzerinden başlık, açıklama, kapak, sayfa, yazar/yayınevi **isimleri**. Bizim yayınevi/yazar UUID'leri dönmez; form eşleştirir. Geçersiz ISBN → 400.",
+        "description": "Open Library üzerinden başlık, açıklama, kapak, sayfa, yazar/yayınevi **isimleri**. Bizim yayınevi/yazar UUID'leri dönmez; form yazar isimlerini yazar, kayıtta sunucu find-or-create eder. Geçersiz ISBN → 400.",
         "operationId": "lookupBookByIsbn",
         "parameters": [
           {
@@ -4029,15 +4029,15 @@
       "CreateBookRequest": {
         "type": "object",
         "properties": {
-          "authorIds": {
+          "authorNames": {
             "type": "array",
             "items": {
               "type": "string",
-              "format": "uuid"
+              "maxLength": 160,
+              "minLength": 0
             },
             "maxItems": 20,
-            "minItems": 0,
-            "uniqueItems": true
+            "minItems": 0
           },
           "categoryIds": {
             "type": "array",
@@ -4077,9 +4077,10 @@
             "type": "number",
             "minimum": 0
           },
-          "publisherId": {
+          "publisherName": {
             "type": "string",
-            "format": "uuid"
+            "maxLength": 160,
+            "minLength": 0
           },
           "title": {
             "type": "string",
@@ -4089,7 +4090,7 @@
         },
         "required": [
           "priceAmount",
-          "publisherId",
+          "publisherName",
           "title"
         ]
       },
@@ -4181,6 +4182,13 @@
               "type": "string"
             }
           },
+          "subjects": {
+            "type": "array",
+            "description": "OL subject / konu adları (kategori eşlemesi için).",
+            "items": {
+              "type": "string"
+            }
+          },
           "title": {
             "type": "string"
           }
@@ -4188,7 +4196,8 @@
         "required": [
           "authors",
           "isbn",
-          "publishers"
+          "publishers",
+          "subjects"
         ]
       },
       "MoveCategoryRequest": {
@@ -4656,15 +4665,15 @@
       "UpdateBookRequest": {
         "type": "object",
         "properties": {
-          "authorIds": {
+          "authorNames": {
             "type": "array",
             "items": {
               "type": "string",
-              "format": "uuid"
+              "maxLength": 160,
+              "minLength": 0
             },
             "maxItems": 20,
-            "minItems": 0,
-            "uniqueItems": true
+            "minItems": 0
           },
           "categoryIds": {
             "type": "array",
@@ -4698,9 +4707,11 @@
             "type": "number",
             "minimum": 0
           },
-          "publisherId": {
+          "publisherName": {
             "type": "string",
-            "format": "uuid"
+            "maxLength": 160,
+            "minLength": 0,
+            "pattern": ".*\\S.*"
           },
           "title": {
             "type": "string",

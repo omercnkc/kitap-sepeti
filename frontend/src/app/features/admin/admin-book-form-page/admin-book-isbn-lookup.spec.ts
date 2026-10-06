@@ -1,67 +1,120 @@
-import { buildIsbnLookupApply, namesEqualTr } from './admin-book-isbn-lookup';
+import { buildIsbnLookupApply, matchCategoryIds, namesEqualTr, truncateDescription } from './admin-book-isbn-lookup';
 
 describe('buildIsbnLookupApply', () => {
-  const authors = [{ id: 'a1', name: 'Ayşe Yılmaz' }];
-  const publishers = [{ id: 'p1', name: 'Deniz Yayınları' }];
+  const categories = [
+    { id: 'c-edebiyat', name: 'Edebiyat', slug: 'edebiyat' },
+    { id: 'c-roman', name: 'Roman', slug: 'roman' },
+    { id: 'c-bilim', name: 'Bilim', slug: 'bilim' },
+    { id: 'c-pop', name: 'Popüler Bilim', slug: 'populer-bilim' },
+    { id: 'c-cocuk', name: 'Çocuk', slug: 'cocuk' },
+  ];
 
-  it('selects matched author/publisher and fills fields', () => {
+  it('writes author names and publisherName text', () => {
     const { patch, hints } = buildIsbnLookupApply(
       {
-        isbn: '9780306406157',
-        title: 'Kar',
-        description: 'Açıklama',
+        isbn: '9788467520446',
+        title: 'Hugo',
+        description: 'ORPHAN, CLOCK KEEPER, THIEF.',
         coverUrl: 'https://example.com/c.jpg',
         pageCount: 200,
-        authors: ['Ayşe Yılmaz'],
-        publishers: ['Deniz Yayınları'],
+        authors: ['Brian Selznick'],
+        publishers: ['Scholastic'],
+        subjects: [],
       },
-      authors,
-      publishers,
+      categories,
       '',
       namesEqualTr,
     );
-    expect(patch['title']).toBe('Kar');
-    expect(patch['authorIds']).toEqual(['a1']);
-    expect(patch['publisherId']).toBe('p1');
+    expect(patch['title']).toBe('Hugo');
+    expect(patch['description']).toBe('ORPHAN, CLOCK KEEPER, THIEF.');
+    expect(patch['authorNames']).toEqual(['Brian Selznick']);
+    expect(patch['publisherName']).toBe('Scholastic');
+    expect(patch['categoryIds']).toBeUndefined();
     expect(hints).toEqual([]);
   });
 
-  it('fills other fields and soft-hints unmatched author (no force)', () => {
+  it('does not emit listede-yok publisher hints', () => {
     const { patch, hints } = buildIsbnLookupApply(
       {
         isbn: '9780306406157',
         title: 'Kar',
         authors: ['Bilinmeyen Yazar'],
-        publishers: ['Deniz Yayınları'],
+        publishers: ['Yok Yayınevi'],
+        subjects: [],
       },
-      authors,
-      publishers,
+      categories,
       '',
       namesEqualTr,
     );
-    expect(patch['title']).toBe('Kar');
-    expect(patch['authorIds']).toBeUndefined();
-    expect(patch['publisherId']).toBe('p1');
-    expect(hints.length).toBe(1);
-    expect(hints[0]).toContain('Bilinmeyen Yazar');
-    expect(hints[0]).toContain('Yazarlar');
+    expect(patch['publisherName']).toBe('Yok Yayınevi');
+    expect(patch['authorNames']).toEqual(['Bilinmeyen Yazar']);
+    expect(hints).toEqual([]);
   });
 
-  it('does not touch authorIds when OL authors empty', () => {
-    const { patch, hints } = buildIsbnLookupApply(
+  it('does not touch authorNames when OL authors empty', () => {
+    const { patch } = buildIsbnLookupApply(
       {
         isbn: '9780306406157',
         title: 'Kar',
         authors: [],
         publishers: [],
+        subjects: [],
       },
-      authors,
-      publishers,
+      categories,
       '978',
       namesEqualTr,
     );
     expect(patch['title']).toBe('Kar');
-    expect(patch['authorIds']).toBeUndefined();
-    expect(hints).toEqual([]);
+    expect(patch['authorNames']).toBeUndefined();
+    expect(patch['publisherName']).toBeUndefined();
+  });
+
+  it('maps juvenile/children subjects to Çocuk; truncates description', () => {
+    const longDesc = 'x'.repeat(10050);
+    const { patch } = buildIsbnLookupApply(
+      {
+        isbn: '9788467520446',
+        title: 'Hugo',
+        description: longDesc,
+        authors: ['Brian Selznick'],
+        publishers: ['Scholastic'],
+        subjects: ['Juvenile fiction', 'Children', 'Picture books'],
+      },
+      categories,
+      '',
+      namesEqualTr,
+    );
+    expect(patch['description']).toBe('x'.repeat(10000));
+    expect(patch['publisherName']).toBe('Scholastic');
+    expect(patch['categoryIds']).toContain('c-cocuk');
+  });
+
+  it('does not set categoryIds when subjects do not match', () => {
+    const { patch } = buildIsbnLookupApply(
+      {
+        isbn: '9780306406157',
+        title: 'Kar',
+        authors: [],
+        publishers: [],
+        subjects: ['Utterly Obscure Topic'],
+      },
+      categories,
+      '',
+      namesEqualTr,
+    );
+    expect(patch['categoryIds']).toBeUndefined();
+  });
+});
+
+describe('matchCategoryIds / truncateDescription', () => {
+  it('maps graphic novel and picture book to Çocuk', () => {
+    const categories = [{ id: 'c-cocuk', name: 'Çocuk', slug: 'cocuk' }];
+    expect(matchCategoryIds(['Graphic novels'], categories, namesEqualTr)).toEqual(['c-cocuk']);
+    expect(matchCategoryIds(['Picture book'], categories, namesEqualTr)).toEqual(['c-cocuk']);
+  });
+
+  it('truncates at 10000', () => {
+    expect(truncateDescription('  short  ')).toBe('short');
+    expect(truncateDescription('y'.repeat(10001)).length).toBe(10000);
   });
 });

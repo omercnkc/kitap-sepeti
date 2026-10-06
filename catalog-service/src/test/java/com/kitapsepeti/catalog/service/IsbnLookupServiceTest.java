@@ -19,7 +19,7 @@ class IsbnLookupServiceTest {
 	@Test
 	void lookupNormalizesAndReturnsMetadata() {
 		IsbnMetadataResponse expected = new IsbnMetadataResponse(VALID, "Kar", null, null, 200,
-				List.of("Orhan Pamuk"), List.of("YKY"));
+				List.of("Orhan Pamuk"), List.of("YKY"), List.of());
 		IsbnLookupService service = new IsbnLookupService(isbn -> Optional.of(expected));
 
 		assertThat(service.lookup("978-605-360-077-0")).isEqualTo(expected);

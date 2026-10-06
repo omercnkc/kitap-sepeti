@@ -114,9 +114,9 @@ export interface AdminBook {
 /** OpenAPI `CreateBookRequest` */
 export interface CreateBookRequest {
   title: string;
-  publisherId: string;
+  publisherName: string;
   priceAmount: number;
-  authorIds?: string[];
+  authorNames?: string[];
   categoryIds?: string[];
   coverUrl?: string;
   description?: string;
@@ -129,9 +129,9 @@ export interface CreateBookRequest {
 export interface UpdateBookRequest {
   version: number;
   title?: string;
-  publisherId?: string;
+  publisherName?: string;
   priceAmount?: number;
-  authorIds?: string[];
+  authorNames?: string[];
   categoryIds?: string[];
   coverUrl?: string;
   description?: string;
@@ -164,4 +164,5 @@ export interface IsbnMetadataResponse {
   pageCount?: number | null;
   authors: string[];
   publishers: string[];
+  subjects?: string[];
 }

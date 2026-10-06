@@ -162,11 +162,11 @@ describe('AdminCatalogApi', () => {
 
   it('createBook should POST /api/admin/books', () => {
     api
-      .createBook({ title: 'Kar', publisherId: 'p1', priceAmount: 120 })
+      .createBook({ title: 'Kar', publisherName: 'YKY', priceAmount: 120 })
       .subscribe((res) => expect(res).toEqual(book));
     const req = httpMock.expectOne('/api/admin/books');
     expect(req.request.method).toBe('POST');
-    expect(req.request.body.publisherId).toBe('p1');
+    expect(req.request.body.publisherName).toBe('YKY');
     req.flush(book, { status: 201, statusText: 'Created' });
   });
 

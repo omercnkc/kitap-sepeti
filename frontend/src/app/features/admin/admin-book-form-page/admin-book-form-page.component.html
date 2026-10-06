@@ -106,16 +106,16 @@
       <div class="row g-3">
         <div class="col-md-6">
           <label class="form-label" for="book-publisher">Yayınevi</label>
-          <select
+          <input
             id="book-publisher"
-            class="form-select"
-            formControlName="publisherId"
-            [class.is-invalid]="form.get('publisherId')?.invalid && form.get('publisherId')?.touched"
-          >
-            <option value="" disabled>Seçin</option>
-            <option *ngFor="let p of publishers" [value]="p.id">{{ p.name }}</option>
-          </select>
-          <app-field-error [errors]="fieldErrors" field="publisherId"></app-field-error>
+            type="text"
+            class="form-control"
+            formControlName="publisherName"
+            maxlength="160"
+            autocomplete="off"
+            [class.is-invalid]="form.get('publisherName')?.invalid && form.get('publisherName')?.touched"
+          />
+          <app-field-error [errors]="fieldErrors" field="publisherName"></app-field-error>
         </div>
         <div class="col-md-3">
           <label class="form-label" for="book-price">Fiyat (₺)</label>
@@ -229,24 +229,46 @@
         <div class="col-md-6">
           <fieldset class="admin-book-form__multi">
             <legend class="form-label fs-6 mb-2">Yazarlar</legend>
-            <div class="admin-book-form__checks border rounded p-2">
-              <p *ngIf="authors.length === 0" class="small text-muted mb-0">
-                Önce yazar ekleyin.
-              </p>
-              <div *ngFor="let author of authors" class="form-check">
-                <input
-                  class="form-check-input"
-                  type="checkbox"
-                  [id]="'author-' + author.id"
-                  [checked]="isAuthorSelected(author.id)"
-                  (change)="toggleAuthor(author.id, $any($event.target).checked)"
-                />
-                <label class="form-check-label" [for]="'author-' + author.id">
-                  {{ author.name }}
-                </label>
+            <div class="admin-book-form__authors border rounded p-2">
+              <div class="d-flex flex-wrap gap-1 mb-2" *ngIf="authorNames.length">
+                <span
+                  *ngFor="let name of authorNames; let i = index"
+                  class="badge bg-light text-dark border admin-book-form__chip"
+                >
+                  {{ name }}
+                  <button
+                    type="button"
+                    class="btn-close btn-close-sm ms-1"
+                    aria-label="Kaldır"
+                    (click)="removeAuthorName(i)"
+                    [disabled]="saving || actionBusy"
+                  ></button>
+                </span>
               </div>
+              <div class="input-group input-group-sm">
+                <input
+                  id="book-author-draft"
+                  type="text"
+                  class="form-control"
+                  maxlength="160"
+                  placeholder="Yazar adı yazıp Ekle"
+                  [value]="authorDraft"
+                  (input)="authorDraft = $any($event.target).value"
+                  (keydown)="onAuthorDraftKeydown($event)"
+                  [disabled]="saving || actionBusy"
+                />
+                <button
+                  type="button"
+                  class="btn btn-outline-secondary"
+                  (click)="addAuthorName()"
+                  [disabled]="saving || actionBusy || !authorDraft.trim()"
+                >
+                  Ekle
+                </button>
+              </div>
+              <div class="form-text">ISBN Getir yazarları buraya yazar; yoksa elle ekleyin. En fazla 20.</div>
             </div>
-            <app-field-error [errors]="fieldErrors" field="authorIds"></app-field-error>
+            <app-field-error [errors]="fieldErrors" field="authorNames"></app-field-error>
           </fieldset>
         </div>
         <div class="col-md-6">

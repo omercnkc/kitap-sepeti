@@ -17,13 +17,11 @@ import { toProblemDetail } from '../../../core/interceptors/error.interceptor';
 import {
   AdminBook,
   AdminBookStatus,
-  AuthorResponse,
   CategoryResponse,
   CreateBookRequest,
   FieldError,
   IsbnMetadataResponse,
   PageResponse,
-  PublisherResponse,
   UpdateBookRequest,
 } from '../../../core/models';
 import { ToastService } from '../../../core/services/toast.service';
@@ -35,6 +33,7 @@ import { buildCreateBookBody, buildUpdateBookBody, roundMoney2 } from './admin-b
 import { buildIsbnLookupApply, namesEqualTr } from './admin-book-isbn-lookup';
 
 const LOOKUP_SIZE = 100;
+const MAX_AUTHOR_NAMES = 20;
 
 type PageState = 'loading' | 'ready' | 'notFound' | 'error';
 
@@ -63,16 +62,15 @@ export class AdminBookFormPageComponent implements OnInit, OnDestroy {
   fieldErrors: FieldError[] = [];
   concurrentConflict = false;
   stockSaving = false;
+  authorDraft = '';
 
-  publishers: PublisherResponse[] = [];
-  authors: AuthorResponse[] = [];
   categories: CategoryResponse[] = [];
 
   readonly form: FormGroup = this.fb.group({
     title: ['', [Validators.required, Validators.maxLength(300)]],
-    publisherId: ['', [Validators.required]],
+    publisherName: ['', [Validators.required, Validators.maxLength(160)]],
     priceAmount: [null as number | null, [Validators.required, Validators.min(0)]],
-    authorIds: [[] as string[]],
+    authorNames: [[] as string[]],
     categoryIds: [[] as string[]],
     coverUrl: ['', [Validators.maxLength(500), httpUrlValidator()]],
     description: ['', [Validators.maxLength(10000)]],
@@ -190,16 +188,52 @@ export class AdminBookFormPageComponent implements OnInit, OnDestroy {
     }
   }
 
-  isAuthorSelected(id: string): boolean {
-    return (this.form.get('authorIds')?.value as string[]).includes(id);
-  }
-
   isCategorySelected(id: string): boolean {
     return (this.form.get('categoryIds')?.value as string[]).includes(id);
   }
 
-  toggleAuthor(id: string, checked: boolean): void {
-    this.toggleId('authorIds', id, checked);
+  get authorNames(): string[] {
+    return (this.form.get('authorNames')?.value as string[]) ?? [];
+  }
+
+  addAuthorName(): void {
+    const name = this.authorDraft.trim();
+    if (!name || this.saving || this.actionBusy) {
+      return;
+    }
+    const current = [...this.authorNames];
+    if (current.some((existing) => namesEqualTr(existing, name))) {
+      this.authorDraft = '';
+      this.cdr.markForCheck();
+      return;
+    }
+    if (current.length >= MAX_AUTHOR_NAMES) {
+      this.toast.error('En fazla 20 yazar eklenebilir.');
+      return;
+    }
+    current.push(name);
+    this.form.get('authorNames')?.setValue(current);
+    this.form.get('authorNames')?.markAsDirty();
+    this.authorDraft = '';
+    this.cdr.markForCheck();
+  }
+
+  onAuthorDraftKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      this.addAuthorName();
+    }
+  }
+
+  removeAuthorName(index: number): void {
+    const current = [...this.authorNames];
+    if (index < 0 || index >= current.length) {
+      return;
+    }
+    current.splice(index, 1);
+    this.form.get('authorNames')?.setValue(current);
+    this.form.get('authorNames')?.markAsDirty();
+    this.cdr.markForCheck();
   }
 
   toggleCategory(id: string, checked: boolean): void {
@@ -443,7 +477,7 @@ export class AdminBookFormPageComponent implements OnInit, OnDestroy {
       });
   }
 
-  private toggleId(controlName: 'authorIds' | 'categoryIds', id: string, checked: boolean): void {
+  private toggleId(controlName: 'categoryIds', id: string, checked: boolean): void {
     const current = [...(this.form.get(controlName)?.value as string[])];
     const idx = current.indexOf(id);
     if (checked && idx < 0) {
@@ -463,8 +497,7 @@ export class AdminBookFormPageComponent implements OnInit, OnDestroy {
   private applyIsbnMetadata(meta: IsbnMetadataResponse): void {
     const { patch, hints } = buildIsbnLookupApply(
       meta,
-      this.authors,
-      this.publishers,
+      this.categories,
       this.form.get('isbn')?.value,
       namesEqualTr,
     );
@@ -477,11 +510,12 @@ export class AdminBookFormPageComponent implements OnInit, OnDestroy {
 
   private resetCreateForm(): void {
     this.loadedIsbn = null;
+    this.authorDraft = '';
     this.form.reset({
       title: '',
-      publisherId: '',
+      publisherName: '',
       priceAmount: null,
-      authorIds: [],
+      authorNames: [],
       categoryIds: [],
       coverUrl: '',
       description: '',
@@ -496,12 +530,13 @@ export class AdminBookFormPageComponent implements OnInit, OnDestroy {
   private patchFromBook(book: AdminBook): void {
     this.book = book;
     this.loadedIsbn = book.isbn || null;
+    this.authorDraft = '';
     this.form.reset({
       title: book.title,
-      publisherId: book.publisher.id,
+      publisherName: book.publisher.name,
       priceAmount:
         book.priceAmount != null ? roundMoney2(Number(book.priceAmount)) : null,
-      authorIds: book.authors.map((a) => a.id),
+      authorNames: book.authors.map((a) => a.name),
       categoryIds: book.categories.map((c) => c.id),
       coverUrl: book.coverUrl || '',
       description: book.description || '',
@@ -524,15 +559,9 @@ export class AdminBookFormPageComponent implements OnInit, OnDestroy {
   }
 
   private loadLookups(): Observable<void> {
-    return forkJoin({
-      publishers: this.loadAll((page, size) => this.api.listPublishers({ page, size })),
-      authors: this.loadAll((page, size) => this.api.listAuthors({ page, size })),
-      categories: this.loadAll((page, size) => this.api.listCategories({ page, size })),
-    }).pipe(
-      map((result) => {
-        this.publishers = result.publishers;
-        this.authors = result.authors;
-        this.categories = result.categories;
+    return this.loadAll((page, size) => this.api.listCategories({ page, size })).pipe(
+      map((categories) => {
+        this.categories = categories;
       }),
     );
   }

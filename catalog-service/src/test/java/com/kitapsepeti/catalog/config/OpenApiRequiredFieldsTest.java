@@ -8,15 +8,22 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
 
 import com.kitapsepeti.catalog.ApiTestSupport;
+import com.kitapsepeti.catalog.client.BookMetadataClient;
+import com.kitapsepeti.catalog.dto.response.IsbnMetadataResponse;
 import com.kitapsepeti.catalog.support.InternalTestKeys;
 import com.kitapsepeti.catalog.support.TestJwt;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -28,11 +35,14 @@ import tools.jackson.databind.json.JsonMapper;
  * kodunun dokümanda yazan şemasına karşı (iç içe şemalar dahil) denetlenir; required alan eksik ya da null olamaz.
  * 2xx yanıtlardan ulaşılabilen her şema en az bir örnekte denetlenmiş olmalı.
  */
+@Import(OpenApiRequiredFieldsTest.IsbnLookupStubConfig.class)
 class OpenApiRequiredFieldsTest extends ApiTestSupport {
 
 	private static final String ADMIN = TestJwt.admin(SUBJECT);
 
 	private static final String SCHEMA_PREFIX = "#/components/schemas/";
+
+	private static final String VALID_ISBN13 = "9780306406157";
 
 	@Autowired
 	private JsonMapper jsonMapper;
@@ -58,10 +68,12 @@ class OpenApiRequiredFieldsTest extends ApiTestSupport {
 			.content("{\"name\":\"Roman\",\"parentId\":\"%s\"}".formatted(rootId))).get("id").asString();
 		// Opsiyonel alanlar (isbn, açıklama, kapak, sayfa sayısı) bilinçli olarak boş bırakılır.
 		String bookId = check("post", "/api/admin/books", 201, admin(post("/api/admin/books")).content("""
-				{"title":"Deneme","publisherId":"%s","priceAmount":129.90,"initialStock":5,
-				"authorIds":["%s"],"categoryIds":["%s"]}""".formatted(publisherId, authorId, childId)))
+				{"title":"Deneme","publisherName":"Deniz Yayınları","priceAmount":129.90,"initialStock":5,
+				"authorNames":["Ayşe Kaya"],"categoryIds":["%s"]}""".formatted(childId)))
 			.get("id").asString();
 		check("post", "/api/admin/books/{id}/publish", 200, admin(post("/api/admin/books/{id}/publish", bookId)));
+		check("get", "/api/admin/books/isbn-lookup", 200,
+				admin(get("/api/admin/books/isbn-lookup").param("isbn", VALID_ISBN13)));
 
 		check("get", "/api/books", 200, get("/api/books"));
 		check("get", "/api/books/{id}", 200, get("/api/books/{id}", bookId));
@@ -164,6 +176,18 @@ class OpenApiRequiredFieldsTest extends ApiTestSupport {
 		for (JsonNode property : schema.path("properties")) {
 			collectRefs(property, names);
 		}
+	}
+
+	@TestConfiguration
+	static class IsbnLookupStubConfig {
+
+		@Bean
+		@Primary
+		BookMetadataClient bookMetadataClient() {
+			return isbn -> Optional.of(new IsbnMetadataResponse(isbn, "Stub Title", null, null, null,
+					List.of("Stub Author"), List.of("Stub Publisher"), List.of("Fiction")));
+		}
+
 	}
 
 }
