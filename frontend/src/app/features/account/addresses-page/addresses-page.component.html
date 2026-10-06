@@ -1,7 +1,7 @@
 <section class="container py-4 addresses-page">
-  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+  <div class="addresses-page__toolbar d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
     <h1 class="h4 mb-0">Adreslerim</h1>
-    <a routerLink="/account/profile" class="small text-decoration-none">Profile dön</a>
+    <a routerLink="/account/profile" class="account-chip-link">Profile dön</a>
   </div>
 
   <app-spinner *ngIf="state === 'loading'"></app-spinner>

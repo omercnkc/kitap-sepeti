@@ -12,8 +12,8 @@
 | --- | --- | --- |
 | Shell | `features/admin/admin-shell/` | yan menü; lg altı NgbOffcanvas |
 | Header Sepet | `layout/header/` | **Kural A:** `role===ADMIN` iken Sepet+rozet her yerde gizli; USER/misafir aynı |
-| Marka logo | `assets/brand/logo.png` | header + mobil menü `<img>`; metin tekrarı yok; favicon aynı PNG |
-| Header nav | `layout/header/` | `header-nav-btn` outline chip; active primary+turuncu vurgu; Sepet rozeti chip içinde |
+| Marka logo | `assets/brand/logo.png` | header + mobil menü `<img>`; metin tekrarı yok; favicon aynı PNG; brand `flex-shrink:0`, logo yükseklik 40px sabit |
+| Header nav | `layout/header/` | `header-nav-btn` outline chip; active primary border/bg (font-weight idle ile aynı); Sepet rozeti chip içinde |
 | Publishers / Authors | `admin-*-page/` | lg tablo / dar kart; modal CRUD |
 | Categories | `admin-categories-page/` | düz satır ağaç; `level` girinti + └/├ + Alt kategori rozeti + «Üst: …»; kart yok |
 
@@ -46,12 +46,12 @@
 | --- | --- | --- |
 | Modeller | `core/models/user.ts` | UpdateProfile / Address OpenAPI birebir |
 | AccountApi | `core/api/account.api.ts` | PATCH `/api/me`; addresses CRUD; setDefault=PATCH isDefault |
-| ProfilePage | `features/account/profile-page/` | Reactive Forms; phone `""` = sil |
+| ProfilePage | `features/account/profile-page/` | toolbar full-width (h1 + Adreslerim chip sağ); form panel `max-width:28rem` ortada |
 | AddressForm | `shared/components/address-form/` | İl→İlçe→Mahalle select; TR cep `trPhoneValidator`; checkout yeniden kullanır |
 | TR geo | `core/geo/TrAddressDataService` + `assets/geo/` | lazy JSON + shareReplay; `city`/`district`/`line1` string map |
 | TR phone | `shared/validators/tr-phone*` | normalize → `5xxxxxxxxx`; register/profile opsiyonel, adres zorunlu |
-| AddressListPage | `features/account/addresses-page/` | modal CRUD; `/addresses/:id` 404 EmptyState |
-| Header | `layout/header/` | Profil → `/account/profile`; Adreslerim → `/account/addresses` |
+| AddressListPage | `features/account/addresses-page/` | toolbar full-width (h1 + Profile dön chip sağ); modal CRUD; `/addresses/:id` 404 EmptyState |
+| Header | `layout/header/` | Profil → `/account/profile`; Adreslerim → `/account/addresses`; logo `flex-shrink:0` + sabit 40px; active font-weight idle ile aynı |
 
 ## Sepet
 

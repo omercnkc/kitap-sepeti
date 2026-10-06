@@ -11,38 +11,40 @@ $header-nav-navy: #1a2b4a;
 }
 
 .navbar-brand {
-  max-width: calc(100% - 3.25rem);
+  flex-shrink: 0;
   padding-top: 0;
   padding-bottom: 0;
   line-height: 1;
   margin-right: 0.75rem;
+
+  // Mobil: toggler için yer; lg+'da menü sayısına bağlı daralma yok
+  @media (max-width: 991.98px) {
+    max-width: calc(100% - 3.25rem);
+  }
 }
 
 .app-header__brand-link {
   display: inline-flex;
   align-items: center;
+  flex-shrink: 0;
   text-decoration: none;
 }
 
 .app-header__logo {
   display: block;
+  flex-shrink: 0;
   height: 40px;
   width: auto;
-  max-width: min(180px, 45vw);
+  max-width: 160px;
   object-fit: contain;
 }
 
 .app-header__logo--menu {
-  height: 42px;
-  max-width: 160px;
+  height: 40px;
+  max-width: 140px;
 }
 
 @media (min-width: 992px) {
-  .app-header__logo {
-    height: 48px;
-    max-width: 200px;
-  }
-
   .navbar-brand {
     margin-right: 1rem;
   }
@@ -81,11 +83,12 @@ $header-nav-navy: #1a2b4a;
     outline-offset: 2px;
   }
 
+  // Active: border/bg vurgusu; font-weight idle ile aynı (logo/menü kayması yok)
   &.active {
     border-color: rgba($primary, 0.35);
     background-color: rgba($primary, 0.08);
     color: $primary !important;
-    font-weight: 600;
+    font-weight: 500;
   }
 }
 

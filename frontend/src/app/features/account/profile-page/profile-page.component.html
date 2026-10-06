@@ -1,97 +1,99 @@
 <section class="container py-4 profile-page">
-  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+  <div class="profile-page__toolbar d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
     <h1 class="h4 mb-0">Profil</h1>
-    <a routerLink="/account/addresses" class="small text-decoration-none">Adreslerim</a>
+    <a routerLink="/account/addresses" class="account-chip-link">Adreslerim</a>
   </div>
 
-  <app-spinner *ngIf="loading"></app-spinner>
+  <div class="profile-page__panel">
+    <app-spinner *ngIf="loading"></app-spinner>
 
-  <form
-    *ngIf="!loading"
-    [formGroup]="form"
-    (ngSubmit)="onSubmit()"
-    novalidate
-    class="profile-page__form"
-  >
-    <div class="mb-3">
-      <label class="form-label" for="profile-email">E-posta</label>
-      <p id="profile-email" class="form-control-plaintext border rounded px-3 py-2 mb-0 bg-light">
-        {{ email }}
-      </p>
-      <div class="form-text">E-posta değiştirilemez.</div>
-    </div>
-
-    <div class="mb-3">
-      <label class="form-label" for="profile-firstName">Ad</label>
-      <input
-        id="profile-firstName"
-        type="text"
-        class="form-control"
-        formControlName="firstName"
-        autocomplete="given-name"
-        maxlength="80"
-        [class.is-invalid]="form.get('firstName')!.touched && form.get('firstName')!.invalid"
-      />
-      <div
-        *ngIf="form.get('firstName')!.touched && form.get('firstName')!.hasError('required')"
-        class="invalid-feedback d-block"
-      >
-        Ad gerekli.
+    <form
+      *ngIf="!loading"
+      [formGroup]="form"
+      (ngSubmit)="onSubmit()"
+      novalidate
+      class="profile-page__form"
+    >
+      <div class="mb-3">
+        <label class="form-label" for="profile-email">E-posta</label>
+        <p id="profile-email" class="form-control-plaintext border rounded px-3 py-2 mb-0 bg-light">
+          {{ email }}
+        </p>
+        <div class="form-text">E-posta değiştirilemez.</div>
       </div>
-      <app-field-error [errors]="fieldErrors" field="firstName"></app-field-error>
-    </div>
 
-    <div class="mb-3">
-      <label class="form-label" for="profile-lastName">Soyad</label>
-      <input
-        id="profile-lastName"
-        type="text"
-        class="form-control"
-        formControlName="lastName"
-        autocomplete="family-name"
-        maxlength="80"
-        [class.is-invalid]="form.get('lastName')!.touched && form.get('lastName')!.invalid"
-      />
-      <div
-        *ngIf="form.get('lastName')!.touched && form.get('lastName')!.hasError('required')"
-        class="invalid-feedback d-block"
-      >
-        Soyad gerekli.
+      <div class="mb-3">
+        <label class="form-label" for="profile-firstName">Ad</label>
+        <input
+          id="profile-firstName"
+          type="text"
+          class="form-control"
+          formControlName="firstName"
+          autocomplete="given-name"
+          maxlength="80"
+          [class.is-invalid]="form.get('firstName')!.touched && form.get('firstName')!.invalid"
+        />
+        <div
+          *ngIf="form.get('firstName')!.touched && form.get('firstName')!.hasError('required')"
+          class="invalid-feedback d-block"
+        >
+          Ad gerekli.
+        </div>
+        <app-field-error [errors]="fieldErrors" field="firstName"></app-field-error>
       </div>
-      <app-field-error [errors]="fieldErrors" field="lastName"></app-field-error>
-    </div>
 
-    <div class="mb-3">
-      <label class="form-label" for="profile-phone">
-        Telefon <span class="text-muted">(opsiyonel — boş kaydedince silinir)</span>
-      </label>
-      <input
-        id="profile-phone"
-        type="tel"
-        class="form-control"
-        formControlName="phone"
-        appTrPhoneInput
-        inputmode="tel"
-        autocomplete="tel"
-        maxlength="16"
-        placeholder="05xx xxx xx xx"
-        [class.is-invalid]="form.get('phone')!.touched && form.get('phone')!.invalid"
-      />
-      <div
-        *ngIf="form.get('phone')!.touched && form.get('phone')!.hasError('trPhone')"
-        class="invalid-feedback d-block"
-      >
-        Geçerli bir cep telefonu girin (05xx xxx xx xx).
+      <div class="mb-3">
+        <label class="form-label" for="profile-lastName">Soyad</label>
+        <input
+          id="profile-lastName"
+          type="text"
+          class="form-control"
+          formControlName="lastName"
+          autocomplete="family-name"
+          maxlength="80"
+          [class.is-invalid]="form.get('lastName')!.touched && form.get('lastName')!.invalid"
+        />
+        <div
+          *ngIf="form.get('lastName')!.touched && form.get('lastName')!.hasError('required')"
+          class="invalid-feedback d-block"
+        >
+          Soyad gerekli.
+        </div>
+        <app-field-error [errors]="fieldErrors" field="lastName"></app-field-error>
       </div>
-      <app-field-error [errors]="fieldErrors" field="phone"></app-field-error>
-    </div>
 
-    <div *ngIf="formError" class="alert alert-danger py-2" role="alert">
-      {{ formError }}
-    </div>
+      <div class="mb-3">
+        <label class="form-label" for="profile-phone">
+          Telefon <span class="text-muted">(opsiyonel — boş kaydedince silinir)</span>
+        </label>
+        <input
+          id="profile-phone"
+          type="tel"
+          class="form-control"
+          formControlName="phone"
+          appTrPhoneInput
+          inputmode="tel"
+          autocomplete="tel"
+          maxlength="16"
+          placeholder="05xx xxx xx xx"
+          [class.is-invalid]="form.get('phone')!.touched && form.get('phone')!.invalid"
+        />
+        <div
+          *ngIf="form.get('phone')!.touched && form.get('phone')!.hasError('trPhone')"
+          class="invalid-feedback d-block"
+        >
+          Geçerli bir cep telefonu girin (05xx xxx xx xx).
+        </div>
+        <app-field-error [errors]="fieldErrors" field="phone"></app-field-error>
+      </div>
 
-    <button type="submit" class="btn btn-primary" [disabled]="submitting || form.invalid">
-      {{ submitting ? 'Kaydediliyor…' : 'Kaydet' }}
-    </button>
-  </form>
+      <div *ngIf="formError" class="alert alert-danger py-2" role="alert">
+        {{ formError }}
+      </div>
+
+      <button type="submit" class="btn btn-primary" [disabled]="submitting || form.invalid">
+        {{ submitting ? 'Kaydediliyor…' : 'Kaydet' }}
+      </button>
+    </form>
+  </div>
 </section>
