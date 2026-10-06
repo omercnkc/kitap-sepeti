@@ -45,7 +45,7 @@ describe('BookListPageComponent', () => {
       providers: [
         {
           provide: AuthService,
-          useValue: { isLoggedIn: () => false },
+          useValue: { isLoggedIn: () => false, isAdmin: () => false },
         },
         {
           provide: CartStore,

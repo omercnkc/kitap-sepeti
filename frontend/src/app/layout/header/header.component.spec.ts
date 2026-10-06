@@ -110,6 +110,28 @@ describe('HeaderComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
     expect(el.querySelector('a[routerLink="/cart"]')).toBeFalsy();
     expect(el.querySelector('a[routerLink="/admin"]')).toBeTruthy();
+    expect(el.querySelector('a[routerLink="/orders"]')).toBeFalsy();
+  });
+
+  it('ADMIN /books nav label is Vitrin', () => {
+    isAdminSpy.and.returnValue(true);
+    currentUser$.next({
+      id: 'u1',
+      email: 'admin@b.com',
+      firstName: 'Ada',
+      lastName: 'Min',
+      phone: null,
+      role: 'ADMIN',
+      status: 'ACTIVE',
+    });
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const booksNav = el.querySelector(
+      'ul.navbar-nav a.nav-link[routerLink="/books"]',
+    );
+    expect(booksNav?.getAttribute('routerLink')).toBe('/books');
+    expect(booksNav?.textContent?.trim()).toBe('Vitrin');
   });
 
   it('should show cart for USER', () => {
@@ -127,6 +149,28 @@ describe('HeaderComponent', () => {
 
     const el = fixture.nativeElement as HTMLElement;
     expect(el.querySelector('a[routerLink="/cart"]')).toBeTruthy();
+    expect(el.querySelector('a[routerLink="/orders"]')).toBeTruthy();
+  });
+
+  it('USER /books nav label is Kitaplar', () => {
+    isAdminSpy.and.returnValue(false);
+    currentUser$.next({
+      id: 'u1',
+      email: 'a@b.com',
+      firstName: 'Ali',
+      lastName: 'Veli',
+      phone: null,
+      role: 'USER',
+      status: 'ACTIVE',
+    });
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const booksNav = el.querySelector(
+      'ul.navbar-nav a.nav-link[routerLink="/books"]',
+    );
+    expect(booksNav?.getAttribute('routerLink')).toBe('/books');
+    expect(booksNav?.textContent?.trim()).toBe('Kitaplar');
   });
 
   it('should show admin link for ADMIN', () => {

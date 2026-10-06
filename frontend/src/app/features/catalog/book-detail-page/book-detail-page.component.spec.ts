@@ -15,12 +15,14 @@ describe('BookDetailPageComponent', () => {
   let paramMap$: BehaviorSubject<ReturnType<typeof convertToParamMap>>;
   let router: Router;
   let isLoggedInSpy: jasmine.Spy;
+  let isAdminSpy: jasmine.Spy;
   let addSpy: jasmine.Spy;
   let toastSuccessSpy: jasmine.Spy;
 
   beforeEach(async () => {
     paramMap$ = new BehaviorSubject(convertToParamMap({ id: 'b1' }));
     isLoggedInSpy = jasmine.createSpy('isLoggedIn').and.returnValue(false);
+    isAdminSpy = jasmine.createSpy('isAdmin').and.returnValue(false);
     addSpy = jasmine.createSpy('add').and.returnValue(of({ itemCount: 1 }));
     toastSuccessSpy = jasmine.createSpy('success');
     await TestBed.configureTestingModule({
@@ -33,7 +35,7 @@ describe('BookDetailPageComponent', () => {
         },
         {
           provide: AuthService,
-          useValue: { isLoggedIn: isLoggedInSpy },
+          useValue: { isLoggedIn: isLoggedInSpy, isAdmin: isAdminSpy },
         },
         {
           provide: CartStore,
@@ -146,5 +148,37 @@ describe('BookDetailPageComponent', () => {
 
     expect(addSpy).toHaveBeenCalledWith('b1');
     expect(toastSuccessSpy).toHaveBeenCalledWith('Sepete eklendi');
+  });
+
+  it('hides Sepete ekle for ADMIN and skips cart/toast', () => {
+    isAdminSpy.and.returnValue(true);
+    isLoggedInSpy.and.returnValue(true);
+    httpMock.expectOne('/api/books/b1').flush({
+      id: 'b1',
+      title: 'Detay Kitap',
+      authors: [],
+      publisher: { id: 'p1', name: 'Yayınevi', slug: 'yayinevi' },
+      categories: [],
+      priceAmount: 80,
+      currency: 'TRY',
+      inStock: true,
+    });
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.textContent).not.toContain('Sepete ekle');
+
+    fixture.componentInstance.onAddToCart({
+      id: 'b1',
+      title: 'Detay Kitap',
+      authors: [],
+      publisher: { id: 'p1', name: 'Yayınevi', slug: 'yayinevi' },
+      categories: [],
+      priceAmount: 80,
+      currency: 'TRY',
+      inStock: true,
+    });
+    expect(addSpy).not.toHaveBeenCalled();
+    expect(toastSuccessSpy).not.toHaveBeenCalled();
   });
 });

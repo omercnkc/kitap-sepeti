@@ -19,9 +19,10 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Yalnızca Resource Server: token'ı user-service üretir, burada JWKS ile doğrulanır ({@link JwtDecoderConfig}).
- * Herkese açık uçlar yalnızca health ve OpenAPI dokümanı/Swagger UI (cart ile aynı). /api/** kimlik ister (USER ve
- * ADMIN, ayrı rol şartı yok; sipariş sahipliği serviste); kimlikli istekte olmayan /api yolu MVC'nin 404'ü. Geri kalan her yol denyAll:
- * kimliksiz 401, kimlikli 403. Order internal uç sunmaz; internal API anahtarı zinciri yok.
+ * Herkese açık uçlar yalnızca health ve OpenAPI dokümanı/Swagger UI (cart ile aynı). {@code POST /api/orders/checkout}
+ * yalnız {@code ROLE_USER} (ADMIN → 403). Diğer {@code /api/**} kimlik ister (USER ve ADMIN; sahiplik serviste).
+ * Kimlikli istekte olmayan /api yolu MVC'nin 404'ü. Geri kalan her yol denyAll: kimliksiz 401, kimlikli 403.
+ * Order internal uç sunmaz; internal API anahtarı zinciri yok.
  */
 @Configuration
 @EnableWebSecurity
@@ -60,6 +61,7 @@ public class SecurityConfig {
 				.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
 				// Aksi halde controller hatasının /error'a yönlendirilmesi de reddedilirdi.
 				.requestMatchers("/error").permitAll()
+				.requestMatchers(HttpMethod.POST, "/api/orders/checkout").hasRole("USER")
 				.requestMatchers("/api/**").authenticated()
 				.anyRequest().denyAll())
 			.oauth2ResourceServer(resourceServer -> resourceServer

@@ -44,6 +44,11 @@ export class HeaderComponent {
     return this.auth.isAdmin(user);
   }
 
+  /** Header /books: ADMIN → Vitrin, USER/misafir → Kitaplar. */
+  booksNavLabel(user: UserResponse | null): string {
+    return user != null && this.isAdmin(user) ? 'Vitrin' : 'Kitaplar';
+  }
+
   displayName(user: UserResponse): string {
     const name = `${user.firstName} ${user.lastName}`.trim();
     return name || user.email;

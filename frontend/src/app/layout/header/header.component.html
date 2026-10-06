@@ -26,7 +26,7 @@
             class="nav-link header-nav-btn"
             routerLink="/books"
             routerLinkActive="active"
-            >Kitaplar</a
+            >{{ booksNavLabel(currentUser$ | async) }}</a
           >
         </li>
         <li class="nav-item" *ngIf="showCart$ | async">
@@ -63,7 +63,7 @@
               >Adreslerim</a
             >
           </li>
-          <li class="nav-item">
+          <li class="nav-item" *ngIf="!isAdmin(user)">
             <a
               class="nav-link header-nav-btn"
               routerLink="/orders"
@@ -148,7 +148,7 @@
         routerLinkActive="active"
         (click)="offcanvas.dismiss()"
       >
-        Kitaplar
+        {{ booksNavLabel(currentUser$ | async) }}
       </a>
       <a
         *ngIf="showCart$ | async"
@@ -185,6 +185,7 @@
           Adreslerim
         </a>
         <a
+          *ngIf="!isAdmin(user)"
           class="nav-link header-nav-btn"
           routerLink="/orders"
           routerLinkActive="active"

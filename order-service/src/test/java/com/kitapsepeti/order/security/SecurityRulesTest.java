@@ -52,6 +52,19 @@ class SecurityRulesTest extends ApiTestSupport {
 			.andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
 	}
 
+	/** ADMIN müşteri checkout yapamaz; satış kataloğu/vitrin kalır (Özellik 6). */
+	@Test
+	void checkoutWithAdminTokenReturns403() throws Exception {
+		mockMvc.perform(post(ORDERS + "/checkout").with(bearer(TestJwt.admin(SUBJECT)))
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("{}"))
+			.andExpect(status().isForbidden())
+			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+			.andExpect(jsonPath("$.status").value(403))
+			.andExpect(jsonPath("$.code").value("FORBIDDEN"))
+			.andExpect(jsonPath("$.instance").value(ORDERS + "/checkout"));
+	}
+
 	/**
 	 * cart ile aynı: kimlikli istekte olmayan /api yolu MVC'nin 404'ü (USER ve ADMIN aynı). Tek segmentli
 	 * {@code /api/orders/x} sipariş ucuna düşer (geçersiz id → 400); bu yüzden iki segmentli yol.

@@ -84,6 +84,11 @@ export class BookDetailPageComponent implements OnInit, OnDestroy {
     return book.authors.map((a) => a.name).join(', ');
   }
 
+  /** ADMIN Vitrin’de sepete eklemez (Özellik 6 ek). */
+  get showAddToCart(): boolean {
+    return !this.auth.isAdmin();
+  }
+
   categoriesLabel(book: BookDetail): string {
     if (!book.categories || book.categories.length === 0) {
       return '';
@@ -92,6 +97,9 @@ export class BookDetailPageComponent implements OnInit, OnDestroy {
   }
 
   onAddToCart(book: BookDetail): void {
+    if (!this.showAddToCart) {
+      return;
+    }
     if (!this.auth.isLoggedIn()) {
       void this.router.navigate(['/login'], {
         queryParams: { returnUrl: this.router.url },

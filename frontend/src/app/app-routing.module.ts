@@ -3,6 +3,7 @@ import { RouterModule, Routes } from '@angular/router';
 import { AdminGuard } from './core/guards/admin.guard';
 import { AuthGuard } from './core/guards/auth.guard';
 import { GuestGuard } from './core/guards/guest.guard';
+import { NonAdminGuard } from './core/guards/non-admin.guard';
 import { ShellComponent } from './layout/shell/shell.component';
 import { NotFoundComponent } from './layout/not-found/not-found.component';
 
@@ -35,13 +36,15 @@ const routes: Routes = [
       },
       {
         path: 'checkout',
-        canActivate: [AuthGuard],
+        canActivate: [AuthGuard, NonAdminGuard],
+        canLoad: [NonAdminGuard],
         loadChildren: () =>
           import('./features/checkout/checkout.module').then((m) => m.CheckoutModule),
       },
       {
         path: 'orders',
-        canActivate: [AuthGuard],
+        canActivate: [AuthGuard, NonAdminGuard],
+        canLoad: [NonAdminGuard],
         loadChildren: () => import('./features/orders/orders.module').then((m) => m.OrdersModule),
       },
       {
