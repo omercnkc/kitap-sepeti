@@ -5,13 +5,6 @@ export interface AuthorRef {
   slug: string;
 }
 
-/** OpenAPI `PublisherRef` */
-export interface PublisherRef {
-  id: string;
-  name: string;
-  slug: string;
-}
-
 /** OpenAPI `CategoryRef` */
 export interface CategoryRef {
   id: string;
@@ -24,7 +17,6 @@ export interface BookSummary {
   id: string;
   title: string;
   authors: AuthorRef[];
-  publisher: PublisherRef;
   priceAmount: number;
   currency: string;
   inStock: boolean;
@@ -36,7 +28,6 @@ export interface BookDetail {
   id: string;
   title: string;
   authors: AuthorRef[];
-  publisher: PublisherRef;
   categories: CategoryRef[];
   priceAmount: number;
   currency: string;
@@ -59,7 +50,6 @@ export interface CategoryTree {
 /** `GET /api/books` query parametreleri (OpenAPI path parameters) */
 export interface BookFilter {
   categoryId?: string | null;
-  publisherId?: string | null;
   authorId?: string | null;
   minPrice?: number | null;
   maxPrice?: number | null;

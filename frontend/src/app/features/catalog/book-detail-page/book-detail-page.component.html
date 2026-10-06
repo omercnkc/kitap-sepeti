@@ -40,9 +40,6 @@
         <p *ngIf="authorsLabel(state.book)" class="text-muted mb-1">
           {{ authorsLabel(state.book) }}
         </p>
-        <p *ngIf="state.book.publisher" class="text-muted small mb-2">
-          {{ state.book.publisher.name }}
-        </p>
 
         <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
           <span class="fs-5 fw-semibold">

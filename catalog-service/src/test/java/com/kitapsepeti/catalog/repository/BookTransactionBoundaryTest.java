@@ -11,7 +11,6 @@ import com.kitapsepeti.catalog.TestcontainersConfiguration;
 import com.kitapsepeti.catalog.entity.Author;
 import com.kitapsepeti.catalog.entity.Book;
 import com.kitapsepeti.catalog.entity.Category;
-import com.kitapsepeti.catalog.entity.Publisher;
 import org.hibernate.LazyInitializationException;
 import org.hibernate.StaleStateException;
 import org.junit.jupiter.api.AfterEach;
@@ -38,9 +37,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Import(TestcontainersConfiguration.class)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class BookTransactionBoundaryTest {
-
-	@Autowired
-	private PublisherRepository publisherRepository;
 
 	@Autowired
 	private AuthorRepository authorRepository;
@@ -77,7 +73,6 @@ class BookTransactionBoundaryTest {
 		jdbc.update("DELETE FROM authors");
 		jdbc.update("UPDATE categories SET parent_id = NULL");
 		jdbc.update("DELETE FROM categories");
-		jdbc.update("DELETE FROM publishers");
 	}
 
 	@Test
@@ -89,7 +84,6 @@ class BookTransactionBoundaryTest {
 
 		// Kontrol: entity graph olmadan aynı erişim transaction dışında patlar; test anlamlı.
 		assertThatThrownBy(() -> plain.getAuthors().size()).isInstanceOf(LazyInitializationException.class);
-		assertThat(detailed.getPublisher().getName()).isEqualTo("Yayınevi");
 		assertThat(detailed.getAuthors()).extracting(Author::getName).containsExactly("Yazar");
 		assertThat(detailed.getCategories()).extracting(Category::getName).containsExactly("Roman");
 	}
@@ -121,8 +115,7 @@ class BookTransactionBoundaryTest {
 
 	private UUID createBookWithAuthorAndCategory() {
 		return tx.execute(status -> {
-			Publisher publisher = publisherRepository.save(new Publisher("Yayınevi", "yayinevi"));
-			Book book = new Book("Kitap", publisher, new BigDecimal("50.00"));
+			Book book = new Book("Kitap", new BigDecimal("50.00"));
 			book.getAuthors().add(authorRepository.save(new Author("Yazar", "yazar")));
 			book.getCategories().add(categoryRepository.save(new Category(null, "Roman", "roman")));
 			return bookRepository.save(book).getId();

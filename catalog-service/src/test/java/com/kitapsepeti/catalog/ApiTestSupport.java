@@ -2,6 +2,8 @@ package com.kitapsepeti.catalog;
 
 import java.util.UUID;
 
+import com.kitapsepeti.catalog.storage.CoverStorage;
+import com.kitapsepeti.catalog.storage.InMemoryCoverStorage;
 import com.kitapsepeti.catalog.support.JwksServer;
 import com.kitapsepeti.catalog.support.MutableClock;
 import com.kitapsepeti.catalog.support.MutableClockConfiguration;
@@ -44,6 +46,9 @@ public abstract class ApiTestSupport {
 	@Autowired
 	protected MutableClock clock;
 
+	@Autowired
+	private CoverStorage coverStorage;
+
 	@DynamicPropertySource
 	static void jwksProperties(DynamicPropertyRegistry registry) {
 		registry.add("spring.security.oauth2.resourceserver.jwt.jwk-set-uri", JWKS::jwkSetUri);
@@ -60,7 +65,9 @@ public abstract class ApiTestSupport {
 		jdbc.update("DELETE FROM authors");
 		jdbc.update("UPDATE categories SET parent_id = NULL");
 		jdbc.update("DELETE FROM categories");
-		jdbc.update("DELETE FROM publishers");
+		if (this.coverStorage instanceof InMemoryCoverStorage memory) {
+			memory.clear();
+		}
 	}
 
 	protected static RequestPostProcessor bearer(String token) {

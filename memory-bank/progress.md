@@ -11,6 +11,8 @@
 - **TÜM BACKEND MİKROSERVİS MİMARİSİ TAMAMLANDI** (User, Catalog, Cart, Payment, Order ve API Gateway servisleri, MySQL, RabbitMQ, Docker Compose üzerinde canlı ve sağlıklı).
 - **catalog-service: TAMAMLANDI** (Adım 1–11: şema, public okuma, admin CRUD, kitap yaşam döngüsü + stok, outbox olayları,
   internal stok rezervasyonu + süre dolumu, OpenAPI + drift testi, actuator, Docker + compose). 270 test yeşil.
+- **Özellik 3 (MinIO kapak):** compose MinIO + minio-init; catalog `CoverStorage`/`CoverIngestService` (allowlist SSRF);
+  admin multipart cover; gateway 6MB codec; admin form dosya yükleme. Testte InMemoryCoverStorage.
 - user-service: Flyway V1 şeması, entity/repository, RS256 JWT + JWKS, kayıt/giriş/refresh (rotation),
   Resource Server + `/api/me` + adres CRUD, RFC 9457 hata altyapısı, outbox worker (publisher confirms,
   SKIP LOCKED), OpenAPI 3 dokümanı + Swagger UI + `docs/api/user-service.openapi.json` (drift testi ile korunur),

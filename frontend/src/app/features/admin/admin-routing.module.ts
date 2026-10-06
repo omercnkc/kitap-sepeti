@@ -4,7 +4,6 @@ import { AdminAuthorsPageComponent } from './admin-authors-page/admin-authors-pa
 import { AdminBookFormPageComponent } from './admin-book-form-page/admin-book-form-page.component';
 import { AdminBooksPageComponent } from './admin-books-page/admin-books-page.component';
 import { AdminCategoriesPageComponent } from './admin-categories-page/admin-categories-page.component';
-import { AdminPublishersPageComponent } from './admin-publishers-page/admin-publishers-page.component';
 import { AdminShellComponent } from './admin-shell/admin-shell.component';
 
 const routes: Routes = [
@@ -12,8 +11,7 @@ const routes: Routes = [
     path: '',
     component: AdminShellComponent,
     children: [
-      { path: '', pathMatch: 'full', redirectTo: 'publishers' },
-      { path: 'publishers', component: AdminPublishersPageComponent },
+      { path: '', pathMatch: 'full', redirectTo: 'authors' },
       { path: 'authors', component: AdminAuthorsPageComponent },
       { path: 'categories', component: AdminCategoriesPageComponent },
       { path: 'books', component: AdminBooksPageComponent },

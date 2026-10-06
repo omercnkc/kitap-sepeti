@@ -9,7 +9,7 @@ describe('buildIsbnLookupApply', () => {
     { id: 'c-cocuk', name: 'Çocuk', slug: 'cocuk' },
   ];
 
-  it('writes author names and publisherName text', () => {
+  it('writes author names from OL metadata', () => {
     const { patch, hints } = buildIsbnLookupApply(
       {
         isbn: '9788467520446',
@@ -18,7 +18,6 @@ describe('buildIsbnLookupApply', () => {
         coverUrl: 'https://example.com/c.jpg',
         pageCount: 200,
         authors: ['Brian Selznick'],
-        publishers: ['Scholastic'],
         subjects: [],
       },
       categories,
@@ -28,25 +27,22 @@ describe('buildIsbnLookupApply', () => {
     expect(patch['title']).toBe('Hugo');
     expect(patch['description']).toBe('ORPHAN, CLOCK KEEPER, THIEF.');
     expect(patch['authorNames']).toEqual(['Brian Selznick']);
-    expect(patch['publisherName']).toBe('Scholastic');
     expect(patch['categoryIds']).toBeUndefined();
     expect(hints).toEqual([]);
   });
 
-  it('does not emit listede-yok publisher hints', () => {
+  it('maps unknown author names from OL', () => {
     const { patch, hints } = buildIsbnLookupApply(
       {
         isbn: '9780306406157',
         title: 'Kar',
         authors: ['Bilinmeyen Yazar'],
-        publishers: ['Yok Yayınevi'],
         subjects: [],
       },
       categories,
       '',
       namesEqualTr,
     );
-    expect(patch['publisherName']).toBe('Yok Yayınevi');
     expect(patch['authorNames']).toEqual(['Bilinmeyen Yazar']);
     expect(hints).toEqual([]);
   });
@@ -57,7 +53,6 @@ describe('buildIsbnLookupApply', () => {
         isbn: '9780306406157',
         title: 'Kar',
         authors: [],
-        publishers: [],
         subjects: [],
       },
       categories,
@@ -66,7 +61,6 @@ describe('buildIsbnLookupApply', () => {
     );
     expect(patch['title']).toBe('Kar');
     expect(patch['authorNames']).toBeUndefined();
-    expect(patch['publisherName']).toBeUndefined();
   });
 
   it('maps juvenile/children subjects to Çocuk; truncates description', () => {
@@ -77,7 +71,6 @@ describe('buildIsbnLookupApply', () => {
         title: 'Hugo',
         description: longDesc,
         authors: ['Brian Selznick'],
-        publishers: ['Scholastic'],
         subjects: ['Juvenile fiction', 'Children', 'Picture books'],
       },
       categories,
@@ -85,7 +78,6 @@ describe('buildIsbnLookupApply', () => {
       namesEqualTr,
     );
     expect(patch['description']).toBe('x'.repeat(10000));
-    expect(patch['publisherName']).toBe('Scholastic');
     expect(patch['categoryIds']).toContain('c-cocuk');
   });
 
@@ -95,7 +87,6 @@ describe('buildIsbnLookupApply', () => {
         isbn: '9780306406157',
         title: 'Kar',
         authors: [],
-        publishers: [],
         subjects: ['Utterly Obscure Topic'],
       },
       categories,

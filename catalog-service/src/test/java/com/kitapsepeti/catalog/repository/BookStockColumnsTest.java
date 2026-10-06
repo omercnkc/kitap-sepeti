@@ -9,7 +9,6 @@ import java.util.UUID;
 
 import com.kitapsepeti.catalog.ApiTestSupport;
 import com.kitapsepeti.catalog.entity.Book;
-import com.kitapsepeti.catalog.entity.Publisher;
 import com.kitapsepeti.catalog.support.SqlCapture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,9 +28,6 @@ class BookStockColumnsTest extends ApiTestSupport {
 	private BookRepository bookRepository;
 
 	@Autowired
-	private PublisherRepository publisherRepository;
-
-	@Autowired
 	private PlatformTransactionManager transactionManager;
 
 	private TransactionTemplate tx;
@@ -45,8 +41,7 @@ class BookStockColumnsTest extends ApiTestSupport {
 		tx = new TransactionTemplate(transactionManager);
 		requiresNew = new TransactionTemplate(transactionManager);
 		requiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-		Publisher publisher = publisherRepository.save(new Publisher("Yayınevi", "yayinevi"));
-		bookId = bookRepository.save(new Book("Eski Başlık", publisher, new BigDecimal("50.00"), 10)).getId();
+		bookId = bookRepository.save(new Book("Eski Başlık", new BigDecimal("50.00"), 10)).getId();
 	}
 
 	@Test

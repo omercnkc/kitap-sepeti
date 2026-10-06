@@ -25,25 +25,23 @@ import org.springframework.data.repository.query.Param;
 public interface BookRepository extends JpaRepository<Book, UUID>, JpaSpecificationExecutor<Book> {
 
 	/**
-	 * Kitabı yayınevi, yazarlar ve kategorilerle tek sorguda getirir; dönen nesnenin bu alanlarına
+	 * Kitabı yazarlar ve kategorilerle tek sorguda getirir; dönen nesnenin bu alanlarına
 	 * transaction dışında da erişilebilir. İki koleksiyon da {@code Set} olduğu için birlikte fetch edilebilir.
 	 */
-	@EntityGraph(attributePaths = { "publisher", "authors", "categories" })
+	@EntityGraph(attributePaths = { "authors", "categories" })
 	Optional<Book> findWithDetailsById(UUID id);
 
 	/**
-	 * Sayfalı liste; yalnızca to-one yayınevi aynı sorguda gelir (sayım sorgusuna graph uygulanmaz).
+	 * Sayfalı liste (sayım sorgusuna graph uygulanmaz).
 	 * Koleksiyonlar burada fetch EDİLMEZ: sayfalamayla to-many fetch Hibernate'i bellekte sayfalamaya zorlar.
 	 */
 	@Override
-	@EntityGraph(attributePaths = "publisher")
 	Page<Book> findAll(Specification<Book> spec, Pageable pageable);
 
 	/**
-	 * Verilen id'lerden verilen durumdakiler, yayınevi aynı sorguda; sıra garanti edilmez. Yazarlar lazy kalır ve
+	 * Verilen id'lerden verilen durumdakiler; sıra garanti edilmez. Yazarlar lazy kalır ve
 	 * erişildiğinde {@code default_batch_fetch_size} ile tek toplu sorguda gelir.
 	 */
-	@EntityGraph(attributePaths = "publisher")
 	List<Book> findByIdInAndStatus(Collection<UUID> ids, BookStatus status);
 
 	/**

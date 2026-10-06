@@ -6,21 +6,12 @@ import {
   AuthorResponse,
   CategoryResponse,
   PageResponse,
-  PublisherResponse,
 } from '../models';
 import { AdminCatalogApi } from './admin-catalog.api';
 
 describe('AdminCatalogApi', () => {
   let api: AdminCatalogApi;
   let httpMock: HttpTestingController;
-
-  const publisher: PublisherResponse = {
-    id: 'p1',
-    name: 'Can',
-    slug: 'can',
-    createdAt: '2026-01-01T00:00:00Z',
-    updatedAt: '2026-01-01T00:00:00Z',
-  };
 
   const author: AuthorResponse = {
     id: 'a1',
@@ -41,7 +32,6 @@ describe('AdminCatalogApi', () => {
   const bookSummary: AdminBookSummary = {
     id: 'b1',
     title: 'Kar',
-    publisher: { id: 'p1', name: 'Can', slug: 'can' },
     priceAmount: 120,
     currency: 'TRY',
     status: 'draft',
@@ -69,35 +59,6 @@ describe('AdminCatalogApi', () => {
 
   afterEach(() => {
     httpMock.verify();
-  });
-
-  it('listPublishers should GET /api/admin/publishers', () => {
-    const page: PageResponse<PublisherResponse> = {
-      items: [publisher],
-      page: 0,
-      size: 20,
-      totalElements: 1,
-      totalPages: 1,
-    };
-    api.listPublishers({ page: 0, size: 20 }).subscribe((res) => expect(res).toEqual(page));
-    const req = httpMock.expectOne('/api/admin/publishers?page=0&size=20');
-    expect(req.request.method).toBe('GET');
-    req.flush(page);
-  });
-
-  it('createPublisher should POST /api/admin/publishers', () => {
-    api.createPublisher({ name: 'Can' }).subscribe((res) => expect(res).toEqual(publisher));
-    const req = httpMock.expectOne('/api/admin/publishers');
-    expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({ name: 'Can' });
-    req.flush(publisher, { status: 201, statusText: 'Created' });
-  });
-
-  it('updatePublisher should PATCH /api/admin/publishers/:id', () => {
-    api.updatePublisher('p1', { name: 'Can Yayınları' }).subscribe((res) => expect(res.id).toBe('p1'));
-    const req = httpMock.expectOne('/api/admin/publishers/p1');
-    expect(req.request.method).toBe('PATCH');
-    req.flush({ ...publisher, name: 'Can Yayınları' });
   });
 
   it('listAuthors should GET /api/admin/authors', () => {
@@ -161,12 +122,10 @@ describe('AdminCatalogApi', () => {
   });
 
   it('createBook should POST /api/admin/books', () => {
-    api
-      .createBook({ title: 'Kar', publisherName: 'YKY', priceAmount: 120 })
-      .subscribe((res) => expect(res).toEqual(book));
+    api.createBook({ title: 'Kar', priceAmount: 120 }).subscribe((res) => expect(res).toEqual(book));
     const req = httpMock.expectOne('/api/admin/books');
     expect(req.request.method).toBe('POST');
-    expect(req.request.body.publisherName).toBe('YKY');
+    expect(req.request.body).toEqual({ title: 'Kar', priceAmount: 120 });
     req.flush(book, { status: 201, statusText: 'Created' });
   });
 
@@ -202,5 +161,20 @@ describe('AdminCatalogApi', () => {
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({ delta: -2 });
     req.flush({ ...book, stockQuantity: 8, availableQuantity: 8 });
+  });
+
+  it('uploadBookCover should POST multipart FormData without Content-Type', () => {
+    const file = new File([new Uint8Array([1, 2, 3])], 'kapak.jpg', { type: 'image/jpeg' });
+    api.uploadBookCover('b1', file).subscribe((res) => {
+      expect(res.coverUrl).toContain('kitapsepeti-covers');
+    });
+    const req = httpMock.expectOne('/api/admin/books/b1/cover');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body instanceof FormData).toBe(true);
+    expect(req.request.headers.has('Content-Type')).toBe(false);
+    req.flush({
+      ...book,
+      coverUrl: 'http://localhost:9000/kitapsepeti-covers/covers/b1/x.jpg',
+    });
   });
 });

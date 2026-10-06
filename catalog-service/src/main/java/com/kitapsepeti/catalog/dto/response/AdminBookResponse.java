@@ -30,7 +30,6 @@ public record AdminBookResponse(
 		@Schema(requiredMode = REQUIRED) Long version,
 		@Schema(requiredMode = REQUIRED) Instant createdAt,
 		@Schema(requiredMode = REQUIRED) Instant updatedAt,
-		@Schema(requiredMode = REQUIRED) PublisherRef publisher,
 		@Schema(requiredMode = REQUIRED) List<AuthorRef> authors,
 		@Schema(requiredMode = REQUIRED) List<CategoryRef> categories) {
 }

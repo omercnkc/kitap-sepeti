@@ -7,8 +7,10 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
+import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -26,16 +28,17 @@ import com.jayway.jsonpath.JsonPath;
 import com.kitapsepeti.catalog.ApiTestSupport;
 import com.kitapsepeti.catalog.entity.Author;
 import com.kitapsepeti.catalog.entity.Category;
-import com.kitapsepeti.catalog.entity.Publisher;
 import com.kitapsepeti.catalog.repository.AuthorRepository;
 import com.kitapsepeti.catalog.repository.CategoryRepository;
-import com.kitapsepeti.catalog.repository.PublisherRepository;
+import com.kitapsepeti.catalog.storage.CoverStorage;
+import com.kitapsepeti.catalog.storage.InMemoryCoverStorage;
 import com.kitapsepeti.catalog.support.SqlCapture;
 import com.kitapsepeti.catalog.support.TestJwt;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -53,9 +56,6 @@ class AdminBookControllerTest extends ApiTestSupport {
 	private static final String VALID_ISBN13 = "9786053600770";
 
 	@Autowired
-	private PublisherRepository publisherRepository;
-
-	@Autowired
 	private AuthorRepository authorRepository;
 
 	@Autowired
@@ -64,7 +64,8 @@ class AdminBookControllerTest extends ApiTestSupport {
 	@Autowired
 	private JsonMapper jsonMapper;
 
-	private Publisher publisher;
+	@Autowired
+	private CoverStorage coverStorage;
 
 	private Author ahmet;
 
@@ -76,7 +77,6 @@ class AdminBookControllerTest extends ApiTestSupport {
 
 	@BeforeEach
 	void createReferences() {
-		publisher = publisherRepository.save(new Publisher("Deniz Yayınları", "deniz-yayinlari"));
 		zeynep = authorRepository.save(new Author("Zeynep Yazar", "zeynep-yazar"));
 		ahmet = authorRepository.save(new Author("Ahmet Yazar", "ahmet-yazar"));
 		edebiyat = categoryRepository.save(new Category(null, "Edebiyat", "edebiyat"));
@@ -99,6 +99,9 @@ class AdminBookControllerTest extends ApiTestSupport {
 		mockMvc.perform(sendAs(USER, post(BASE + "/" + id + "/stock-adjustments"), Map.of("delta", 5)))
 			.andExpect(status().isForbidden());
 		mockMvc.perform(sendAs(USER, post(BASE), validBook())).andExpect(status().isForbidden());
+		MockMultipartFile cover = new MockMultipartFile("file", "kapak.jpg", "image/jpeg", TINY_JPEG);
+		mockMvc.perform(multipart(BASE + "/" + id + "/cover").file(cover).with(bearer(USER)))
+			.andExpect(status().isForbidden());
 
 		mockMvc.perform(get(BASE).with(bearer(ADMIN))).andExpect(status().isOk());
 		mockMvc.perform(get(BASE + "/" + id).with(bearer(ADMIN))).andExpect(status().isOk());
@@ -129,7 +132,8 @@ class AdminBookControllerTest extends ApiTestSupport {
 			.andExpect(jsonPath("$.availableQuantity").value(7))
 			.andExpect(jsonPath("$.version").value(0))
 			.andExpect(jsonPath("$.publishedAt").value(nullValue()))
-			.andExpect(jsonPath("$.publisher.slug").value("deniz-yayinlari"))
+			// allowlist dışı dış URL saklanmaz (ingest null).
+			.andExpect(jsonPath("$.coverUrl").value(nullValue()))
 			.andExpect(jsonPath("$.authors[*].name", contains("Ahmet Yazar", "Zeynep Yazar")))
 			.andExpect(jsonPath("$.categories[*].slug", contains("roman")))
 			.andExpect(jsonPath("$.pageCount").value(180))
@@ -139,8 +143,33 @@ class AdminBookControllerTest extends ApiTestSupport {
 
 		assertThat(result.getResponse().getHeader("Location")).isEqualTo(BASE + "/" + id);
 		assertThat(statusOf(UUID.fromString(id))).isEqualTo("draft");
+		assertThat(column("cover_url", UUID.fromString(id))).isNull();
 		assertThat(outbox()).isEmpty();
 		assertThat(authorRepository.findAll()).hasSize(2);
+	}
+
+	@Test
+	void createDropsNonAllowlistedExternalCoverUrl() throws Exception {
+		Map<String, Object> body = validBook();
+		body.put("coverUrl", "https://cdn.example.com/kapak.jpg");
+		mockMvc.perform(send(post(BASE), body))
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.coverUrl").value(nullValue()));
+	}
+
+	@Test
+	void adminCanUploadCoverMultipart() throws Exception {
+		assertThat(this.coverStorage).isInstanceOf(InMemoryCoverStorage.class);
+		UUID id = create(validBook());
+		MockMultipartFile cover = new MockMultipartFile("file", "kapak.jpg", "image/jpeg", TINY_JPEG);
+
+		mockMvc.perform(multipart(BASE + "/" + id + "/cover").file(cover).with(bearer(ADMIN)))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.coverUrl", startsWith("http://localhost:9000/kitapsepeti-covers/")))
+			.andExpect(jsonPath("$.coverUrl", containsString("/covers/" + id + "/")));
+
+		assertThat(column("cover_url", id)).startsWith("http://localhost:9000/kitapsepeti-covers/");
+		assertThat(((InMemoryCoverStorage) this.coverStorage).size()).isEqualTo(1);
 	}
 
 	@Test
@@ -163,14 +192,6 @@ class AdminBookControllerTest extends ApiTestSupport {
 
 	@Test
 	void createRejectsMissingOrUnknownReferences() throws Exception {
-		Map<String, Object> missingPublisher = validBook();
-		missingPublisher.remove("publisherName");
-		assertInvalidField(send(post(BASE), missingPublisher), "publisherName");
-
-		Map<String, Object> blankPublisher = validBook();
-		blankPublisher.put("publisherName", "   ");
-		assertInvalidField(send(post(BASE), blankPublisher), "publisherName");
-
 		UUID unknown = UUID.randomUUID();
 		Map<String, Object> unknownCategory = validBook();
 		unknownCategory.put("categoryIds", List.of(unknown));
@@ -320,11 +341,11 @@ class AdminBookControllerTest extends ApiTestSupport {
 
 		Map<String, Object> payload = payload(row);
 		assertThat(payload).containsOnlyKeys("eventVersion", "bookId", "title", "isbn", "description", "priceAmount",
-				"currency", "coverUrl", "pageCount", "inStock", "publishedAt", "publisher", "authors", "categories",
+				"currency", "coverUrl", "pageCount", "inStock", "publishedAt", "authors", "categories",
 				"categoryIdsWithAncestors", "occurredAt");
 		assertThat(payload).doesNotContainKeys("stockQuantity", "reservedQuantity", "availableQuantity", "version",
 				"status");
-		assertThat(payload.get("eventVersion")).isEqualTo(1);
+		assertThat(payload.get("eventVersion")).isEqualTo(2);
 		assertThat(payload.get("bookId")).isEqualTo(id.toString());
 		assertThat(payload.get("title")).isEqualTo("Kırmızı Pazartesi");
 		assertThat(payload.get("isbn")).isEqualTo(VALID_ISBN13);
@@ -334,8 +355,6 @@ class AdminBookControllerTest extends ApiTestSupport {
 		assertThat(payload.get("inStock")).isEqualTo(true);
 		assertThat(payload.get("publishedAt")).isNotNull();
 		assertThat(payload.get("occurredAt")).isNotNull();
-		assertThat(payload.get("publisher")).isEqualTo(Map.of("id", publisher.getId().toString(), "name",
-				"Deniz Yayınları", "slug", "deniz-yayinlari"));
 		assertThat(JsonPath.<List<String>>read(row.get("payload").toString(), "$.authors[*].slug"))
 			.containsExactly("ahmet-yazar", "zeynep-yazar");
 		assertThat(JsonPath.<List<String>>read(row.get("payload").toString(), "$.categories[*].slug"))
@@ -604,8 +623,7 @@ class AdminBookControllerTest extends ApiTestSupport {
 			.andExpect(jsonPath("$.items[0].stockQuantity").value(3))
 			.andExpect(jsonPath("$.items[0].reservedQuantity").value(1))
 			.andExpect(jsonPath("$.items[0].availableQuantity").value(2))
-			.andExpect(jsonPath("$.items[0].version").value(1))
-			.andExpect(jsonPath("$.items[0].publisher.slug").value("deniz-yayinlari"));
+			.andExpect(jsonPath("$.items[0].version").value(1));
 
 		for (String path : List.of("/api/books/" + id, "/api/books")) {
 			String body = mockMvc.perform(get(path))
@@ -673,10 +691,12 @@ class AdminBookControllerTest extends ApiTestSupport {
 
 	// --- yardımcılar
 
+	/** Minimal geçerli JPEG (SOI + EOI). */
+	private static final byte[] TINY_JPEG = new byte[] { (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xD9 };
+
 	private Map<String, Object> validBook() {
 		Map<String, Object> body = new LinkedHashMap<>();
 		body.put("title", "Kırmızı Pazartesi");
-		body.put("publisherName", publisher.getName());
 		body.put("priceAmount", new BigDecimal("149.90"));
 		body.put("authorNames", List.of(ahmet.getName()));
 		body.put("categoryIds", List.of(roman.getId()));

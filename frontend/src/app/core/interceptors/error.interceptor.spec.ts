@@ -138,12 +138,12 @@ describe('ErrorInterceptor', () => {
   });
 
   it('409 RESOURCE_IN_USE should toast in-use message', () => {
-    http.delete('/api/admin/publishers/p1').subscribe({
+    http.delete('/api/admin/authors/a1').subscribe({
       next: () => fail('expected error'),
       error: () => undefined,
     });
 
-    httpMock.expectOne('/api/admin/publishers/p1').flush(
+    httpMock.expectOne('/api/admin/authors/a1').flush(
       { title: 'Conflict', status: 409, code: 'RESOURCE_IN_USE' },
       { status: 409, statusText: 'Conflict' },
     );

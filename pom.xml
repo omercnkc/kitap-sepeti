@@ -101,6 +101,8 @@
 			Boot yükseltilirken bu tablo yeniden kontrol edilmeli; milestone/RC kullanılmaz.
 		-->
 		<spring-cloud.version>2025.1.3</spring-cloud.version>
+		<!-- AWS SDK v2 (catalog MinIO/S3 kapak depolama). -->
+		<aws.sdk.version>2.31.16</aws.sdk.version>
 	</properties>
 
 	<!--
@@ -125,6 +127,13 @@
 				<groupId>org.springframework.cloud</groupId>
 				<artifactId>spring-cloud-dependencies</artifactId>
 				<version>${spring-cloud.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+			<dependency>
+				<groupId>software.amazon.awssdk</groupId>
+				<artifactId>bom</artifactId>
+				<version>${aws.sdk.version}</version>
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>

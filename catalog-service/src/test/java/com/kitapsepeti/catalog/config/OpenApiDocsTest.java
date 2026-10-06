@@ -59,8 +59,7 @@ class OpenApiDocsTest extends ApiTestSupport {
 				"GET /api/admin/books/{id}",
 				"PATCH /api/admin/books/{id}", "DELETE /api/admin/books/{id}", "POST /api/admin/books/{id}/publish",
 				"POST /api/admin/books/{id}/archive", "POST /api/admin/books/{id}/stock-adjustments",
-				"GET /api/admin/publishers", "POST /api/admin/publishers", "GET /api/admin/publishers/{id}",
-				"PATCH /api/admin/publishers/{id}", "DELETE /api/admin/publishers/{id}",
+				"POST /api/admin/books/{id}/cover",
 				"GET /api/admin/authors", "POST /api/admin/authors", "GET /api/admin/authors/{id}",
 				"PATCH /api/admin/authors/{id}", "DELETE /api/admin/authors/{id}",
 				"GET /api/admin/categories", "POST /api/admin/categories", "GET /api/admin/categories/{id}",
@@ -90,7 +89,8 @@ class OpenApiDocsTest extends ApiTestSupport {
 			.containsEntry("type", "http").containsEntry("scheme", "bearer").containsEntry("bearerFormat", "JWT");
 
 		Map<String, Map<String, Object>> admin = operationsUnder(docs, "/api/admin/");
-		assertThat(admin).hasSize(25);
+		// publishers kaldırıldı (20) + cover upload (1) = 21
+		assertThat(admin).hasSize(21);
 		admin.forEach((operation, spec) -> {
 			assertThat(spec.get("security")).as(operation).isEqualTo(List.of(Map.of("bearerAuth", List.of())));
 			assertThat(responses(spec)).as(operation).containsKeys("401", "403", "503");

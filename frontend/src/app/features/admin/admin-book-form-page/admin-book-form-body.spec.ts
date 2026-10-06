@@ -9,7 +9,6 @@ describe('admin book form body', () => {
   it('create omits blank isbn/cover and includes stock', () => {
     const body = buildCreateBookBody({
       title: 'Kar',
-      publisherName: 'Scholastic',
       priceAmount: 19.999,
       authorNames: [],
       categoryIds: [],
@@ -20,7 +19,6 @@ describe('admin book form body', () => {
       initialStock: 5,
     });
     expect(body.priceAmount).toBe(20);
-    expect(body.publisherName).toBe('Scholastic');
     expect(body.isbn).toBeUndefined();
     expect(body.coverUrl).toBeUndefined();
     expect(body.initialStock).toBe(5);
@@ -31,7 +29,6 @@ describe('admin book form body', () => {
     const body = buildUpdateBookBody({
       version: 3,
       title: 'Kar',
-      publisherName: 'YKY',
       priceAmount: 120.456,
       authorNames: ['Ayşe'],
       categoryIds: ['c1'],
@@ -43,7 +40,6 @@ describe('admin book form body', () => {
 
     expect(body.version).toBe(3);
     expect(body.priceAmount).toBe(120.46);
-    expect(body.publisherName).toBe('YKY');
     expect(body.isbn).toBe('');
     expect(body.coverUrl).toBe('');
     expect(body.pageCount).toBe(200);
@@ -58,7 +54,6 @@ describe('admin book form body', () => {
     const body = buildUpdateBookBody({
       version: 1,
       title: 'T',
-      publisherName: 'P',
       priceAmount: 10,
       authorNames: [],
       categoryIds: [],
@@ -77,7 +72,6 @@ describe('admin book form body', () => {
       {
         version: 2,
         title: 'T',
-        publisherName: 'P',
         priceAmount: 10,
         authorNames: [],
         categoryIds: [],
@@ -96,7 +90,6 @@ describe('admin book form body', () => {
       {
         version: 2,
         title: 'T',
-        publisherName: 'P',
         priceAmount: 10,
         authorNames: [],
         categoryIds: [],

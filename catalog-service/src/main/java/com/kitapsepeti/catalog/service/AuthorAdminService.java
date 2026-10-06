@@ -19,7 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Yazar yönetimi; {@link PublisherAdminService} ile aynı kurallar. Kitabı olan yazar
+ * Yazar yönetimi. Kitabı olan yazar
  * {@code fk_book_authors_author} ile reddedilir (409 RESOURCE_IN_USE). Kitap formundan gelen
  * isimler {@link #ensureByNames} ile find-or-create edilir (mevcut ad global rename edilmez).
  */

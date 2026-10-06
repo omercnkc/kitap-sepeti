@@ -19,7 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Kategori yönetimi. Ad/slug kuralları {@link PublisherAdminService} ile aynı. Üst kategori yalnızca
+ * Kategori yönetimi. Üst kategori yalnızca
  * {@link #move} ile değişir. Silmede alt kategori ({@code fk_categories_parent}) veya kitap
  * ({@code fk_book_categories_category}) varsa 409 RESOURCE_IN_USE.
  */

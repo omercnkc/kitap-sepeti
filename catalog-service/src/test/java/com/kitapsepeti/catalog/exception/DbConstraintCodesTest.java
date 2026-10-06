@@ -16,23 +16,23 @@ class DbConstraintCodesTest {
 	@Test
 	void foreignKeyRowIsReferencedMapsToResourceInUse() {
 		DbConstraintCodes.Violation violation = DbConstraintCodes.classify(wrapped(ConstraintKind.FOREIGN_KEY,
-				"fk_books_publisher", 1451));
+				"fk_book_authors_author", 1451));
 
 		assertThat(violation.code()).isEqualTo(CatalogErrorCode.RESOURCE_IN_USE);
-		assertThat(violation.logNote()).isEqualTo("constraint=fk_books_publisher, kind=FOREIGN_KEY");
+		assertThat(violation.logNote()).isEqualTo("constraint=fk_book_authors_author, kind=FOREIGN_KEY");
 	}
 
 	@Test
 	void foreignKeyMissingParentMapsToConflict() {
 		DbConstraintCodes.Violation violation = DbConstraintCodes.classify(wrapped(ConstraintKind.FOREIGN_KEY,
-				"fk_books_publisher", 1452));
+				"fk_book_authors_author", 1452));
 
 		assertThat(violation.code()).isEqualTo(CommonErrorCode.CONFLICT);
 	}
 
 	@Test
 	void tablePrefixedUniqueNamesMapToSpecificCodes() {
-		assertThat(DbConstraintCodes.classify(wrapped(ConstraintKind.UNIQUE, "publishers.uk_publishers_slug", 1062)).code())
+		assertThat(DbConstraintCodes.classify(wrapped(ConstraintKind.UNIQUE, "authors.uk_authors_slug", 1062)).code())
 			.isEqualTo(CatalogErrorCode.SLUG_ALREADY_EXISTS);
 		assertThat(DbConstraintCodes.classify(wrapped(ConstraintKind.UNIQUE, "authors.UK_AUTHORS_SLUG", 1062)).code())
 			.isEqualTo(CatalogErrorCode.SLUG_ALREADY_EXISTS);

@@ -15,7 +15,7 @@ import org.springframework.http.MediaType;
 class AdminAccessTest extends ApiTestSupport {
 
 	@ParameterizedTest
-	@ValueSource(strings = { "/api/admin/publishers", "/api/admin/authors", "/api/admin/categories" })
+	@ValueSource(strings = { "/api/admin/authors", "/api/admin/categories" })
 	void onlyAdminCanUseAdminEndpoints(String path) throws Exception {
 		mockMvc.perform(get(path))
 			.andExpect(status().isUnauthorized())

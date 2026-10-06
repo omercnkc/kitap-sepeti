@@ -13,14 +13,14 @@ import java.util.UUID;
  */
 public record BookUpsertedEvent(int eventVersion, UUID bookId, String title, String isbn, String description,
 		String priceAmount, String currency, String coverUrl, Integer pageCount, boolean inStock, Instant publishedAt,
-		Ref publisher, List<Ref> authors, List<Ref> categories, List<UUID> categoryIdsWithAncestors,
-		Instant occurredAt) {
+		List<Ref> authors, List<Ref> categories, List<UUID> categoryIdsWithAncestors, Instant occurredAt) {
 
-	public static final int VERSION = 1;
+	/** v2: yayınevi ({@code publisher}) alanı kaldırıldı. */
+	public static final int VERSION = 2;
 
 	public static final String TYPE = "BookUpserted";
 
-	/** Yayınevi/yazar/kategori özeti. */
+	/** Yazar/kategori özeti. */
 	public record Ref(UUID id, String name, String slug) {
 	}
 

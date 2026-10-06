@@ -63,9 +63,8 @@ public class OpenLibraryBookMetadataClient implements BookMetadataClient {
 		String coverUrl = coverUrl(book, isbn);
 		Integer pageCount = intOrNull(book.get("number_of_pages"));
 		List<String> authors = names(book.get("authors"));
-		List<String> publishers = names(book.get("publishers"));
 		List<String> subjects = subjectNames(book.get("subjects"));
-		return new IsbnMetadataResponse(isbn, title, description, coverUrl, pageCount, authors, publishers, subjects);
+		return new IsbnMetadataResponse(isbn, title, description, coverUrl, pageCount, authors, subjects);
 	}
 
 	/**
@@ -99,7 +98,7 @@ public class OpenLibraryBookMetadataClient implements BookMetadataClient {
 			}
 			return new IsbnMetadataResponse(mapped.isbn(), mapped.title(),
 					workDescription != null ? workDescription : mapped.description(), mapped.coverUrl(),
-					mapped.pageCount(), mapped.authors(), mapped.publishers(), subjects);
+					mapped.pageCount(), mapped.authors(), subjects);
 		}
 		catch (RestClientException ex) {
 			log.warn("Open Library work request failed for ISBN description");

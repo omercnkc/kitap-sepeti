@@ -18,15 +18,16 @@
 | Categories | `admin-categories-page/` | düz satır ağaç; `level` girinti + └/├ + Alt kategori rozeti + «Üst: …»; kart yok |
 
 | Books list | `admin-books-page/` | status filter; Yayınla/Arşivle/Stok; taslak≠vitrin yardım metni |
-| Book form | `admin-book-form-page/` | create/edit; lifecycle + stok; taslak/vitrin notu |
-| AdminCatalogApi | `core/api/admin-catalog.api.ts` | publish/archive/stock-adjustments |
+| Book form | `admin-book-form-page/` | create/edit; lifecycle + stok; kapak dosya + URL önizleme; kayıt sonrası multipart |
+| AdminCatalogApi | `core/api/admin-catalog.api.ts` | publish/archive/stock-adjustments; `uploadBookCover` FormData |
 | Hata mesajları | `error-messages.ts` | STOCK_BELOW_RESERVED, BOOK_NOT_PUBLISHABLE |
 ## Admin kitap formu (PATCH 400)
 
 - İstemci: `isbnValidator` (checksum), `httpUrlValidator` (mutlak http/https)
 - `toUpdateBody`: boş `isbn`/`coverUrl`/`description` → `""` (temizle); dolu ISBN normalize; fiyat `roundMoney2`
 - **Legacy ISBN:** seed’deki checksum’sız ISBN yüklenince validator kabul eder; PATCH’te değişmediyse `isbn` alanı **gönderilmez** (BE Bean Validation tekrarlamasın). Sarı uyarı: `hasLegacyInvalidIsbn`
-- ISBN lookup: OL description (excerpt yok); `authorNames` chip + `publisherName` text (select/listede-yok yok); subjects→kategori map (juvenile/children/graphic novel/picture book→Çocuk vb.); success toast
+- ISBN lookup: OL description (excerpt yok); `authorNames` chip + `publisherName` text (select/listede-yok yok); subjects→kategori map (juvenile/children/graphic novel/picture book→Çocuk vb.); success toast; `coverUrl` önizleme (kayıtta sunucu MinIO URL’sine çevirir)
+- Kapak: file input (jpeg/png/webp); create’te dosya seçiliyse body’de OL `coverUrl` yok → create → `uploadBookCover` → navigate; edit’te save sonrası upload + `patchFromBook`
 - 400 `errors[]` → `fieldErrors` + interceptor toast “Girdiğiniz bilgileri kontrol edin.”
 - `toCreateBody`: boş isbn/cover hiç gönderilmez
 - 400 `errors[]` → `fieldErrors` + interceptor toast “Girdiğiniz bilgileri kontrol edin.”

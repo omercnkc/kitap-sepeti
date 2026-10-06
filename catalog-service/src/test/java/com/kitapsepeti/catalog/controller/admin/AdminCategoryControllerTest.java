@@ -19,10 +19,8 @@ import com.jayway.jsonpath.JsonPath;
 import com.kitapsepeti.catalog.ApiTestSupport;
 import com.kitapsepeti.catalog.entity.Book;
 import com.kitapsepeti.catalog.entity.Category;
-import com.kitapsepeti.catalog.entity.Publisher;
 import com.kitapsepeti.catalog.repository.BookRepository;
 import com.kitapsepeti.catalog.repository.CategoryRepository;
-import com.kitapsepeti.catalog.repository.PublisherRepository;
 import com.kitapsepeti.catalog.support.TestJwt;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,9 +37,6 @@ class AdminCategoryControllerTest extends ApiTestSupport {
 
 	@Autowired
 	private CategoryRepository categoryRepository;
-
-	@Autowired
-	private PublisherRepository publisherRepository;
 
 	@Autowired
 	private BookRepository bookRepository;
@@ -162,8 +157,7 @@ class AdminCategoryControllerTest extends ApiTestSupport {
 		categoryRepository.save(new Category(parent, "Alt", "alt"));
 		Category withBook = categoryRepository.save(new Category(null, "Kitaplı", "kitapli"));
 		Category leaf = categoryRepository.save(new Category(null, "Boş", "bos"));
-		Publisher publisher = publisherRepository.save(new Publisher("Yayınevi", "yayinevi"));
-		Book book = new Book("Kitap", publisher, new BigDecimal("10.00"));
+		Book book = new Book("Kitap", new BigDecimal("10.00"));
 		book.getCategories().add(withBook);
 		bookRepository.save(book);
 

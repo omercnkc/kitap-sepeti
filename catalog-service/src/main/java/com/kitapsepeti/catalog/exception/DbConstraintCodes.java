@@ -16,7 +16,6 @@ import org.hibernate.exception.ConstraintViolationException.ConstraintKind;
 public final class DbConstraintCodes {
 
 	private static final Map<String, ErrorCode> UNIQUE_CODES = Map.of(
-			"uk_publishers_slug", CatalogErrorCode.SLUG_ALREADY_EXISTS,
 			"uk_authors_slug", CatalogErrorCode.SLUG_ALREADY_EXISTS,
 			"uk_categories_slug", CatalogErrorCode.SLUG_ALREADY_EXISTS,
 			"uk_books_isbn", CatalogErrorCode.ISBN_ALREADY_EXISTS);

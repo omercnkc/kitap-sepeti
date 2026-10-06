@@ -3,10 +3,10 @@ package com.kitapsepeti.catalog.exception;
 import java.math.BigDecimal;
 import java.util.UUID;
 
+import com.kitapsepeti.catalog.entity.Author;
 import com.kitapsepeti.catalog.entity.Book;
-import com.kitapsepeti.catalog.entity.Publisher;
+import com.kitapsepeti.catalog.repository.AuthorRepository;
 import com.kitapsepeti.catalog.repository.BookRepository;
-import com.kitapsepeti.catalog.repository.PublisherRepository;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -31,7 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/test/errors")
 class ErrorProbeController {
 
-	record PublisherRequest(String name, String slug) {
+	record AuthorRequest(String name, String slug) {
 	}
 
 	record BookRequest(String isbn) {
@@ -40,7 +40,7 @@ class ErrorProbeController {
 	record ValidatedRequest(@NotBlank @Size(max = 10) String name, @NotBlank @Pattern(regexp = "[a-z0-9-]+") String slug) {
 	}
 
-	private final PublisherRepository publisherRepository;
+	private final AuthorRepository authorRepository;
 
 	private final BookRepository bookRepository;
 
@@ -48,39 +48,39 @@ class ErrorProbeController {
 
 	private final TransactionTemplate requiresNew;
 
-	ErrorProbeController(PublisherRepository publisherRepository, BookRepository bookRepository,
+	ErrorProbeController(AuthorRepository authorRepository, BookRepository bookRepository,
 			PlatformTransactionManager transactionManager) {
-		this.publisherRepository = publisherRepository;
+		this.authorRepository = authorRepository;
 		this.bookRepository = bookRepository;
 		this.tx = new TransactionTemplate(transactionManager);
 		this.requiresNew = new TransactionTemplate(transactionManager);
 		this.requiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 	}
 
-	@PostMapping("/publishers")
-	UUID createPublisher(@RequestBody PublisherRequest request) {
-		return publisherRepository.saveAndFlush(new Publisher(request.name(), request.slug())).getId();
+	@PostMapping("/authors")
+	UUID createAuthor(@RequestBody AuthorRequest request) {
+		return authorRepository.saveAndFlush(new Author(request.name(), request.slug())).getId();
 	}
 
 	@PostMapping("/books")
 	@Transactional
 	UUID createBook(@RequestBody BookRequest request) {
-		Book book = new Book("Kitap", newPublisher(), new BigDecimal("10.00"));
+		Book book = new Book("Kitap", new BigDecimal("10.00"));
 		book.setIsbn(request.isbn());
 		return bookRepository.saveAndFlush(book).getId();
 	}
 
-	@DeleteMapping("/publishers/{id}")
+	@DeleteMapping("/authors/{id}")
 	@Transactional
-	void deletePublisher(@PathVariable UUID id) {
-		publisherRepository.deleteById(id);
-		publisherRepository.flush();
+	void deleteAuthor(@PathVariable UUID id) {
+		authorRepository.deleteById(id);
+		authorRepository.flush();
 	}
 
 	@PostMapping("/books/overbooked")
 	@Transactional
 	UUID createOverbookedBook() {
-		Book book = new Book("Kitap", newPublisher(), new BigDecimal("10.00"), -1);
+		Book book = new Book("Kitap", new BigDecimal("10.00"), -1);
 		return bookRepository.saveAndFlush(book).getId();
 	}
 
@@ -103,11 +103,6 @@ class ErrorProbeController {
 	@GetMapping("/unexpected")
 	String unexpected() {
 		throw new IllegalStateException("gizli-ic-detay-4411");
-	}
-
-	private Publisher newPublisher() {
-		String slug = "p-" + UUID.randomUUID();
-		return publisherRepository.save(new Publisher("Yayınevi", slug));
 	}
 
 }

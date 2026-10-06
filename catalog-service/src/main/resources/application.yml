@@ -3,6 +3,10 @@ spring:
     name: catalog-service
   config:
     import: optional:file:../.env[.properties],optional:file:.env[.properties]
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
   datasource:
     url: jdbc:mysql://${CATALOG_DB_HOST:localhost}:${CATALOG_DB_PORT:3306}/catalog_db
     username: ${CATALOG_DB_USER}
@@ -87,6 +91,19 @@ app:
     base-url: https://openlibrary.org
     connect-timeout: 3s
     read-timeout: 5s
+  # endpoint = PutObject (container: http://minio:9000); public-base-url = cover_url / tarayıcı (localhost).
+  s3:
+    endpoint: ${S3_ENDPOINT:http://localhost:9000}
+    access-key: ${S3_ACCESS_KEY:}
+    secret-key: ${S3_SECRET_KEY:}
+    bucket: ${S3_BUCKET:kitapsepeti-covers}
+    public-base-url: ${S3_PUBLIC_BASE_URL:http://localhost:9000}
+    region: us-east-1
+    max-object-bytes: 5242880
+    ingest-connect-timeout: 3s
+    ingest-read-timeout: 5s
+    allowed-ingest-hosts:
+      - covers.openlibrary.org
 
 logging:
   level:

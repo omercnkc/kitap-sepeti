@@ -49,9 +49,9 @@ class DbConstraintsTest {
 
 	@Test
 	void rowReferencedOnlyForForeignKey1451() {
-		assertThat(DbConstraints.isRowReferenced(hibernate(ConstraintKind.FOREIGN_KEY, "fk_books_publisher", 1451)))
+		assertThat(DbConstraints.isRowReferenced(hibernate(ConstraintKind.FOREIGN_KEY, "fk_book_authors_author", 1451)))
 			.isTrue();
-		assertThat(DbConstraints.isRowReferenced(hibernate(ConstraintKind.FOREIGN_KEY, "fk_books_publisher", 1452)))
+		assertThat(DbConstraints.isRowReferenced(hibernate(ConstraintKind.FOREIGN_KEY, "fk_book_authors_author", 1452)))
 			.isFalse();
 		assertThat(DbConstraints.isRowReferenced(hibernate(ConstraintKind.UNIQUE, "uk_x", 1451))).isFalse();
 	}

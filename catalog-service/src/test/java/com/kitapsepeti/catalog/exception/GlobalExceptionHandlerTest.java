@@ -15,10 +15,10 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 import com.kitapsepeti.catalog.ApiTestSupport;
+import com.kitapsepeti.catalog.entity.Author;
 import com.kitapsepeti.catalog.entity.Book;
-import com.kitapsepeti.catalog.entity.Publisher;
+import com.kitapsepeti.catalog.repository.AuthorRepository;
 import com.kitapsepeti.catalog.repository.BookRepository;
-import com.kitapsepeti.catalog.repository.PublisherRepository;
 import com.kitapsepeti.catalog.support.TestJwt;
 import com.kitapsepeti.common.error.CommonErrorCode;
 import com.kitapsepeti.common.error.ErrorCode;
@@ -46,23 +46,23 @@ class GlobalExceptionHandlerTest extends ApiTestSupport {
 	private static final String SECRET_ISBN = "9786059998877";
 
 	@Autowired
-	private PublisherRepository publisherRepository;
+	private AuthorRepository authorRepository;
 
 	@Autowired
 	private BookRepository bookRepository;
 
 	@Test
-	void duplicatePublisherSlugReturnsSlugAlreadyExists(CapturedOutput output) throws Exception {
-		String request = "{\"name\":\"Yayınevi\",\"slug\":\"" + SECRET_SLUG + "\"}";
-		perform(post(BASE + "/publishers").contentType(MediaType.APPLICATION_JSON).content(request))
+	void duplicateAuthorSlugReturnsSlugAlreadyExists(CapturedOutput output) throws Exception {
+		String request = "{\"name\":\"Yazar\",\"slug\":\"" + SECRET_SLUG + "\"}";
+		perform(post(BASE + "/authors").contentType(MediaType.APPLICATION_JSON).content(request))
 			.andExpect(status().isOk());
 
-		String body = assertConflict(post(BASE + "/publishers").contentType(MediaType.APPLICATION_JSON).content(request),
+		String body = assertConflict(post(BASE + "/authors").contentType(MediaType.APPLICATION_JSON).content(request),
 				CatalogErrorCode.SLUG_ALREADY_EXISTS);
 
 		assertNoLeak(body, output, SECRET_SLUG);
-		assertThat(output).contains("POST " + BASE + "/publishers -> SLUG_ALREADY_EXISTS")
-			.contains("constraint=uk_publishers_slug, kind=UNIQUE");
+		assertThat(output).contains("POST " + BASE + "/authors -> SLUG_ALREADY_EXISTS")
+			.contains("constraint=uk_authors_slug, kind=UNIQUE");
 	}
 
 	@Test
@@ -79,15 +79,17 @@ class GlobalExceptionHandlerTest extends ApiTestSupport {
 	}
 
 	@Test
-	void deletingPublisherWithBooksReturnsResourceInUse(CapturedOutput output) throws Exception {
-		Publisher publisher = publisherRepository.save(new Publisher("Yayınevi", SECRET_SLUG));
-		bookRepository.save(new Book("Kitap", publisher, new BigDecimal("10.00")));
+	void deletingAuthorWithBooksReturnsResourceInUse(CapturedOutput output) throws Exception {
+		Author author = authorRepository.save(new Author("Yazar", SECRET_SLUG));
+		Book book = new Book("Kitap", new BigDecimal("10.00"));
+		book.getAuthors().add(author);
+		bookRepository.save(book);
 
-		String body = assertConflict(delete(BASE + "/publishers/" + publisher.getId()), CatalogErrorCode.RESOURCE_IN_USE);
+		String body = assertConflict(delete(BASE + "/authors/" + author.getId()), CatalogErrorCode.RESOURCE_IN_USE);
 
 		assertNoLeak(body, output, SECRET_SLUG);
-		assertThat(output).contains("constraint=fk_books_publisher, kind=FOREIGN_KEY");
-		assertThat(publisherRepository.existsById(publisher.getId())).isTrue();
+		assertThat(output).contains("constraint=fk_book_authors_author, kind=FOREIGN_KEY");
+		assertThat(authorRepository.existsById(author.getId())).isTrue();
 	}
 
 	@Test
@@ -100,8 +102,7 @@ class GlobalExceptionHandlerTest extends ApiTestSupport {
 
 	@Test
 	void staleVersionReturnsConcurrentModification(CapturedOutput output) throws Exception {
-		Publisher publisher = publisherRepository.save(new Publisher("Yayınevi", "yayinevi"));
-		UUID bookId = bookRepository.save(new Book("Kitap", publisher, new BigDecimal("10.00"))).getId();
+		UUID bookId = bookRepository.save(new Book("Kitap", new BigDecimal("10.00"))).getId();
 
 		String body = assertConflict(post(BASE + "/books/" + bookId + "/stale-update"),
 				CatalogErrorCode.CONCURRENT_MODIFICATION);

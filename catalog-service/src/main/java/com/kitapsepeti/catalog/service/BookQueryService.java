@@ -1,7 +1,6 @@
 package com.kitapsepeti.catalog.service;
 
 import static com.kitapsepeti.catalog.repository.BookSpecifications.hasAuthor;
-import static com.kitapsepeti.catalog.repository.BookSpecifications.hasPublisher;
 import static com.kitapsepeti.catalog.repository.BookSpecifications.inAnyCategory;
 import static com.kitapsepeti.catalog.repository.BookSpecifications.isPublished;
 import static com.kitapsepeti.catalog.repository.BookSpecifications.priceAtLeast;
@@ -36,8 +35,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Herkese açık kitap okuma. Yalnızca PUBLISHED kitaplar görünür; taslak ve arşiv dışarıdan ayırt edilemez (404).
- * Liste sorgusu: sayfa (yayınevi to-one JOIN FETCH) + sayım + yazarlar için tek toplu sorgu
- * ({@code default_batch_fetch_size}). To-many JOIN FETCH sayfalamayla kullanılmaz (Hibernate bellekte sayfalar).
+ * Liste sorgusu: sayfa + sayım + yazarlar için tek toplu sorgu ({@code default_batch_fetch_size}).
+ * To-many JOIN FETCH sayfalamayla kullanılmaz (Hibernate bellekte sayfalar).
  */
 @Service
 @Transactional(readOnly = true)
@@ -60,7 +59,7 @@ public class BookQueryService {
 
 	/**
 	 * Verilen id'lerden yayındakiler, istekteki ilk geçiş sırasıyla; tekrarlı id bir kez, bulunamayan/taslak/arşiv
-	 * atlanır. Kitap sayısından bağımsız iki sorgu: kitaplar + yayınevi, yazarlar (toplu).
+	 * atlanır. Kitap sayısından bağımsız iki sorgu: kitaplar, yazarlar (toplu).
 	 */
 	public BookLookupResponse lookup(List<UUID> ids) {
 		List<UUID> distinctIds = List.copyOf(new LinkedHashSet<>(ids));
@@ -85,9 +84,6 @@ public class BookQueryService {
 	private Specification<Book> specificationOf(BookSearchRequest request) {
 		List<Specification<Book>> specifications = new ArrayList<>();
 		specifications.add(isPublished());
-		if (request.publisherId() != null) {
-			specifications.add(hasPublisher(request.publisherId()));
-		}
 		if (request.authorId() != null) {
 			specifications.add(hasAuthor(request.authorId()));
 		}

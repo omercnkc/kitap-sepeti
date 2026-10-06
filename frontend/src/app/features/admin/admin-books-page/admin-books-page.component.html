@@ -58,7 +58,6 @@
         <thead>
           <tr>
             <th scope="col">Başlık</th>
-            <th scope="col">Yayınevi</th>
             <th scope="col">Durum</th>
             <th scope="col" class="text-end">Fiyat</th>
             <th scope="col" class="text-end">Stok</th>
@@ -74,7 +73,6 @@
                 {{ item.title }}
               </a>
             </td>
-            <td>{{ item.publisher.name }}</td>
             <td>
               <span class="badge" [ngClass]="statusBadgeClass(item.status)">
                 {{ statusLabel(item.status) }}
@@ -146,7 +144,6 @@
             {{ statusLabel(item.status) }}
           </span>
         </div>
-        <div class="small text-muted mb-2">{{ item.publisher.name }}</div>
         <div class="d-flex flex-wrap gap-3 small mb-3">
           <span>
             {{

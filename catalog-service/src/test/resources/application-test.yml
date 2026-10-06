@@ -28,6 +28,20 @@ app:
     base-url: http://127.0.0.1:9
     connect-timeout: 1s
     read-timeout: 1s
+  s3:
+    endpoint: http://127.0.0.1:9
+    access-key: test
+    secret-key: testtest
+    bucket: kitapsepeti-covers
+    public-base-url: http://localhost:9000
+    region: us-east-1
+    max-object-bytes: 5242880
+    ingest-connect-timeout: 1s
+    ingest-read-timeout: 2s
+    allowed-ingest-hosts:
+      - covers.openlibrary.org
+      - localhost
+      - 127.0.0.1
   # Yalnızca testte geçerli anahtarın özeti (ham hali InternalTestKeys'te); .env'deki gerçek özet kullanılmaz.
   internal-auth:
     clients:

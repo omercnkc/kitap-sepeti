@@ -18,7 +18,6 @@ public record AdminBookSummaryResponse(
 		@Schema(requiredMode = REQUIRED) int stockQuantity,
 		@Schema(requiredMode = REQUIRED) int reservedQuantity,
 		@Schema(requiredMode = REQUIRED) int availableQuantity,
-		@Schema(requiredMode = REQUIRED) PublisherRef publisher,
 		@Schema(requiredMode = REQUIRED) Instant updatedAt,
 		@Schema(requiredMode = REQUIRED) Long version) {
 }

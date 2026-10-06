@@ -21,7 +21,6 @@ const DEFAULT_SIZE = 12;
 
 const CLEARABLE_PARAMS = [
   'categoryId',
-  'publisherId',
   'authorId',
   'minPrice',
   'maxPrice',
@@ -183,7 +182,6 @@ export class BookListPageComponent implements OnInit, OnDestroy {
 export function bookFilterFromParams(params: ParamMap): BookFilter {
   return {
     categoryId: optionalString(params.get('categoryId')),
-    publisherId: optionalString(params.get('publisherId')),
     authorId: optionalString(params.get('authorId')),
     minPrice: optionalNumber(params.get('minPrice')),
     maxPrice: optionalNumber(params.get('maxPrice')),

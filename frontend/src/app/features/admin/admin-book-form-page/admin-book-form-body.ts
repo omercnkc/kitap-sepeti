@@ -8,7 +8,6 @@ export function roundMoney2(value: number): number {
 
 export interface AdminBookFormRaw {
   title: string;
-  publisherName: string;
   priceAmount: number | string | null;
   authorNames: string[];
   categoryIds: string[];
@@ -32,7 +31,6 @@ export interface BuildUpdateBookBodyOptions {
 export function buildCreateBookBody(raw: AdminBookFormRaw): CreateBookRequest {
   const body: CreateBookRequest = {
     title: String(raw.title).trim(),
-    publisherName: String(raw.publisherName).trim(),
     priceAmount: roundMoney2(Number(raw.priceAmount)),
   };
   if (raw.authorNames?.length) {
@@ -74,7 +72,6 @@ export function buildUpdateBookBody(
   const body: UpdateBookRequest = {
     version: Number(raw.version),
     title: String(raw.title).trim(),
-    publisherName: String(raw.publisherName).trim(),
     priceAmount: roundMoney2(Number(raw.priceAmount)),
     authorNames: raw.authorNames ?? [],
     categoryIds: raw.categoryIds ?? [],

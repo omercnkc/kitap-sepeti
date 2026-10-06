@@ -17,10 +17,8 @@ import com.jayway.jsonpath.JsonPath;
 import com.kitapsepeti.catalog.ApiTestSupport;
 import com.kitapsepeti.catalog.entity.Author;
 import com.kitapsepeti.catalog.entity.Book;
-import com.kitapsepeti.catalog.entity.Publisher;
 import com.kitapsepeti.catalog.repository.AuthorRepository;
 import com.kitapsepeti.catalog.repository.BookRepository;
-import com.kitapsepeti.catalog.repository.PublisherRepository;
 import com.kitapsepeti.catalog.support.TestJwt;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,9 +35,6 @@ class AdminAuthorControllerTest extends ApiTestSupport {
 
 	@Autowired
 	private AuthorRepository authorRepository;
-
-	@Autowired
-	private PublisherRepository publisherRepository;
 
 	@Autowired
 	private BookRepository bookRepository;
@@ -93,8 +88,7 @@ class AdminAuthorControllerTest extends ApiTestSupport {
 	@Test
 	void authorWithBooksCannotBeDeleted() throws Exception {
 		Author author = authorRepository.save(new Author("Kitaplı Yazar", "kitapli-yazar"));
-		Publisher publisher = publisherRepository.save(new Publisher("Yayınevi", "yayinevi"));
-		Book book = new Book("Kitap", publisher, new BigDecimal("10.00"));
+		Book book = new Book("Kitap", new BigDecimal("10.00"));
 		book.getAuthors().add(author);
 		bookRepository.save(book);
 

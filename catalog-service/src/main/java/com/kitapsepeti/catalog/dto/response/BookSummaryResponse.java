@@ -19,6 +19,5 @@ public record BookSummaryResponse(
 		@Schema(requiredMode = REQUIRED) BigDecimal priceAmount,
 		@Schema(requiredMode = REQUIRED) String currency,
 		@Schema(requiredMode = REQUIRED) boolean inStock,
-		@Schema(requiredMode = REQUIRED) PublisherRef publisher,
 		@Schema(requiredMode = REQUIRED) List<AuthorRef> authors) {
 }

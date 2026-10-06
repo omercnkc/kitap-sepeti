@@ -20,8 +20,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import com.kitapsepeti.catalog.ApiTestSupport;
-import com.kitapsepeti.catalog.entity.Publisher;
-import com.kitapsepeti.catalog.repository.PublisherRepository;
 import com.kitapsepeti.catalog.support.InternalTestKeys;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,19 +35,13 @@ abstract class InternalStockTestSupport extends ApiTestSupport {
 	static final Instant NOW = Instant.parse("2026-01-01T10:00:00Z");
 
 	@Autowired
-	private PublisherRepository publisherRepository;
-
-	@Autowired
 	protected JsonMapper jsonMapper;
-
-	private Publisher publisher;
 
 	private int bookCounter;
 
 	@BeforeEach
 	void prepareFixtures() {
 		clock.fixAt(NOW);
-		publisher = publisherRepository.save(new Publisher("Deniz Yayınları", "deniz-yayinlari"));
 	}
 
 	/** Olay üretmeden doğrudan DB'ye kitap ekler (yazar/kategori yok). */
@@ -60,9 +52,9 @@ abstract class InternalStockTestSupport extends ApiTestSupport {
 	UUID book(String status, int stock, BigDecimal price) {
 		UUID id = UUID.randomUUID();
 		bookCounter++;
-		jdbc.update("INSERT INTO books (id, title, publisher_id, price_amount, currency, stock_quantity, status, "
-				+ "published_at) VALUES (UUID_TO_BIN(?), ?, UUID_TO_BIN(?), ?, 'TRY', ?, ?, ?)", id.toString(),
-				"Kitap " + bookCounter, publisher.getId().toString(), price, stock, status,
+		jdbc.update("INSERT INTO books (id, title, price_amount, currency, stock_quantity, status, "
+				+ "published_at) VALUES (UUID_TO_BIN(?), ?, ?, 'TRY', ?, ?, ?)", id.toString(),
+				"Kitap " + bookCounter, price, stock, status,
 				"draft".equals(status) ? null : Timestamp.from(NOW.minusSeconds(3600)));
 		return id;
 	}

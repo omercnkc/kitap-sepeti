@@ -22,17 +22,14 @@ import com.kitapsepeti.catalog.entity.Author;
 import com.kitapsepeti.catalog.entity.Book;
 import com.kitapsepeti.catalog.entity.BookStatus;
 import com.kitapsepeti.catalog.entity.Category;
-import com.kitapsepeti.catalog.entity.Publisher;
 import com.kitapsepeti.catalog.repository.AuthorRepository;
 import com.kitapsepeti.catalog.repository.BookRepository;
 import com.kitapsepeti.catalog.repository.CategoryRepository;
-import com.kitapsepeti.catalog.repository.PublisherRepository;
 import com.kitapsepeti.catalog.support.TestJwt;
 import jakarta.persistence.EntityManagerFactory;
 import org.hamcrest.Matcher;
 import org.hibernate.SessionFactory;
 import org.hibernate.stat.Statistics;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -45,9 +42,6 @@ class BookControllerTest extends ApiTestSupport {
 	private static final Instant NOW = Instant.now().truncatedTo(ChronoUnit.SECONDS);
 
 	@Autowired
-	private PublisherRepository publisherRepository;
-
-	@Autowired
 	private AuthorRepository authorRepository;
 
 	@Autowired
@@ -58,13 +52,6 @@ class BookControllerTest extends ApiTestSupport {
 
 	@Autowired
 	private EntityManagerFactory entityManagerFactory;
-
-	private Publisher publisher;
-
-	@BeforeEach
-	void createDefaultPublisher() {
-		publisher = publisherRepository.save(new Publisher("Varsayılan Yayınevi", "varsayilan"));
-	}
 
 	@Test
 	void listContainsOnlyPublishedBooks() throws Exception {
@@ -82,21 +69,19 @@ class BookControllerTest extends ApiTestSupport {
 	}
 
 	@Test
-	void publisherAuthorAndPriceFiltersWorkAloneAndCombined() throws Exception {
-		Publisher other = publisherRepository.save(new Publisher("Diğer Yayınevi", "diger"));
+	void authorAndPriceFiltersWorkAloneAndCombined() throws Exception {
 		Author x = authorRepository.save(new Author("Yazar X", "yazar-x"));
 		Author y = authorRepository.save(new Author("Yazar Y", "yazar-y"));
 		save(withAuthors(book("B1", "50.00"), x));
 		save(withAuthors(book("B2", "100.00"), y));
-		save(withAuthors(withPublisher(book("B3", "150.00"), other), x));
-		save(withAuthors(withPublisher(book("B4", "200.00"), other), y, x));
+		save(withAuthors(book("B3", "150.00"), x));
+		save(withAuthors(book("B4", "200.00"), y, x));
 
-		assertTitles("publisherId=" + publisher.getId(), "B1", "B2");
 		assertTitles("authorId=" + x.getId(), "B1", "B3", "B4");
 		assertTitles("minPrice=100", "B2", "B3", "B4");
 		assertTitles("maxPrice=100", "B1", "B2");
 		assertTitles("minPrice=100&maxPrice=150", "B2", "B3");
-		assertTitles("publisherId=" + other.getId() + "&authorId=" + x.getId() + "&maxPrice=180", "B3");
+		assertTitles("authorId=" + x.getId() + "&maxPrice=180", "B1", "B3");
 		assertTitles("authorId=" + UUID.randomUUID());
 	}
 
@@ -196,12 +181,10 @@ class BookControllerTest extends ApiTestSupport {
 
 	@Test
 	void listQueryCountDoesNotDependOnAuthorCount() throws Exception {
-		Publisher second = publisherRepository.save(new Publisher("İkinci", "ikinci"));
 		for (int i = 0; i < 20; i++) {
 			Author first = authorRepository.save(new Author("Yazar " + i + "a", "yazar-" + i + "a"));
 			Author other = authorRepository.save(new Author("Yazar " + i + "b", "yazar-" + i + "b"));
-			Book book = withAuthors(book("Kitap " + i, "10.00"), first, other);
-			save((i % 2 == 0) ? book : withPublisher(book, second));
+			save(withAuthors(book("Kitap " + i, "10.00"), first, other));
 		}
 		Statistics statistics = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
 		statistics.clear();
@@ -210,7 +193,6 @@ class BookControllerTest extends ApiTestSupport {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.items", hasSize(20)))
 			.andExpect(jsonPath("$.items[*].authors[1].name").isNotEmpty())
-			.andExpect(jsonPath("$.items[*].publisher.name").isNotEmpty())
 			.andExpect(jsonPath("$.totalElements").value(20));
 
 		assertThat(statistics.getPrepareStatementCount()).as("SQL statements for one list request").isLessThanOrEqualTo(4);
@@ -239,7 +221,6 @@ class BookControllerTest extends ApiTestSupport {
 			.andExpect(jsonPath("$.isbn").value("9786050009999"))
 			.andExpect(jsonPath("$.pageCount").value(123))
 			.andExpect(jsonPath("$.publishedAt").isNotEmpty())
-			.andExpect(jsonPath("$.publisher.slug").value("varsayilan"))
 			.andExpect(jsonPath("$.authors[*].name", contains("Ali", "Zeynep")))
 			.andExpect(jsonPath("$.categories[*].name", contains("Öykü", "Roman")))
 			.andExpect(jsonPath("$.stockQuantity").doesNotExist())
@@ -319,7 +300,7 @@ class BookControllerTest extends ApiTestSupport {
 	}
 
 	private Book book(String title, String price, int stock) {
-		Book book = new Book(title, publisher, new BigDecimal(price), stock);
+		Book book = new Book(title, new BigDecimal(price), stock);
 		book.setStatus(BookStatus.PUBLISHED);
 		book.setPublishedAt(NOW);
 		return book;
@@ -337,11 +318,6 @@ class BookControllerTest extends ApiTestSupport {
 
 	private static Book withStatus(Book book, BookStatus status) {
 		book.setStatus(status);
-		return book;
-	}
-
-	private static Book withPublisher(Book book, Publisher publisher) {
-		book.setPublisher(publisher);
 		return book;
 	}
 

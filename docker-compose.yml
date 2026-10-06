@@ -94,6 +94,45 @@ services:
       start_period: 40s
     mem_limit: 768m
 
+  # minio/minio ve minio/mc Docker Hub'dan kalktı (2026-09); S3 API uyumlu fork: pgsty/silo (+ mc).
+  minio:
+    image: pgsty/silo:RELEASE.2026-09-16T00-00-00Z
+    container_name: kitapsepeti-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?S3_ACCESS_KEY .env içinde tanımlı olmalı}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?S3_SECRET_KEY .env içinde tanımlı olmalı}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "--max-time", "4", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # Tek seferlik: bucket + anonim GET (kapak URL'leri tarayıcıdan okunabilsin).
+  minio-init:
+    image: pgsty/silo:RELEASE.2026-09-16T00-00-00Z
+    container_name: kitapsepeti-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 \"$${S3_ACCESS_KEY}\" \"$${S3_SECRET_KEY}\" &&
+      mc mb --ignore-existing local/kitapsepeti-covers &&
+      mc anonymous set download local/kitapsepeti-covers
+      "
+    environment:
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?S3_ACCESS_KEY .env içinde tanımlı olmalı}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY .env içinde tanımlı olmalı}
+    restart: "no"
+
   catalog-service:
     build:
       context: .
@@ -110,6 +149,10 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     # .env toplu verilmez (env_file yok); yalnızca gereken değişkenler. Profil verilmez: local profilindeki
     # dev seed container'da uygulanmaz (volume'daki seed geçmişi ignore-migration-patterns ile yok sayılır).
     environment:
@@ -123,6 +166,12 @@ services:
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       USER_SERVICE_JWKS_URI: http://user-service:8081/.well-known/jwks.json
       CATALOG_INTERNAL_KEY_ORDER_SHA256: ${CATALOG_INTERNAL_KEY_ORDER_SHA256:?CATALOG_INTERNAL_KEY_ORDER_SHA256 .env içinde tanımlı olmalı}
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?S3_ACCESS_KEY .env içinde tanımlı olmalı}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY .env içinde tanımlı olmalı}
+      S3_BUCKET: kitapsepeti-covers
+      # cover_url / tarayıcı: host'tan erişilebilir adres (asla minio:9000 yazılmaz).
+      S3_PUBLIC_BASE_URL: http://localhost:9000
     # Readiness yalnızca DB'ye bakar; RabbitMQ veya user-service kapalıyken servis healthy kalır.
     healthcheck:
       test: ["CMD", "curl", "-fsS", "--max-time", "4", "-o", "/dev/null", "http://localhost:8082/actuator/health/readiness"]
@@ -327,3 +376,4 @@ secrets:
 volumes:
   mysql_data:
   rabbitmq_data:
+  minio_data:

@@ -63,12 +63,13 @@ export class AdminBookFormPageComponent implements OnInit, OnDestroy {
   concurrentConflict = false;
   stockSaving = false;
   authorDraft = '';
+  /** Kayıttan sonra multipart yüklenecek yerel dosya (OL URL yerine tercih). */
+  pendingCoverFile: File | null = null;
 
   categories: CategoryResponse[] = [];
 
   readonly form: FormGroup = this.fb.group({
     title: ['', [Validators.required, Validators.maxLength(300)]],
-    publisherName: ['', [Validators.required, Validators.maxLength(160)]],
     priceAmount: [null as number | null, [Validators.required, Validators.min(0)]],
     authorNames: [[] as string[]],
     categoryIds: [[] as string[]],
@@ -433,6 +434,13 @@ export class AdminBookFormPageComponent implements OnInit, OnDestroy {
       });
   }
 
+  onCoverFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0] ?? null;
+    this.pendingCoverFile = file;
+    this.cdr.markForCheck();
+  }
+
   onSubmit(): void {
     this.form.markAllAsTouched();
     this.cdr.markForCheck();
@@ -445,13 +453,21 @@ export class AdminBookFormPageComponent implements OnInit, OnDestroy {
     this.concurrentConflict = false;
     this.cdr.markForCheck();
 
-    const request$ = this.isCreate
-      ? this.api.createBook(this.toCreateBody())
+    const wasCreate = this.isCreate;
+    const pendingFile = this.pendingCoverFile;
+    const request$ = wasCreate
+      ? this.api.createBook(this.toCreateBody(!!pendingFile))
       : this.api.updateBook(this.bookId as string, this.toUpdateBody());
 
     request$
       .pipe(
         takeUntil(this.destroy$),
+        switchMap((book) => {
+          if (pendingFile && book.id) {
+            return this.api.uploadBookCover(book.id, pendingFile);
+          }
+          return of(book);
+        }),
         finalize(() => {
           this.saving = false;
           this.cdr.markForCheck();
@@ -459,8 +475,9 @@ export class AdminBookFormPageComponent implements OnInit, OnDestroy {
       )
       .subscribe({
         next: (book) => {
-          this.toast.success(this.isCreate ? 'Kitap oluşturuldu' : 'Kitap güncellendi');
-          if (this.isCreate) {
+          this.pendingCoverFile = null;
+          this.toast.success(wasCreate ? 'Kitap oluşturuldu' : 'Kitap güncellendi');
+          if (wasCreate) {
             void this.router.navigate(['/admin/books', book.id]);
           } else {
             this.patchFromBook(book);
@@ -511,9 +528,9 @@ export class AdminBookFormPageComponent implements OnInit, OnDestroy {
   private resetCreateForm(): void {
     this.loadedIsbn = null;
     this.authorDraft = '';
+    this.pendingCoverFile = null;
     this.form.reset({
       title: '',
-      publisherName: '',
       priceAmount: null,
       authorNames: [],
       categoryIds: [],
@@ -531,9 +548,9 @@ export class AdminBookFormPageComponent implements OnInit, OnDestroy {
     this.book = book;
     this.loadedIsbn = book.isbn || null;
     this.authorDraft = '';
+    this.pendingCoverFile = null;
     this.form.reset({
       title: book.title,
-      publisherName: book.publisher.name,
       priceAmount:
         book.priceAmount != null ? roundMoney2(Number(book.priceAmount)) : null,
       authorNames: book.authors.map((a) => a.name),
@@ -548,8 +565,13 @@ export class AdminBookFormPageComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
   }
 
-  private toCreateBody(): CreateBookRequest {
-    return buildCreateBookBody(this.form.getRawValue());
+  /** Dosya seçiliyse OL coverUrl gövdede gönderilmez (sunucu ingest yerine multipart). */
+  private toCreateBody(omitCoverUrl: boolean): CreateBookRequest {
+    const body = buildCreateBookBody(this.form.getRawValue());
+    if (omitCoverUrl) {
+      delete body.coverUrl;
+    }
+    return body;
   }
 
   private toUpdateBody(): UpdateBookRequest {

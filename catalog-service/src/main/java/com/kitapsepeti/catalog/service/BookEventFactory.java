@@ -41,10 +41,7 @@ public class BookEventFactory {
 		return new BookUpsertedEvent(BookUpsertedEvent.VERSION, book.getId(), book.getTitle(), book.getIsbn(),
 				book.getDescription(), book.getPriceAmount().setScale(2, RoundingMode.UNNECESSARY).toPlainString(),
 				book.getCurrency(), book.getCoverUrl(), book.getPageCount(), BookMapper.inStock(book),
-				book.getPublishedAt(),
-				new BookUpsertedEvent.Ref(book.getPublisher().getId(), book.getPublisher().getName(),
-						book.getPublisher().getSlug()),
-				refs(book.getAuthors(), Author::getName, Author::getSlug, Author::getId),
+				book.getPublishedAt(), refs(book.getAuthors(), Author::getName, Author::getSlug, Author::getId),
 				refs(book.getCategories(), Category::getName, Category::getSlug, Category::getId), withAncestors,
 				Instant.now());
 	}

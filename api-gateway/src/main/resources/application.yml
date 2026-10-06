@@ -4,6 +4,9 @@ server:
 spring:
   application:
     name: api-gateway
+  # Kapak multipart (~5 MB dosya); varsayılan codec limiti küçük kalır.
+  codec:
+    max-in-memory-size: 6MB
   cloud:
     gateway:
       server:

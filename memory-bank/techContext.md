@@ -114,6 +114,11 @@
   Container: `docker compose build catalog-service` + `docker compose up -d` (imaj `kitapsepeti/catalog-service:local`, 595 MB;
   yerel `spring-boot:run` ile aynı anda çalışamaz). Health `/actuator/health/{liveness,readiness}`. Ayrıntı: `docs/docker.md`.
   Container'da profil yok → seed yüklenmez; seed'li yerel deneme için `spring-boot:run -Dspring-boot.run.profiles=local`.
+- MinIO kapak depolama (Özellik 3): compose `minio`/`minio-init` imajı `pgsty/silo` (Docker Hub `minio/minio`+`minio/mc`
+  2026-09’da kalktı; S3 API + `MINIO_*` uyumlu fork). Portlar 9000/9001; bucket `kitapsepeti-covers`, anonymous download.
+  `.env` `S3_ACCESS_KEY`/`S3_SECRET_KEY` (yerel `minioadmin`/`minioadmin`, `${:?}`); catalog env: `S3_ENDPOINT=http://minio:9000`
+  (PutObject), `S3_PUBLIC_BASE_URL=http://localhost:9000` (DB `cover_url` / tarayıcı — asla `minio:9000`). AWS SDK v2 S3 2.31.16;
+  test profilinde `InMemoryCoverStorage`. Admin `POST /api/admin/books/{id}/cover` multipart; gateway `spring.codec.max-in-memory-size: 6MB`.
 - PowerShell 5.1: `docker compose stop ...` gibi stderr'e ilerleme yazan komutlar `$ErrorActionPreference='Stop'` altında
   NativeCommandError ile script'i keser → `cmd /c "docker compose stop x 2>&1"`. `docker run ... sh -c '...'` içinde çift tırnak
   kaybolur; `find` parantezleri `\(` `\)` ile yazılır.

@@ -55,8 +55,6 @@ public class OpenApiConfig {
 
 	public static final String TAG_ADMIN_BOOKS = "Admin – Books";
 
-	public static final String TAG_ADMIN_PUBLISHERS = "Admin – Publishers";
-
 	public static final String TAG_ADMIN_AUTHORS = "Admin – Authors";
 
 	public static final String TAG_ADMIN_CATEGORIES = "Admin – Categories";
@@ -218,7 +216,7 @@ public class OpenApiConfig {
 			.addProperty("instance", new StringSchema().format("uri-reference")
 				.description("İsteğin yolu; yoldaki id'ler `:<ad>` olarak maskelenir (ör. `/api/admin/books/:bookId`, "
 						+ "`/internal/stock/reservations/:orderId/commit`).")
-				.example("/api/admin/publishers"))
+				.example("/api/admin/authors"))
 			.addProperty("code", new StringSchema()._enum(codes).description("Makine tarafından okunacak hata kodu.")
 				.example(CatalogErrorCode.SLUG_ALREADY_EXISTS.name()))
 			.addProperty("errors", new ArraySchema()

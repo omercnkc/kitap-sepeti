@@ -14,7 +14,6 @@ describe('BookCardComponent', () => {
     id: 'b1',
     title: 'Deneme Kitap',
     authors: [{ id: 'a1', name: 'Ali Yazar', slug: 'ali-yazar' }],
-    publisher: { id: 'p1', name: 'Yayınevi', slug: 'yayinevi' },
     priceAmount: 120,
     currency: 'TRY',
     inStock: true,

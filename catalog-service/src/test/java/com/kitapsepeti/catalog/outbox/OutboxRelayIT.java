@@ -22,10 +22,8 @@ import com.jayway.jsonpath.JsonPath;
 import com.kitapsepeti.catalog.ApiTestSupport;
 import com.kitapsepeti.catalog.entity.Author;
 import com.kitapsepeti.catalog.entity.Category;
-import com.kitapsepeti.catalog.entity.Publisher;
 import com.kitapsepeti.catalog.repository.AuthorRepository;
 import com.kitapsepeti.catalog.repository.CategoryRepository;
-import com.kitapsepeti.catalog.repository.PublisherRepository;
 import com.kitapsepeti.catalog.support.TestJwt;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -75,9 +73,6 @@ class OutboxRelayIT extends ApiTestSupport {
 	private FaultInjectingPublisher publisher;
 
 	@Autowired
-	private PublisherRepository publisherRepository;
-
-	@Autowired
 	private AuthorRepository authorRepository;
 
 	@Autowired
@@ -88,8 +83,6 @@ class OutboxRelayIT extends ApiTestSupport {
 
 	private final List<String> queues = new ArrayList<>();
 
-	private Publisher bookPublisher;
-
 	private Author author;
 
 	private Category category;
@@ -97,7 +90,6 @@ class OutboxRelayIT extends ApiTestSupport {
 	@BeforeEach
 	void setUp() {
 		publisher.reset();
-		bookPublisher = publisherRepository.save(new Publisher("Deniz Yayınları", "deniz-yayinlari"));
 		author = authorRepository.save(new Author("Ahmet Yazar", "ahmet-yazar"));
 		category = categoryRepository.save(new Category(null, "Roman", "roman"));
 	}
@@ -228,9 +220,8 @@ class OutboxRelayIT extends ApiTestSupport {
 	}
 
 	private UUID createPublishedBook() throws Exception {
-		Map<String, Object> body = Map.of("title", "Kırmızı Pazartesi", "publisherName", bookPublisher.getName(),
-				"priceAmount", new BigDecimal("149.90"), "initialStock", 5, "authorNames", List.of(author.getName()),
-				"categoryIds", List.of(category.getId()));
+		Map<String, Object> body = Map.of("title", "Kırmızı Pazartesi", "priceAmount", new BigDecimal("149.90"),
+				"initialStock", 5, "authorNames", List.of(author.getName()), "categoryIds", List.of(category.getId()));
 		MvcResult result = mockMvc.perform(json(post(BASE), body)).andExpect(status().isCreated()).andReturn();
 		UUID id = UUID.fromString(JsonPath.read(result.getResponse().getContentAsString(), "$.id"));
 		mockMvc.perform(post(BASE + "/" + id + "/publish").with(bearer(ADMIN))).andExpect(status().isOk());

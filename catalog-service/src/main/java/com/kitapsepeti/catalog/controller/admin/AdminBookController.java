@@ -33,7 +33,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * Kitap yönetimi (SecurityConfig: /api/admin/** yalnızca ADMIN). Tüm durumlar görünür; yanıtlar stok
@@ -67,8 +69,8 @@ public class AdminBookController {
 
 	@GetMapping("/isbn-lookup")
 	@Operation(operationId = "lookupBookByIsbn", summary = "ISBN ile dış metadata getir",
-			description = "Open Library üzerinden başlık, açıklama, kapak, sayfa, yazar/yayınevi **isimleri**. "
-					+ "Bizim yayınevi/yazar UUID'leri dönmez; form yazar isimlerini yazar, kayıtta sunucu find-or-create eder. "
+			description = "Open Library üzerinden başlık, açıklama, kapak, sayfa, yazar **isimleri** ve subjects. "
+					+ "Bizim yazar UUID'leri dönmez; form yazar isimlerini yazar, kayıtta sunucu find-or-create eder. "
 					+ "Geçersiz ISBN → 400.")
 	@ApiResponse(responseCode = "200", description = "Metadata.")
 	@ApiResponse(responseCode = "404", description = "`BOOK_METADATA_NOT_FOUND`: Open Library'de yok veya sağlayıcıya ulaşılamadı.")
@@ -86,8 +88,8 @@ public class AdminBookController {
 
 	@PostMapping
 	@Operation(operationId = "createBook", summary = "Kitap oluştur",
-			description = "Kitap her zaman `draft` ve `TRY` olarak oluşur; olay yazılmaz. `publisherName` ve "
-					+ "`authorNames` sunucuda find-or-create edilir. Olmayan kategori → 400 `VALIDATION_FAILED`.")
+			description = "Kitap her zaman `draft` ve `TRY` olarak oluşur; olay yazılmaz. `authorNames` sunucuda "
+					+ "find-or-create edilir. Olmayan kategori → 400 `VALIDATION_FAILED`.")
 	@ApiResponse(responseCode = "201", description = "Oluşturuldu.", headers = @Header(name = "Location",
 			description = "Yeni kitabın yolu.", schema = @Schema(type = "string", format = "uri-reference")))
 	@ApiResponse(responseCode = "409", description = "`ISBN_ALREADY_EXISTS`: ISBN başka bir kitapta kayıtlı.")
@@ -145,6 +147,16 @@ public class AdminBookController {
 	public AdminBookResponse adjustStock(@Parameter(description = "Kitap id'si") @PathVariable UUID id,
 			@Valid @RequestBody StockAdjustmentRequest request) {
 		return bookAdminService.adjustStock(id, request);
+	}
+
+	@PostMapping(path = "/{id}/cover", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+	@Operation(operationId = "uploadBookCover", summary = "Kapak görseli yükle",
+			description = "jpeg/png/webp, en fazla 5 MB. Nesne MinIO bucket'ına yazılır; `coverUrl` public taban "
+					+ "adresiyle güncellenir. Yayındaysa `BookUpserted` yazılır.")
+	@ApiResponse(responseCode = "200", description = "Güncellenmiş kitap.")
+	public AdminBookResponse uploadCover(@Parameter(description = "Kitap id'si") @PathVariable UUID id,
+			@RequestPart("file") MultipartFile file) {
+		return bookAdminService.uploadCover(id, file);
 	}
 
 }

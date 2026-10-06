@@ -18,7 +18,6 @@ import com.kitapsepeti.catalog.entity.Author;
 import com.kitapsepeti.catalog.entity.Book;
 import com.kitapsepeti.catalog.entity.BookStatus;
 import com.kitapsepeti.catalog.entity.Category;
-import com.kitapsepeti.catalog.entity.Publisher;
 import com.kitapsepeti.catalog.entity.ReservationStatus;
 import com.kitapsepeti.catalog.entity.StockReservation;
 import jakarta.persistence.EntityManager;
@@ -35,16 +34,13 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Entity eşlemeleri ve repository sorguları (gerçek MySQL, Flyway V1, ddl-auto validate).
+ * Entity eşlemeleri ve repository sorguları (gerçek MySQL, Flyway, ddl-auto validate).
  * Her test kendi transaction'ında koşar ve geri alınır.
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import(TestcontainersConfiguration.class)
 class CatalogRepositoryTest {
-
-	@Autowired
-	private PublisherRepository publisherRepository;
 
 	@Autowired
 	private AuthorRepository authorRepository;
@@ -70,30 +66,25 @@ class CatalogRepositoryTest {
 
 		assertThat(ddlAuto).isEqualTo("validate");
 		assertThat(entityManager.getMetamodel().getEntities()).extracting(EntityType::getName)
-			.containsExactlyInAnyOrder("Publisher", "Author", "Category", "Book", "StockReservation", "OutboxEvent");
+			.containsExactlyInAnyOrder("Author", "Category", "Book", "StockReservation", "OutboxEvent");
 	}
 
 	@Test
-	void savesAndReadsPublisherAuthorAndCategoryWithUuidV7Ids() {
-		UUID publisherId = publisherRepository.saveAndFlush(new Publisher("Can Yayınları", "can-yayinlari")).getId();
+	void savesAndReadsAuthorAndCategoryWithUuidV7Ids() {
 		UUID authorId = authorRepository.saveAndFlush(new Author("Orhan Pamuk", "orhan-pamuk")).getId();
 		UUID categoryId = categoryRepository.saveAndFlush(new Category(null, "Roman", "roman")).getId();
 		entityManager.clear();
 
-		Publisher publisher = publisherRepository.findBySlug("can-yayinlari").orElseThrow();
 		Author author = authorRepository.findBySlug("orhan-pamuk").orElseThrow();
 		Category category = categoryRepository.findBySlug("roman").orElseThrow();
 
-		assertThat(List.of(publisherId, authorId, categoryId)).allSatisfy(id -> assertThat(id.version()).isEqualTo(7));
-		assertThat(publisher.getId()).isEqualTo(publisherId);
-		assertThat(publisher.getName()).isEqualTo("Can Yayınları");
-		assertThat(publisher.getCreatedAt()).isNotNull();
-		assertThat(publisher.getUpdatedAt()).isNotNull();
+		assertThat(List.of(authorId, categoryId)).allSatisfy(id -> assertThat(id.version()).isEqualTo(7));
 		assertThat(author.getId()).isEqualTo(authorId);
 		assertThat(author.getName()).isEqualTo("Orhan Pamuk");
+		assertThat(author.getCreatedAt()).isNotNull();
+		assertThat(author.getUpdatedAt()).isNotNull();
 		assertThat(category.getId()).isEqualTo(categoryId);
 		assertThat(category.getParent()).isNull();
-		assertThat(publisherRepository.existsBySlug("can-yayinlari")).isTrue();
 		assertThat(authorRepository.existsBySlug("yok")).isFalse();
 		assertThat(categoryRepository.existsBySlug("roman")).isTrue();
 	}
@@ -177,7 +168,7 @@ class CatalogRepositoryTest {
 
 	@Test
 	void keepsPriceScale() {
-		Book book = new Book("Kitap", savePublisher("p1"), new BigDecimal("149.90"));
+		Book book = new Book("Kitap", new BigDecimal("149.90"));
 		bookRepository.saveAndFlush(book);
 		entityManager.clear();
 
@@ -239,27 +230,30 @@ class CatalogRepositoryTest {
 
 	@Test
 	void uniqueViolationIsTranslatedToDataIntegrityViolation() {
-		savePublisher("ayni-slug");
+		saveAuthor("ayni-slug");
 
-		Throwable thrown = catchThrowable(() -> publisherRepository.saveAndFlush(new Publisher("İkinci", "ayni-slug")));
+		Throwable thrown = catchThrowable(() -> authorRepository.saveAndFlush(new Author("İkinci", "ayni-slug")));
 
 		// MySQL 8 UNIQUE ihlalinde anahtarı tablo adıyla birlikte raporlar.
-		assertTranslated(thrown, ConstraintKind.UNIQUE, "publishers.uk_publishers_slug",
+		assertTranslated(thrown, ConstraintKind.UNIQUE, "authors.uk_authors_slug",
 				SQLIntegrityConstraintViolationException.class);
 	}
 
 	@Test
 	void foreignKeyViolationIsTranslatedToDataIntegrityViolation() {
-		Book book = bookRepository.saveAndFlush(newBook("Kitap"));
-		UUID publisherId = book.getPublisher().getId();
+		Author author = saveAuthor("yazar");
+		Book book = newBook("Kitap");
+		book.getAuthors().add(author);
+		bookRepository.saveAndFlush(book);
+		UUID authorId = author.getId();
 		entityManager.clear();
 
 		Throwable thrown = catchThrowable(() -> {
-			publisherRepository.deleteById(publisherId);
-			publisherRepository.flush();
+			authorRepository.deleteById(authorId);
+			authorRepository.flush();
 		});
 
-		assertTranslated(thrown, ConstraintKind.FOREIGN_KEY, "fk_books_publisher",
+		assertTranslated(thrown, ConstraintKind.FOREIGN_KEY, "fk_book_authors_author",
 				SQLIntegrityConstraintViolationException.class);
 	}
 
@@ -272,10 +266,6 @@ class CatalogRepositoryTest {
 			assertThat(hibernate.getKind()).isEqualTo(kind);
 			assertThat(hibernate.getConstraintName()).isEqualTo(constraint);
 		});
-	}
-
-	private Publisher savePublisher(String slug) {
-		return publisherRepository.save(new Publisher("Yayınevi " + slug, slug));
 	}
 
 	private Author saveAuthor(String slug) {
@@ -291,7 +281,7 @@ class CatalogRepositoryTest {
 	}
 
 	private Book newBook(String title, int initialStock) {
-		return new Book(title, savePublisher("p-" + UUID.randomUUID()), new BigDecimal("99.90"), initialStock);
+		return new Book(title, new BigDecimal("99.90"), initialStock);
 	}
 
 	private int countLinks(String table, UUID bookId) {

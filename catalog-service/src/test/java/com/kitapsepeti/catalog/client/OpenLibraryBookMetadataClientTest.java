@@ -33,7 +33,6 @@ class OpenLibraryBookMetadataClientTest {
 		assertThat(mapped.description()).isEqualTo("A short note.");
 		assertThat(mapped.pageCount()).isEqualTo(80);
 		assertThat(mapped.authors()).containsExactly("John Miedema");
-		assertThat(mapped.publishers()).containsExactly("Litwin Books");
 		assertThat(mapped.subjects()).isEmpty();
 		assertThat(mapped.coverUrl()).isEqualTo("https://covers.openlibrary.org/b/id/1-L.jpg");
 	}
@@ -48,7 +47,6 @@ class OpenLibraryBookMetadataClientTest {
 
 		assertThat(mapped.coverUrl()).isEqualTo("https://covers.openlibrary.org/b/isbn/9780140328721-L.jpg");
 		assertThat(mapped.authors()).isEmpty();
-		assertThat(mapped.publishers()).isEmpty();
 		assertThat(mapped.subjects()).isEmpty();
 	}
 
@@ -79,7 +77,6 @@ class OpenLibraryBookMetadataClientTest {
 		assertThat(mapped.description()).isEqualTo("ORPHAN, CLOCK KEEPER, THIEF.");
 		assertThat(mapped.description()).doesNotContain("THE STORY I AM ABOUT TO SHARE");
 		assertThat(mapped.subjects()).containsExactly("Juvenile fiction", "Children");
-		assertThat(mapped.publishers()).containsExactly("Scholastic");
 	}
 
 	@Test

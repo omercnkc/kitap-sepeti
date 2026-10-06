@@ -23,7 +23,7 @@ Rezervasyon onayı (`.../commit`) olay üretmez: stok ve rezerv birlikte azalır
 Ayrıntılar: [catalog-internal-stock.md](../api/catalog-internal-stock.md).
 
 Yayınlanmaz: kitap oluşturma (her zaman DRAFT), DRAFT kitapta değişiklik, arşivleme (bkz. `BookRemoved`).
-Yayınevi/yazar/kategori adı veya slug'ı değiştiğinde de **yayınlanmaz**; bu durumda aramanın yeniden
+Yazar/kategori adı veya slug'ı değiştiğinde de **yayınlanmaz**; bu durumda aramanın yeniden
 indekslenmesi gerekir (bilinen eksik).
 
 ## Yönlendirme
@@ -57,7 +57,7 @@ UTF-8 JSON nesnesi. Alan sırası ve boşluklar garanti edilmez (JSON olarak ayr
 
 | Alan | Tip | Açıklama |
 |---|---|---|
-| `eventVersion` | integer | Payload şema sürümü; şu an `1`. |
+| `eventVersion` | integer | Payload şema sürümü; şu an `2` (v2: `publisher` kaldırıldı). |
 | `bookId` | string (UUID) | Kitap id'si; `aggregateId` header'ı ile aynı. |
 | `title` | string | Başlık. |
 | `isbn` | string \| null | Normalize edilmiş ISBN-10 veya ISBN-13 (tire/boşluk yok, kontrol karakteri büyük `X`). |
@@ -68,7 +68,6 @@ UTF-8 JSON nesnesi. Alan sırası ve boşluklar garanti edilmez (JSON olarak ayr
 | `pageCount` | integer \| null | Sayfa sayısı. |
 | `inStock` | boolean | Satılabilir stok (stok − rezerv) > 0. Stok miktarları payload'da yer almaz. |
 | `publishedAt` | string (ISO-8601 UTC) | İlk yayın anı; arşivden yeniden yayında değişmez. |
-| `publisher` | object | `{id, name, slug}`. |
 | `authors` | array | `[{id, name, slug}]`, Türkçe ada göre sıralı. Boş olmaz. |
 | `categories` | array | Kitabın doğrudan bağlı olduğu kategoriler, `[{id, name, slug}]`, Türkçe ada göre sıralı. Boş olmaz. |
 | `categoryIdsWithAncestors` | array of string (UUID) | Kitabın kategorileri ve tüm ataları (kök dahil); kategori ağacında filtreleme için. Sıra garanti edilmez. |
@@ -87,7 +86,7 @@ metin kalır.
 
 ```json
 {
-  "eventVersion": 1,
+  "eventVersion": 2,
   "bookId": "01a0f76e-4ad9-7b8c-8c88-b12e1ad81948",
   "title": "Kırmızı Pazartesi",
   "isbn": "9786053600770",
@@ -98,7 +97,6 @@ metin kalır.
   "pageCount": 180,
   "inStock": true,
   "publishedAt": "2026-10-01T12:26:36.512841Z",
-  "publisher": { "id": "01920000-0000-7000-8000-000000000101", "name": "Deniz Yayınları", "slug": "deniz-yayinlari" },
   "authors": [
     { "id": "01920000-0000-7000-8000-000000000201", "name": "Ahmet Yazar", "slug": "ahmet-yazar" }
   ],

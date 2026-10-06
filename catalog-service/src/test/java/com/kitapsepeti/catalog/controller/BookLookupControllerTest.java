@@ -22,10 +22,8 @@ import com.kitapsepeti.catalog.dto.request.BookLookupRequest;
 import com.kitapsepeti.catalog.entity.Author;
 import com.kitapsepeti.catalog.entity.Book;
 import com.kitapsepeti.catalog.entity.BookStatus;
-import com.kitapsepeti.catalog.entity.Publisher;
 import com.kitapsepeti.catalog.repository.AuthorRepository;
 import com.kitapsepeti.catalog.repository.BookRepository;
-import com.kitapsepeti.catalog.repository.PublisherRepository;
 import com.kitapsepeti.catalog.support.SqlCapture;
 import com.kitapsepeti.catalog.support.TestJwt;
 import jakarta.persistence.EntityManagerFactory;
@@ -47,9 +45,6 @@ class BookLookupControllerTest extends ApiTestSupport {
 	private static final Instant NOW = Instant.now().truncatedTo(ChronoUnit.SECONDS);
 
 	@Autowired
-	private PublisherRepository publisherRepository;
-
-	@Autowired
 	private AuthorRepository authorRepository;
 
 	@Autowired
@@ -58,13 +53,10 @@ class BookLookupControllerTest extends ApiTestSupport {
 	@Autowired
 	private EntityManagerFactory entityManagerFactory;
 
-	private Publisher publisher;
-
 	private Author author;
 
 	@BeforeEach
 	void createDefaults() {
-		publisher = publisherRepository.save(new Publisher("Varsayılan Yayınevi", "varsayilan"));
 		author = authorRepository.save(new Author("Yazar", "yazar"));
 	}
 
@@ -84,7 +76,6 @@ class BookLookupControllerTest extends ApiTestSupport {
 			.andExpect(jsonPath("$.items[0].id").value(third.getId().toString()))
 			.andExpect(jsonPath("$.items[0].priceAmount").value(30.0))
 			.andExpect(jsonPath("$.items[0].currency").value("TRY"))
-			.andExpect(jsonPath("$.items[0].publisher.slug").value("varsayilan"))
 			.andExpect(jsonPath("$.items[0].authors[*].name", contains("Yazar")));
 	}
 
@@ -195,8 +186,7 @@ class BookLookupControllerTest extends ApiTestSupport {
 		assertThat(fiftyBooks).as("SQL statements for 50 ids").isEqualTo(oneBook);
 		assertThat(statistics.getCollectionFetchCount()).as("author collections loaded in one batch").isEqualTo(1);
 		assertThat(statements).hasSize(2);
-		assertThat(statements.get(0)).contains("from books").contains(" in (").contains("status=?")
-			.contains("join publishers");
+		assertThat(statements.get(0)).contains("from books").contains(" in (").contains("status=?");
 		assertThat(statements.get(1)).contains("from book_authors").contains("book_id in (");
 	}
 
@@ -235,7 +225,7 @@ class BookLookupControllerTest extends ApiTestSupport {
 	}
 
 	private Book book(String title, String price, int stock) {
-		Book book = new Book(title, publisher, new BigDecimal(price), stock);
+		Book book = new Book(title, new BigDecimal(price), stock);
 		book.setStatus(BookStatus.PUBLISHED);
 		book.setPublishedAt(NOW);
 		book.getAuthors().add(author);

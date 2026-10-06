@@ -1,14 +1,17 @@
 package com.kitapsepeti.catalog.service;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 
+import com.kitapsepeti.catalog.config.S3Properties;
 import com.kitapsepeti.catalog.dto.request.AdminBookListRequest;
 import com.kitapsepeti.catalog.dto.request.CreateBookRequest;
 import com.kitapsepeti.catalog.dto.request.StockAdjustmentRequest;
@@ -20,7 +23,6 @@ import com.kitapsepeti.catalog.entity.Author;
 import com.kitapsepeti.catalog.entity.Book;
 import com.kitapsepeti.catalog.entity.BookStatus;
 import com.kitapsepeti.catalog.entity.Category;
-import com.kitapsepeti.catalog.entity.Publisher;
 import com.kitapsepeti.catalog.exception.BookNotPublishableException;
 import com.kitapsepeti.catalog.exception.InvalidFieldException;
 import com.kitapsepeti.catalog.exception.StaleVersionException;
@@ -30,6 +32,7 @@ import com.kitapsepeti.catalog.repository.BookRepository;
 import com.kitapsepeti.catalog.repository.CategoryRepository;
 import com.kitapsepeti.catalog.service.event.BookRemovedEvent;
 import com.kitapsepeti.catalog.service.event.BookUpsertedEvent;
+import com.kitapsepeti.catalog.storage.CoverStorage;
 import com.kitapsepeti.common.error.ResourceNotFoundException;
 import com.kitapsepeti.common.outbox.OutboxService;
 import org.springframework.data.domain.PageRequest;
@@ -38,6 +41,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * Kitap yönetimi. Kurallar:
@@ -56,9 +60,9 @@ public class BookAdminService {
 
 	private static final Sort ADMIN_ORDER = Sort.by(Sort.Order.desc("updatedAt"), Sort.Order.desc("id"));
 
-	private final BookRepository bookRepository;
+	private static final Set<String> ALLOWED_COVER_TYPES = Set.of("image/jpeg", "image/png", "image/webp");
 
-	private final PublisherAdminService publisherAdminService;
+	private final BookRepository bookRepository;
 
 	private final AuthorAdminService authorAdminService;
 
@@ -68,15 +72,23 @@ public class BookAdminService {
 
 	private final BookEventFactory eventFactory;
 
-	public BookAdminService(BookRepository bookRepository, PublisherAdminService publisherAdminService,
-			AuthorAdminService authorAdminService, CategoryRepository categoryRepository, OutboxService outboxService,
-			BookEventFactory eventFactory) {
+	private final CoverIngestService coverIngestService;
+
+	private final CoverStorage coverStorage;
+
+	private final S3Properties s3Properties;
+
+	public BookAdminService(BookRepository bookRepository, AuthorAdminService authorAdminService,
+			CategoryRepository categoryRepository, OutboxService outboxService, BookEventFactory eventFactory,
+			CoverIngestService coverIngestService, CoverStorage coverStorage, S3Properties s3Properties) {
 		this.bookRepository = bookRepository;
-		this.publisherAdminService = publisherAdminService;
 		this.authorAdminService = authorAdminService;
 		this.categoryRepository = categoryRepository;
 		this.outboxService = outboxService;
 		this.eventFactory = eventFactory;
+		this.coverIngestService = coverIngestService;
+		this.coverStorage = coverStorage;
+		this.s3Properties = s3Properties;
 	}
 
 	@Transactional(readOnly = true)
@@ -95,15 +107,14 @@ public class BookAdminService {
 
 	/** Her zaman DRAFT ve TRY; olay yazılmaz (yayında olmayan kitap dışarıya duyurulmaz). */
 	public AdminBookResponse create(CreateBookRequest request) {
-		Publisher publisher = this.publisherAdminService.ensureByName(request.publisherName());
 		List<Author> authors = this.authorAdminService.ensureByNames(request.authorNames());
 		List<Category> categories = requireAll(this.categoryRepository, request.categoryIds(), "categoryIds",
 				"categories");
-		Book book = new Book(request.title(), publisher, scaled(request.priceAmount()), request.initialStock());
+		Book book = new Book(request.title(), scaled(request.priceAmount()), request.initialStock());
 		book.setIsbn(request.isbn());
 		book.setDescription(request.description());
 		book.setPageCount(request.pageCount());
-		book.setCoverUrl(request.coverUrl());
+		book.setCoverUrl(this.coverIngestService.ingestIfExternal(request.coverUrl()));
 		book.getAuthors().addAll(authors);
 		book.getCategories().addAll(categories);
 		return AdminBookMapper.toResponse(this.bookRepository.saveAndFlush(book));
@@ -118,8 +129,6 @@ public class BookAdminService {
 		if (!book.getVersion().equals(request.version())) {
 			throw new StaleVersionException();
 		}
-		Publisher publisher = (request.publisherName() != null)
-				? this.publisherAdminService.ensureByName(request.publisherName()) : null;
 		List<Author> authors = (request.authorNames() != null)
 				? this.authorAdminService.ensureByNames(request.authorNames()) : null;
 		List<Category> categories = (request.categoryIds() != null)
@@ -134,14 +143,12 @@ public class BookAdminService {
 		if (request.description() != null) {
 			book.setDescription(blankToNull(request.description()));
 		}
-		if (publisher != null) {
-			book.setPublisher(publisher);
-		}
 		if (request.pageCount() != null) {
 			book.setPageCount(request.pageCount());
 		}
 		if (request.coverUrl() != null) {
-			book.setCoverUrl(blankToNull(request.coverUrl()));
+			String cleared = blankToNull(request.coverUrl());
+			book.setCoverUrl(cleared == null ? null : this.coverIngestService.ingestIfExternal(cleared));
 		}
 		if (request.priceAmount() != null) {
 			book.setPriceAmount(scaled(request.priceAmount()));
@@ -210,6 +217,46 @@ public class BookAdminService {
 	}
 
 	/**
+	 * Multipart kapak yükleme. jpeg/png/webp, boyut ≤ {@link S3Properties#maxObjectBytes()}. Yayındaysa
+	 * {@code BookUpserted}.
+	 */
+	public AdminBookResponse uploadCover(UUID id, MultipartFile file) {
+		if (file == null || file.isEmpty()) {
+			throw new InvalidFieldException("file", "must not be empty");
+		}
+		String contentType = normalizeMediaType(file.getContentType());
+		if (contentType == null || !ALLOWED_COVER_TYPES.contains(contentType)) {
+			throw new InvalidFieldException("file", "must be image/jpeg, image/png, or image/webp");
+		}
+		if (file.getSize() > this.s3Properties.maxObjectBytes()) {
+			throw new InvalidFieldException("file", "must not exceed maximum size");
+		}
+		byte[] bytes;
+		try {
+			bytes = file.getBytes();
+		}
+		catch (IOException ex) {
+			throw new InvalidFieldException("file", "could not be read");
+		}
+		if (bytes.length > this.s3Properties.maxObjectBytes()) {
+			throw new InvalidFieldException("file", "must not exceed maximum size");
+		}
+		Book book = requireForUpdate(id);
+		String ext = switch (contentType) {
+			case "image/png" -> "png";
+			case "image/webp" -> "webp";
+			default -> "jpg";
+		};
+		String key = "covers/" + id + "/" + UUID.randomUUID() + "." + ext;
+		book.setCoverUrl(this.coverStorage.put(bytes, contentType, key));
+		if (book.getStatus() == BookStatus.PUBLISHED) {
+			appendUpserted(book);
+		}
+		this.bookRepository.flush();
+		return AdminBookMapper.toResponse(book);
+	}
+
+	/**
 	 * Tek koşullu UPDATE; 0 satır etkilenirse kitap yoksa 404, varsa 409 STOCK_BELOW_RESERVED. Yayındaki kitabın
 	 * {@code inStock} değeri değiştiyse {@code BookUpserted}. Önceki değer, güncellenmiş satırdan
 	 * ({@code available - delta}) hesaplanır: satır bu transaction'da kilitli, araya başka yazma giremez.
@@ -270,6 +317,17 @@ public class BookAdminService {
 
 	private static String blankToNull(String value) {
 		return value.isBlank() ? null : value;
+	}
+
+	private static String normalizeMediaType(String raw) {
+		if (raw == null || raw.isBlank()) {
+			return null;
+		}
+		String type = raw.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
+		if ("image/jpg".equals(type)) {
+			return "image/jpeg";
+		}
+		return type;
 	}
 
 	private static ResourceNotFoundException notFound() {

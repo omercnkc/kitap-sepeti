@@ -17,7 +17,7 @@ const SUBJECT_TO_CATEGORY_NAMES: ReadonlyArray<{ keys: string[]; names: string[]
   },
 ];
 
-/** Open Library metadata → form patch (yazar/yayınevi isimleri; sunucu find-or-create). */
+/** Open Library metadata → form patch (yazar isimleri; sunucu find-or-create). */
 export function buildIsbnLookupApply(
   meta: IsbnMetadataResponse,
   categories: Pick<CategoryResponse, 'id' | 'name' | 'slug'>[],
@@ -45,11 +45,6 @@ export function buildIsbnLookupApply(
     .filter((name) => name.length > 0);
   if (olAuthors.length) {
     patch['authorNames'] = olAuthors;
-  }
-
-  const publisherName = String((meta.publishers ?? [])[0] || '').trim();
-  if (publisherName) {
-    patch['publisherName'] = publisherName;
   }
 
   const matchedCategoryIds = matchCategoryIds(meta.subjects ?? [], categories, namesEqual);

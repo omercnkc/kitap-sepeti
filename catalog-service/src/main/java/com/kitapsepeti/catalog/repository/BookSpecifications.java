@@ -24,11 +24,6 @@ public final class BookSpecifications {
 		return (root, query, cb) -> cb.equal(root.get("status"), BookStatus.PUBLISHED);
 	}
 
-	/** {@code publisher.id} FK sütunundan okunur; publishers tablosuna JOIN gerekmez. */
-	public static Specification<Book> hasPublisher(UUID publisherId) {
-		return (root, query, cb) -> cb.equal(root.get("publisher").get("id"), publisherId);
-	}
-
 	public static Specification<Book> hasAuthor(UUID authorId) {
 		return (root, query, cb) -> {
 			Subquery<Integer> subquery = query.subquery(Integer.class);

@@ -14,7 +14,6 @@ export interface AdminNavItem {
 })
 export class AdminShellComponent {
   readonly navItems: AdminNavItem[] = [
-    { path: 'publishers', label: 'Yayınevleri' },
     { path: 'authors', label: 'Yazarlar' },
     { path: 'categories', label: 'Kategoriler' },
     { path: 'books', label: 'Kitaplar' },

@@ -13,8 +13,7 @@ public final class AdminBookMapper {
 	public static AdminBookSummaryResponse toSummary(Book book) {
 		return new AdminBookSummaryResponse(book.getId(), book.getTitle(), book.getStatus().value(),
 				book.getPriceAmount(), book.getCurrency(), book.getStockQuantity(), book.getReservedQuantity(),
-				book.getAvailableQuantity(), BookMapper.toRef(book.getPublisher()), book.getUpdatedAt(),
-				book.getVersion());
+				book.getAvailableQuantity(), book.getUpdatedAt(), book.getVersion());
 	}
 
 	public static AdminBookResponse toResponse(Book book) {
@@ -22,7 +21,7 @@ public final class AdminBookMapper {
 				book.getPageCount(), book.getCoverUrl(), book.getPriceAmount(), book.getCurrency(),
 				book.getStockQuantity(), book.getReservedQuantity(), book.getAvailableQuantity(),
 				book.getStatus().value(), book.getPublishedAt(), book.getVersion(), book.getCreatedAt(),
-				book.getUpdatedAt(), BookMapper.toRef(book.getPublisher()), BookMapper.authorRefs(book.getAuthors()),
+				book.getUpdatedAt(), BookMapper.authorRefs(book.getAuthors()),
 				BookMapper.categoryRefs(book.getCategories()));
 	}
 

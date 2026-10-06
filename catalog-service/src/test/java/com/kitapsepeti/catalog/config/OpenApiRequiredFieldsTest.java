@@ -58,8 +58,6 @@ class OpenApiRequiredFieldsTest extends ApiTestSupport {
 		docs = jsonMapper.readTree(mockMvc.perform(get("/v3/api-docs")).andReturn().getResponse()
 			.getContentAsString(StandardCharsets.UTF_8));
 
-		String publisherId = check("post", "/api/admin/publishers", 201,
-				admin(post("/api/admin/publishers")).content("{\"name\":\"Deniz Yayınları\"}")).get("id").asString();
 		String authorId = check("post", "/api/admin/authors", 201,
 				admin(post("/api/admin/authors")).content("{\"name\":\"Ayşe Kaya\"}")).get("id").asString();
 		String rootId = check("post", "/api/admin/categories", 201,
@@ -68,7 +66,7 @@ class OpenApiRequiredFieldsTest extends ApiTestSupport {
 			.content("{\"name\":\"Roman\",\"parentId\":\"%s\"}".formatted(rootId))).get("id").asString();
 		// Opsiyonel alanlar (isbn, açıklama, kapak, sayfa sayısı) bilinçli olarak boş bırakılır.
 		String bookId = check("post", "/api/admin/books", 201, admin(post("/api/admin/books")).content("""
-				{"title":"Deneme","publisherName":"Deniz Yayınları","priceAmount":129.90,"initialStock":5,
+				{"title":"Deneme","priceAmount":129.90,"initialStock":5,
 				"authorNames":["Ayşe Kaya"],"categoryIds":["%s"]}""".formatted(childId)))
 			.get("id").asString();
 		check("post", "/api/admin/books/{id}/publish", 200, admin(post("/api/admin/books/{id}/publish", bookId)));
@@ -81,8 +79,6 @@ class OpenApiRequiredFieldsTest extends ApiTestSupport {
 		check("get", "/api/categories", 200, get("/api/categories"));
 		check("get", "/api/admin/books", 200, admin(get("/api/admin/books")));
 		check("get", "/api/admin/books/{id}", 200, admin(get("/api/admin/books/{id}", bookId)));
-		check("get", "/api/admin/publishers", 200, admin(get("/api/admin/publishers")));
-		check("get", "/api/admin/publishers/{id}", 200, admin(get("/api/admin/publishers/{id}", publisherId)));
 		check("get", "/api/admin/authors", 200, admin(get("/api/admin/authors")));
 		check("get", "/api/admin/authors/{id}", 200, admin(get("/api/admin/authors/{id}", authorId)));
 		check("get", "/api/admin/categories", 200, admin(get("/api/admin/categories")));
@@ -185,7 +181,7 @@ class OpenApiRequiredFieldsTest extends ApiTestSupport {
 		@Primary
 		BookMetadataClient bookMetadataClient() {
 			return isbn -> Optional.of(new IsbnMetadataResponse(isbn, "Stub Title", null, null, null,
-					List.of("Stub Author"), List.of("Stub Publisher"), List.of("Fiction")));
+					List.of("Stub Author"), List.of("Fiction")));
 		}
 
 	}

@@ -64,7 +64,6 @@ class DevSeedMigrationTest {
 		}
 
 		assertThat(count("SELECT COUNT(*) FROM books")).isEqualTo(booksAfterFirst).isEqualTo(14);
-		assertThat(count("SELECT COUNT(*) FROM publishers")).isEqualTo(3);
 		assertThat(count("SELECT COUNT(*) FROM authors")).isEqualTo(5);
 		assertThat(count("SELECT COUNT(*) FROM categories")).isEqualTo(6);
 		assertThat(count("SELECT COUNT(*) FROM book_authors")).isEqualTo(14);

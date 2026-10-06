@@ -1,28 +1,7 @@
-import { AuthorRef, CategoryRef, PublisherRef } from './catalog';
+import { AuthorRef, CategoryRef } from './catalog';
 
 /** OpenAPI `AdminBookResponse.status` / list filter */
 export type AdminBookStatus = 'draft' | 'published' | 'archived';
-
-/** OpenAPI `PublisherResponse` */
-export interface PublisherResponse {
-  id: string;
-  name: string;
-  slug: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/** OpenAPI `CreatePublisherRequest` */
-export interface CreatePublisherRequest {
-  name: string;
-  slug?: string;
-}
-
-/** OpenAPI `UpdatePublisherRequest` */
-export interface UpdatePublisherRequest {
-  name?: string;
-  slug?: string;
-}
 
 /** OpenAPI `AuthorResponse` */
 export interface AuthorResponse {
@@ -77,7 +56,6 @@ export interface MoveCategoryRequest {
 export interface AdminBookSummary {
   id: string;
   title: string;
-  publisher: PublisherRef;
   priceAmount: number;
   currency: string;
   status: AdminBookStatus;
@@ -93,7 +71,6 @@ export interface AdminBook {
   id: string;
   title: string;
   authors: AuthorRef[];
-  publisher: PublisherRef;
   categories: CategoryRef[];
   priceAmount: number;
   currency: string;
@@ -114,7 +91,6 @@ export interface AdminBook {
 /** OpenAPI `CreateBookRequest` */
 export interface CreateBookRequest {
   title: string;
-  publisherName: string;
   priceAmount: number;
   authorNames?: string[];
   categoryIds?: string[];
@@ -129,7 +105,6 @@ export interface CreateBookRequest {
 export interface UpdateBookRequest {
   version: number;
   title?: string;
-  publisherName?: string;
   priceAmount?: number;
   authorNames?: string[];
   categoryIds?: string[];
@@ -144,7 +119,7 @@ export interface StockAdjustmentRequest {
   delta: number;
 }
 
-/** Admin list query (publishers / authors / categories) */
+/** Admin list query (authors / categories) */
 export interface AdminPageQuery {
   page?: number | null;
   size?: number | null;
@@ -163,6 +138,5 @@ export interface IsbnMetadataResponse {
   coverUrl?: string | null;
   pageCount?: number | null;
   authors: string[];
-  publishers: string[];
   subjects?: string[];
 }

@@ -1,6 +1,8 @@
 # Active Context
 
 ## Son değişiklikler
+- Özellik 3 (MinIO book covers): `minio` + `minio-init` compose; catalog S3 PutObject (`S3_ENDPOINT`) vs public URL
+  (`S3_PUBLIC_BASE_URL` → `cover_url`); ingest allowlist; `POST …/cover`; admin Angular FormData upload; gateway 6MB.
 - Kök parent/aggregator `pom.xml` oluşturuldu; `user-service/pom.xml` bu parent'tan
   miras alacak şekilde sadeleştirildi. `.\mvnw.cmd clean package -DskipTests` başarılı.
 - Kök `.gitignore` eklendi (`.env` ignore ediliyor).

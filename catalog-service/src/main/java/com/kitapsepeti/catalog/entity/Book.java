@@ -14,7 +14,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import lombok.AccessLevel;
@@ -55,12 +54,6 @@ public class Book {
 	@Setter
 	@Column(name = "description", columnDefinition = "TEXT")
 	private String description;
-
-	/** Kitabı olan yayınevi silinemez (DB RESTRICT). */
-	@Setter
-	@ManyToOne(fetch = FetchType.LAZY, optional = false)
-	@JoinColumn(name = "publisher_id", nullable = false)
-	private Publisher publisher;
 
 	/** Null olabilir; doluysa pozitif ({@code ck_books_page_count}). */
 	@Setter
@@ -129,14 +122,13 @@ public class Book {
 	private Set<Category> categories = new HashSet<>();
 
 	/** Zorunlu alanlarla yeni kitap; status=DRAFT, currency="TRY", stok ve rezerv 0 başlar. */
-	public Book(String title, Publisher publisher, BigDecimal priceAmount) {
-		this(title, publisher, priceAmount, 0);
+	public Book(String title, BigDecimal priceAmount) {
+		this(title, priceAmount, 0);
 	}
 
 	/** Başlangıç stoğuyla yeni kitap; rezerv 0 başlar. Stok yalnızca burada (insert) verilebilir. */
-	public Book(String title, Publisher publisher, BigDecimal priceAmount, int initialStock) {
+	public Book(String title, BigDecimal priceAmount, int initialStock) {
 		this.title = title;
-		this.publisher = publisher;
 		this.priceAmount = priceAmount;
 		this.stockQuantity = initialStock;
 	}

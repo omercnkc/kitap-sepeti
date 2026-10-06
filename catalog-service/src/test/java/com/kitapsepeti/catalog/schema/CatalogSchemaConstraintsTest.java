@@ -22,7 +22,7 @@ import org.springframework.jdbc.UncategorizedSQLException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * V1 şemasındaki kısıtların DB seviyesinde uygulandığını doğrular (entity yok, düz SQL).
+ * Flyway şemasındaki kısıtların DB seviyesinde uygulandığını doğrular (entity yok, düz SQL).
  * Her test kendi transaction'ında koşar ve geri alınır.
  */
 @JdbcTest
@@ -37,21 +37,24 @@ class CatalogSchemaConstraintsTest {
 
 	@Test
 	void flywayCreatesAllCatalogTables() {
-		Integer applied = jdbc.queryForObject(
+		Integer v1 = jdbc.queryForObject(
 				"SELECT COUNT(*) FROM flyway_schema_history WHERE version = '1' AND success = 1", Integer.class);
+		Integer v2 = jdbc.queryForObject(
+				"SELECT COUNT(*) FROM flyway_schema_history WHERE version = '2' AND success = 1", Integer.class);
 		List<String> tables = jdbc.queryForList("""
 				SELECT table_name FROM information_schema.tables
 				WHERE table_schema = DATABASE() AND table_name <> 'flyway_schema_history'
 				""", String.class);
 
-		assertThat(applied).isEqualTo(1);
-		assertThat(tables).containsExactlyInAnyOrder("publishers", "authors", "categories", "books", "book_authors",
+		assertThat(v1).isEqualTo(1);
+		assertThat(v2).isEqualTo(1);
+		assertThat(tables).containsExactlyInAnyOrder("authors", "categories", "books", "book_authors",
 				"book_categories", "stock_reservations", "outbox");
 	}
 
 	@Test
 	void rejectsReservedQuantityAboveStock() {
-		byte[] bookId = insertBook(insertPublisher("p1"), null, 5);
+		byte[] bookId = insertBook(null, 5);
 
 		assertCheckViolation(() -> jdbc.update("UPDATE books SET reserved_quantity = 6 WHERE id = ?", (Object) bookId),
 				"ck_books_reserved_le_stock");
@@ -59,7 +62,6 @@ class CatalogSchemaConstraintsTest {
 
 	@Test
 	void rejectsNegativeStock() {
-		byte[] publisherId = insertPublisher("p1");
 		String clause = jdbc.queryForObject("""
 				SELECT check_clause FROM information_schema.check_constraints
 				WHERE constraint_schema = DATABASE() AND constraint_name = 'ck_books_stock_non_negative'
@@ -67,13 +69,13 @@ class CatalogSchemaConstraintsTest {
 
 		assertThat(clause).isEqualTo("(`stock_quantity` >= 0)");
 		// reserved_quantity >= 0 iken negatif stok ck_books_reserved_le_stock'u da ihlal eder; MySQL yalnızca birini raporlar.
-		assertCheckViolation(() -> insertBook(publisherId, null, -1), "ck_books_stock_non_negative",
+		assertCheckViolation(() -> insertBook(null, -1), "ck_books_stock_non_negative",
 				"ck_books_reserved_le_stock");
 	}
 
 	@Test
 	void rejectsUnknownBookStatus() {
-		byte[] bookId = insertBook(insertPublisher("p1"), null, 0);
+		byte[] bookId = insertBook(null, 0);
 
 		assertCheckViolation(() -> jdbc.update("UPDATE books SET status = 'deleted' WHERE id = ?", (Object) bookId),
 				"ck_books_status");
@@ -81,37 +83,27 @@ class CatalogSchemaConstraintsTest {
 
 	@Test
 	void rejectsNegativePrice() {
-		byte[] bookId = insertBook(insertPublisher("p1"), null, 0);
+		byte[] bookId = insertBook(null, 0);
 
 		assertCheckViolation(() -> jdbc.update("UPDATE books SET price_amount = -1 WHERE id = ?", (Object) bookId),
 				"ck_books_price_non_negative");
 	}
 
 	@Test
-	void rejectsDuplicatePublisherSlug() {
-		insertPublisher("can-yayinlari");
+	void rejectsDuplicateAuthorSlug() {
+		insertAuthor("can-yazar");
 
-		assertDuplicate(() -> insertPublisher("can-yayinlari"), "uk_publishers_slug");
+		assertDuplicate(() -> insertAuthor("can-yazar"), "uk_authors_slug");
 	}
 
 	@Test
 	void allowsManyNullIsbnsButRejectsDuplicateIsbn() {
-		byte[] publisherId = insertPublisher("p1");
-		insertBook(publisherId, null, 0);
-		insertBook(publisherId, null, 0);
-		insertBook(publisherId, "9789750719387", 0);
+		insertBook(null, 0);
+		insertBook(null, 0);
+		insertBook("9789750719387", 0);
 
 		assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM books WHERE isbn IS NULL", Integer.class)).isEqualTo(2);
-		assertDuplicate(() -> insertBook(publisherId, "9789750719387", 0), "uk_books_isbn");
-	}
-
-	@Test
-	void rejectsDeletingPublisherWithBooks() {
-		byte[] publisherId = insertPublisher("p1");
-		insertBook(publisherId, null, 0);
-
-		assertViolation(() -> jdbc.update("DELETE FROM publishers WHERE id = ?", (Object) publisherId),
-				"fk_books_publisher");
+		assertDuplicate(() -> insertBook("9789750719387", 0), "uk_books_isbn");
 	}
 
 	@Test
@@ -125,7 +117,7 @@ class CatalogSchemaConstraintsTest {
 
 	@Test
 	void deletingBookCascadesToLinksButKeepsAuthorAndCategory() {
-		byte[] bookId = insertBook(insertPublisher("p1"), null, 0);
+		byte[] bookId = insertBook(null, 0);
 		byte[] authorId = insertAuthor("orhan-pamuk");
 		byte[] categoryId = insertCategory(null, "roman");
 		jdbc.update("INSERT INTO book_authors (book_id, author_id) VALUES (?, ?)", bookId, authorId);
@@ -141,7 +133,7 @@ class CatalogSchemaConstraintsTest {
 
 	@Test
 	void rejectsDeletingAuthorWithBooks() {
-		byte[] bookId = insertBook(insertPublisher("p1"), null, 0);
+		byte[] bookId = insertBook(null, 0);
 		byte[] authorId = insertAuthor("sabahattin-ali");
 		jdbc.update("INSERT INTO book_authors (book_id, author_id) VALUES (?, ?)", bookId, authorId);
 
@@ -151,9 +143,8 @@ class CatalogSchemaConstraintsTest {
 
 	@Test
 	void allowsOneReservationPerOrderAndBook() {
-		byte[] publisherId = insertPublisher("p1");
-		byte[] firstBook = insertBook(publisherId, null, 10);
-		byte[] secondBook = insertBook(publisherId, null, 10);
+		byte[] firstBook = insertBook(null, 10);
+		byte[] secondBook = insertBook(null, 10);
 		byte[] orderId = newId();
 		insertReservation(firstBook, orderId, 1);
 
@@ -164,14 +155,14 @@ class CatalogSchemaConstraintsTest {
 
 	@Test
 	void rejectsZeroQuantityReservation() {
-		byte[] bookId = insertBook(insertPublisher("p1"), null, 10);
+		byte[] bookId = insertBook(null, 10);
 
 		assertCheckViolation(() -> insertReservation(bookId, newId(), 0), "ck_stock_reservations_quantity");
 	}
 
 	@Test
 	void rejectsDeletingBookWithReservations() {
-		byte[] bookId = insertBook(insertPublisher("p1"), null, 10);
+		byte[] bookId = insertBook(null, 10);
 		insertReservation(bookId, newId(), 1);
 
 		assertViolation(() -> jdbc.update("DELETE FROM books WHERE id = ?", (Object) bookId),
@@ -202,12 +193,6 @@ class CatalogSchemaConstraintsTest {
 		assertThatThrownBy(statement).isInstanceOf(DuplicateKeyException.class).hasMessageContaining(constraint);
 	}
 
-	private byte[] insertPublisher(String slug) {
-		byte[] id = newId();
-		jdbc.update("INSERT INTO publishers (id, name, slug) VALUES (?, ?, ?)", id, "Yayınevi " + slug, slug);
-		return id;
-	}
-
 	private byte[] insertAuthor(String slug) {
 		byte[] id = newId();
 		jdbc.update("INSERT INTO authors (id, name, slug) VALUES (?, ?, ?)", id, "Yazar " + slug, slug);
@@ -221,12 +206,12 @@ class CatalogSchemaConstraintsTest {
 		return id;
 	}
 
-	private byte[] insertBook(byte[] publisherId, String isbn, int stockQuantity) {
+	private byte[] insertBook(String isbn, int stockQuantity) {
 		byte[] id = newId();
 		jdbc.update("""
-				INSERT INTO books (id, isbn, title, publisher_id, price_amount, stock_quantity)
-				VALUES (?, ?, ?, ?, ?, ?)
-				""", id, isbn, "Kitap", publisherId, new BigDecimal("99.90"), stockQuantity);
+				INSERT INTO books (id, isbn, title, price_amount, stock_quantity)
+				VALUES (?, ?, ?, ?, ?)
+				""", id, isbn, "Kitap", new BigDecimal("99.90"), stockQuantity);
 		return id;
 	}
 

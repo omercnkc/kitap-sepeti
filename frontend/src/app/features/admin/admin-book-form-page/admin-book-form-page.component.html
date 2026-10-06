@@ -104,19 +104,6 @@
       </div>
 
       <div class="row g-3">
-        <div class="col-md-6">
-          <label class="form-label" for="book-publisher">Yayınevi</label>
-          <input
-            id="book-publisher"
-            type="text"
-            class="form-control"
-            formControlName="publisherName"
-            maxlength="160"
-            autocomplete="off"
-            [class.is-invalid]="form.get('publisherName')?.invalid && form.get('publisherName')?.touched"
-          />
-          <app-field-error [errors]="fieldErrors" field="publisherName"></app-field-error>
-        </div>
         <div class="col-md-3">
           <label class="form-label" for="book-price">Fiyat (₺)</label>
           <input
@@ -211,6 +198,27 @@
             Kapak adresi http(s):// ile başlamalı.
           </div>
           <app-field-error [errors]="fieldErrors" field="coverUrl"></app-field-error>
+          <div class="mt-2">
+            <label class="form-label" for="book-cover-file">Kapak dosyası</label>
+            <input
+              id="book-cover-file"
+              type="file"
+              class="form-control form-control-sm"
+              accept="image/jpeg,image/png,image/webp"
+              (change)="onCoverFileSelected($event)"
+              [disabled]="saving || actionBusy"
+            />
+            <div *ngIf="pendingCoverFile" class="form-text">
+              Seçildi: {{ pendingCoverFile.name }} (kayıttan sonra yüklenecek)
+            </div>
+          </div>
+          <div *ngIf="form.get('coverUrl')?.value" class="mt-2">
+            <img
+              [src]="form.get('coverUrl')?.value"
+              alt="Kapak önizleme"
+              class="admin-book-form__cover-preview img-thumbnail"
+            />
+          </div>
         </div>
       </div>
 

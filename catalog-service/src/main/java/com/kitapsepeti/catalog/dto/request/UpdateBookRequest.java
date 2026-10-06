@@ -20,15 +20,14 @@ import jakarta.validation.constraints.Size;
 /**
  * Kısmi güncelleme. {@code version} zorunlu: kaydın güncel versiyonu değilse 409 ve hiçbir şey yazılmaz.
  * null alan değiştirilmez; {@code isbn}/{@code description}/{@code coverUrl} için boş metin = temizle.
- * {@code publisherName}/{@code authorNames}/{@code categoryIds} gönderilirse ilgili küme/alan değişir
- * (yayınevi/yazar find-or-create; mevcut kayıt global rename edilmez). Durum ve stok burada değişmez.
+ * {@code authorNames}/{@code categoryIds} gönderilirse ilgili küme değişir (yazar find-or-create; mevcut
+ * kayıt global rename edilmez). Durum ve stok burada değişmez.
  */
 public record UpdateBookRequest(
 		@Schema(description = "Son okunan `version`; güncel değilse 409 `CONCURRENT_MODIFICATION`") @NotNull Long version,
 		@NullOrNotBlank @Size(max = 300) String title,
 		@Isbn String isbn,
 		@Size(max = BookTexts.MAX_DESCRIPTION_LENGTH) String description,
-		@NullOrNotBlank @Size(max = 160) String publisherName,
 		@Positive Integer pageCount,
 		@HttpUrl @Size(max = 500) String coverUrl,
 		@DecimalMin("0") @Digits(integer = 10, fraction = 2) BigDecimal priceAmount,
@@ -38,9 +37,6 @@ public record UpdateBookRequest(
 	public UpdateBookRequest {
 		title = (title != null) ? title.strip() : null;
 		isbn = Isbns.normalize(isbn);
-		if (publisherName != null) {
-			publisherName = publisherName.strip();
-		}
 		if (authorNames != null) {
 			authorNames = AuthorNames.compact(authorNames);
 		}

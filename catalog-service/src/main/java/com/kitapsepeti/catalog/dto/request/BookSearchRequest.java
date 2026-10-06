@@ -19,7 +19,6 @@ import jakarta.validation.constraints.Min;
 @ValidPriceRange
 public record BookSearchRequest(
 		@Schema(description = "Kategori; alt kategorilerdeki kitaplar da dahil") UUID categoryId,
-		UUID publisherId,
 		UUID authorId,
 		@DecimalMin("0") BigDecimal minPrice,
 		@Schema(description = "`minPrice` ile birlikte verilirse ondan küçük olamaz") @DecimalMin("0") BigDecimal maxPrice,

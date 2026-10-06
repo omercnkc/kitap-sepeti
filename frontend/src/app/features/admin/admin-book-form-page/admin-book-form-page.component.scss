@@ -18,3 +18,9 @@
 .admin-book-form__chip .btn-close {
   font-size: 0.55rem;
 }
+
+.admin-book-form__cover-preview {
+  max-width: 120px;
+  max-height: 160px;
+  object-fit: contain;
+}

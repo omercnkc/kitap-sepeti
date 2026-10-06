@@ -361,7 +361,6 @@ function toSummary(book: AdminBook): AdminBookSummary {
   return {
     id: book.id,
     title: book.title,
-    publisher: book.publisher,
     priceAmount: book.priceAmount,
     currency: book.currency,
     status: book.status,

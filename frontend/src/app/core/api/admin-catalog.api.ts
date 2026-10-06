@@ -12,16 +12,13 @@ import {
   CreateAuthorRequest,
   CreateBookRequest,
   CreateCategoryRequest,
-  CreatePublisherRequest,
   IsbnMetadataResponse,
   MoveCategoryRequest,
   PageResponse,
-  PublisherResponse,
   StockAdjustmentRequest,
   UpdateAuthorRequest,
   UpdateBookRequest,
   UpdateCategoryRequest,
-  UpdatePublisherRequest,
 } from '../models';
 import { toHttpParams } from './to-http-params';
 
@@ -30,30 +27,6 @@ export class AdminCatalogApi {
   private readonly base = `${environment.apiUrl}/api/admin`;
 
   constructor(private readonly http: HttpClient) {}
-
-  // —— Publishers ——
-
-  listPublishers(query: AdminPageQuery = {}): Observable<PageResponse<PublisherResponse>> {
-    return this.http.get<PageResponse<PublisherResponse>>(`${this.base}/publishers`, {
-      params: toHttpParams(query),
-    });
-  }
-
-  getPublisher(id: string): Observable<PublisherResponse> {
-    return this.http.get<PublisherResponse>(`${this.base}/publishers/${id}`);
-  }
-
-  createPublisher(body: CreatePublisherRequest): Observable<PublisherResponse> {
-    return this.http.post<PublisherResponse>(`${this.base}/publishers`, body);
-  }
-
-  updatePublisher(id: string, body: UpdatePublisherRequest): Observable<PublisherResponse> {
-    return this.http.patch<PublisherResponse>(`${this.base}/publishers/${id}`, body);
-  }
-
-  deletePublisher(id: string): Observable<void> {
-    return this.http.delete<void>(`${this.base}/publishers/${id}`);
-  }
 
   // —— Authors ——
 
@@ -147,5 +120,12 @@ export class AdminCatalogApi {
 
   adjustBookStock(id: string, body: StockAdjustmentRequest): Observable<AdminBook> {
     return this.http.post<AdminBook>(`${this.base}/books/${id}/stock-adjustments`, body);
+  }
+
+  /** Multipart kapak; Content-Type elle set edilmez (boundary için tarayıcı doldurur). */
+  uploadBookCover(id: string, file: File): Observable<AdminBook> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<AdminBook>(`${this.base}/books/${id}/cover`, formData);
   }
 }
