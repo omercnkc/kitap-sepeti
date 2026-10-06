@@ -40,8 +40,12 @@
         ></app-empty-state>
 
         <div *ngIf="state.kind === 'ready'" class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-3">
-          <div *ngFor="let book of state.page.items" class="col">
-            <app-book-card [book]="book" (addToCart)="onAddToCart($event)"></app-book-card>
+          <div *ngFor="let book of state.page.items" class="col d-flex">
+            <app-book-card
+              class="w-100"
+              [book]="book"
+              (addToCart)="onAddToCart($event)"
+            ></app-book-card>
           </div>
         </div>
 

@@ -1,5 +1,6 @@
 :host {
   display: block;
+  height: 100%;
   max-width: 280px;
   width: 100%;
   margin-inline: auto;
@@ -14,15 +15,18 @@
 
 .book-card__media {
   display: block;
+  flex-shrink: 0;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
   background: #f3f4f6;
 }
 
 .book-card__cover {
   display: block;
   width: 100%;
-  aspect-ratio: 3 / 4;
+  height: 100%;
   object-fit: cover;
-  max-width: 280px;
+  object-position: center top;
 }
 
 .book-card__cover--placeholder {
@@ -41,6 +45,8 @@
   overflow: hidden;
   word-break: break-word;
   margin-bottom: 0.25rem;
+  min-height: 2.5em;
+  line-height: 1.25;
 }
 
 .book-card__authors {
@@ -48,6 +54,7 @@
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  min-height: 1.25em;
 }
 
 .book-card__price {

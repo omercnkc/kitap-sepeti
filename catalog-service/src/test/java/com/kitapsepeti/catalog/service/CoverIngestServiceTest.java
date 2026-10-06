@@ -84,13 +84,38 @@ class CoverIngestServiceTest {
 	}
 
 	@Test
-	void nonImageContentTypeReturnsNull() {
+	void nonImageContentTypeKeepsOriginalUrl() {
 		this.wireMock.stubFor(get(urlEqualTo("/not-image")).willReturn(aResponse().withStatus(200)
 			.withHeader("Content-Type", "text/html")
 			.withBody("<html></html>")));
 
 		String url = "http://127.0.0.1:" + this.wireMock.port() + "/not-image";
-		assertThat(this.service.ingestIfExternal(url)).isNull();
+		assertThat(this.service.ingestIfExternal(url)).isEqualTo(url);
+		assertThat(this.storage.size()).isZero();
+	}
+
+	@Test
+	void allowlistedRedirectIsFollowed() {
+		this.wireMock.stubFor(get(urlEqualTo("/old.jpg")).willReturn(aResponse().withStatus(302)
+			.withHeader("Location", "/new.jpg")));
+		this.wireMock.stubFor(get(urlEqualTo("/new.jpg")).willReturn(aResponse().withStatus(200)
+			.withHeader("Content-Type", "image/jpeg")
+			.withBody(TINY_JPEG)));
+
+		String url = "http://127.0.0.1:" + this.wireMock.port() + "/old.jpg";
+		String result = this.service.ingestIfExternal(url);
+
+		assertThat(result).startsWith("http://localhost:9000/kitapsepeti-covers/covers/");
+		assertThat(this.storage.size()).isEqualTo(1);
+	}
+
+	@Test
+	void redirectOutsideAllowlistKeepsOriginalUrl() {
+		this.wireMock.stubFor(get(urlEqualTo("/leave.jpg")).willReturn(aResponse().withStatus(302)
+			.withHeader("Location", "https://evil.example/x.jpg")));
+
+		String url = "http://127.0.0.1:" + this.wireMock.port() + "/leave.jpg";
+		assertThat(this.service.ingestIfExternal(url)).isEqualTo(url);
 		assertThat(this.storage.size()).isZero();
 	}
 

@@ -17,13 +17,16 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
- * Dış kapak URL'sini allowlist üzerinden indirip kendi bucket'ına koyar (SSRF: yalnızca https,
- * host allowlist, yönlendirme yok). Başarısızlıkta WARN + null; kitap yine oluşur.
+ * Dış kapak URL'sini allowlist üzerinden indirip kendi bucket'ına koyar (SSRF: yalnızca https /
+ * local http, host allowlist; yönlendirme yalnızca allowlist host'lara, en fazla 5 hop).
+ * İndirme başarısızsa WARN + orijinal allowlist URL (tarayıcı yine gösterebilir); kitap oluşur.
  */
 @Service
 public class CoverIngestService {
 
 	private static final Logger log = LoggerFactory.getLogger(CoverIngestService.class);
+
+	private static final int MAX_REDIRECTS = 5;
 
 	private static final Set<String> ALLOWED_IMAGE_TYPES = Set.of("image/jpeg", "image/png", "image/webp");
 
@@ -43,7 +46,7 @@ public class CoverIngestService {
 	}
 
 	/**
-	 * @return yönetilen public URL, zaten yönetilen URL (aynı), veya null (boş / izin yok / hata)
+	 * @return yönetilen public URL, zaten yönetilen URL, allowlist orijinal URL (ingest düştü), veya null
 	 */
 	public String ingestIfExternal(String coverUrl) {
 		if (coverUrl == null || coverUrl.isBlank()) {
@@ -70,8 +73,8 @@ public class CoverIngestService {
 			return this.coverStorage.put(image.bytes(), image.contentType(), key);
 		}
 		catch (Exception ex) {
-			log.warn("Cover ingest failed: {}", ex.toString());
-			return null;
+			log.warn("Cover ingest failed, keeping original URL: {}", ex.toString());
+			return trimmed;
 		}
 	}
 
@@ -92,23 +95,55 @@ public class CoverIngestService {
 			.anyMatch(allowed -> allowed.equalsIgnoreCase(hostLower));
 	}
 
-	private DownloadedImage download(URI uri) throws IOException, InterruptedException {
-		HttpRequest request = HttpRequest.newBuilder(uri)
-			.GET()
-			.timeout(this.properties.ingestReadTimeout())
-			.header("Accept", "image/jpeg,image/png,image/webp,*/*")
-			.build();
-		HttpResponse<InputStream> response = this.httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
-		if (response.statusCode() < 200 || response.statusCode() >= 300) {
-			throw new IOException("HTTP " + response.statusCode());
+	private DownloadedImage download(URI start) throws IOException, InterruptedException {
+		URI uri = start;
+		for (int hop = 0; hop <= MAX_REDIRECTS; hop++) {
+			HttpRequest request = HttpRequest.newBuilder(uri)
+				.GET()
+				.timeout(this.properties.ingestReadTimeout())
+				.header("Accept", "image/jpeg,image/png,image/webp,*/*")
+				.build();
+			HttpResponse<InputStream> response = this.httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+			int status = response.statusCode();
+			if (status >= 300 && status < 400) {
+				String location = response.headers().firstValue("Location")
+					.orElseThrow(() -> new IOException("HTTP " + status + " without Location"));
+				drain(response.body());
+				URI next = uri.resolve(location);
+				if (!isAllowedUri(next)) {
+					throw new IOException("redirect host not allowlisted");
+				}
+				uri = next;
+				continue;
+			}
+			if (status < 200 || status >= 300) {
+				drain(response.body());
+				throw new IOException("HTTP " + status);
+			}
+			String contentType = response.headers().firstValue("Content-Type")
+				.map(CoverIngestService::normalizeMediaType)
+				.filter(ALLOWED_IMAGE_TYPES::contains)
+				.orElseThrow(() -> {
+					drain(response.body());
+					return new IOException("unsupported content-type");
+				});
+			try (InputStream in = response.body()) {
+				byte[] bytes = readLimited(in, this.properties.maxObjectBytes());
+				return new DownloadedImage(bytes, contentType);
+			}
 		}
-		String contentType = response.headers().firstValue("Content-Type")
-			.map(CoverIngestService::normalizeMediaType)
-			.filter(ALLOWED_IMAGE_TYPES::contains)
-			.orElseThrow(() -> new IOException("unsupported content-type"));
-		try (InputStream in = response.body()) {
-			byte[] bytes = readLimited(in, this.properties.maxObjectBytes());
-			return new DownloadedImage(bytes, contentType);
+		throw new IOException("too many redirects");
+	}
+
+	private static void drain(InputStream in) {
+		if (in == null) {
+			return;
+		}
+		try (InputStream stream = in) {
+			stream.readAllBytes();
+		}
+		catch (IOException ignored) {
+			// yanıt gövdesini kapatmak SSRF/redirect yolunda yeterli
 		}
 	}
 
