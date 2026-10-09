@@ -5,6 +5,7 @@ import static com.kitapsepeti.catalog.repository.BookSpecifications.inAnyCategor
 import static com.kitapsepeti.catalog.repository.BookSpecifications.isPublished;
 import static com.kitapsepeti.catalog.repository.BookSpecifications.priceAtLeast;
 import static com.kitapsepeti.catalog.repository.BookSpecifications.priceAtMost;
+import static com.kitapsepeti.catalog.repository.BookSpecifications.titleContains;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -84,6 +85,9 @@ public class BookQueryService {
 	private Specification<Book> specificationOf(BookSearchRequest request) {
 		List<Specification<Book>> specifications = new ArrayList<>();
 		specifications.add(isPublished());
+		if (request.q() != null) {
+			specifications.add(titleContains(request.q()));
+		}
 		if (request.authorId() != null) {
 			specifications.add(hasAuthor(request.authorId()));
 		}

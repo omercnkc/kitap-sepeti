@@ -86,6 +86,27 @@ class BookControllerTest extends ApiTestSupport {
 	}
 
 	@Test
+	void titleSearchMatchesCaseInsensitiveAndCombinesWithCategory() throws Exception {
+		Category roman = categoryRepository.save(new Category(null, "Roman", "roman"));
+		Category bilim = categoryRepository.save(new Category(null, "Bilim", "bilim"));
+		save(withCategories(book("Watchmen", "10.00"), roman));
+		save(withCategories(book("Moby-Dick", "20.00"), roman));
+		save(withCategories(book("Başka Kitap", "30.00"), bilim));
+
+		assertTitles("q=watch", "Watchmen");
+		assertTitles("q=WATCHMEN", "Watchmen");
+		assertTitles("q=Moby", "Moby-Dick");
+		assertTitles("q=watch&categoryId=" + roman.getId(), "Watchmen");
+		assertTitles("q=Moby&categoryId=" + bilim.getId());
+		mockMvc.perform(get("/api/books?q=&sort=price_asc"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.totalElements").value(3));
+		mockMvc.perform(get("/api/books?q=   &sort=price_asc"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.totalElements").value(3));
+	}
+
+	@Test
 	void categoryFilterIncludesSubcategoriesAndReturnsEachBookOnce() throws Exception {
 		Category edebiyat = categoryRepository.save(new Category(null, "Edebiyat", "edebiyat"));
 		Category roman = categoryRepository.save(new Category(edebiyat, "Roman", "roman"));
@@ -165,7 +186,9 @@ class BookControllerTest extends ApiTestSupport {
 		"minPrice=10&maxPrice=5 | minPrice",
 		"categoryId=bozuk   | categoryId",
 		"page=abc           | page",
-		"maxPrice=on-lira   | maxPrice" })
+		"maxPrice=on-lira   | maxPrice",
+		"q=a                | q",
+		"q=x                | q" })
 	void invalidQueryParametersReturn400ValidationFailed(String query, String field) throws Exception {
 		String body = mockMvc.perform(get("/api/books?" + query))
 			.andExpect(status().isBadRequest())

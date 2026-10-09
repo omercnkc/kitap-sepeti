@@ -26,6 +26,13 @@ describe('bookFilterFromParams', () => {
     expect(filter.size).toBe(12);
     expect(filter.categoryId).toBeNull();
   });
+
+  it('maps q when at least 2 chars and ignores shorter', () => {
+    expect(bookFilterFromParams(convertToParamMap({ q: 'Moby' })).q).toBe('Moby');
+    expect(bookFilterFromParams(convertToParamMap({ q: '  watch  ' })).q).toBe('watch');
+    expect(bookFilterFromParams(convertToParamMap({ q: 'a' })).q).toBeNull();
+    expect(bookFilterFromParams(convertToParamMap({ q: '' })).q).toBeNull();
+  });
 });
 
 describe('BookListPageComponent', () => {

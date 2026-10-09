@@ -170,6 +170,10 @@ class OpenApiDocsTest extends ApiTestSupport {
 
 		assertThat(docs.<List<String>>read("$.paths['/api/books'].get.parameters[?(@.name == 'sort')].schema.enum[*]"))
 			.containsExactly("newest", "price_asc", "price_desc", "title_asc");
+		assertThat(docs.<List<Integer>>read("$.paths['/api/books'].get.parameters[?(@.name == 'q')].schema.minLength"))
+			.containsExactly(2);
+		assertThat(docs.<List<Integer>>read("$.paths['/api/books'].get.parameters[?(@.name == 'q')].schema.maxLength"))
+			.containsExactly(100);
 		assertThat(docs.<List<String>>read("$.paths['/api/admin/books'].get.parameters[?(@.name == 'status')].schema.enum[*]"))
 			.containsExactly("draft", "published", "archived");
 		assertThat(docs.<List<String>>read("$.components.schemas.UpdateBookRequest.required")).contains("version");

@@ -49,6 +49,7 @@ export interface CategoryTree {
 
 /** `GET /api/books` query parametreleri (OpenAPI path parameters) */
 export interface BookFilter {
+  q?: string | null;
   categoryId?: string | null;
   authorId?: string | null;
   minPrice?: number | null;

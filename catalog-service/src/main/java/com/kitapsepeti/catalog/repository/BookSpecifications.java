@@ -2,6 +2,7 @@ package com.kitapsepeti.catalog.repository;
 
 import java.math.BigDecimal;
 import java.util.Collection;
+import java.util.Locale;
 import java.util.UUID;
 
 import com.kitapsepeti.catalog.entity.Book;
@@ -52,6 +53,12 @@ public final class BookSpecifications {
 
 	public static Specification<Book> priceAtMost(BigDecimal maxPrice) {
 		return (root, query, cb) -> cb.lessThanOrEqualTo(root.get("priceAmount"), maxPrice);
+	}
+
+	/** Başlıkta büyük/küçük harf duyarsız alt dizgi araması ({@code tr-TR} ile). */
+	public static Specification<Book> titleContains(String q) {
+		String pattern = "%" + q.toLowerCase(Locale.forLanguageTag("tr-TR")) + "%";
+		return (root, query, cb) -> cb.like(cb.lower(root.get("title")), pattern);
 	}
 
 }

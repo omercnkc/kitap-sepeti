@@ -11,6 +11,19 @@
     </button>
   </div>
 
+  <div class="mb-3">
+    <label class="visually-hidden" for="book-search">Başlıkta ara</label>
+    <input
+      id="book-search"
+      type="search"
+      class="form-control"
+      placeholder="Başlıkta ara…"
+      autocomplete="off"
+      maxlength="100"
+      [formControl]="searchControl"
+    />
+  </div>
+
   <div class="row g-4">
     <aside class="col-lg-3 d-none d-lg-block">
       <app-book-filters

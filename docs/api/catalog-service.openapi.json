@@ -2463,6 +2463,18 @@
         "operationId": "searchBooks",
         "parameters": [
           {
+            "description": "Başlıkta arama (LIKE); boş veya yalnızca boşluk yok sayılır",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Başlıkta arama (LIKE); boş veya yalnızca boşluk yok sayılır",
+              "maxLength": 100,
+              "minLength": 2
+            }
+          },
+          {
             "description": "Kategori; alt kategorilerdeki kitaplar da dahil",
             "in": "query",
             "name": "categoryId",

@@ -4,7 +4,8 @@
 
 - Angular 13 NgModule; lazy features; proxy `/api` → Gateway 8080
 - UI-10: responsive/a11y cila, production budgets, E2E checklist; Docker UI hazır
-- Sırada: Notifications (UI-8); `q` arama (B1)
+- Sırada: Notifications (UI-8)
+- B1 `q` arama: `GET /api/books?q=` (catalog title LIKE); vitrin `/books` arama kutusu (debounce 300ms)
 
 ## Admin
 
@@ -74,7 +75,8 @@
 | BookCard | `shared/components/book-card/` | max 280px; Tükendi; addToCart emit |
 | Pagination | `shared/components/pagination/` | NgbPagination; backend page 0-tabanlı; vitrin `layout=simple` (Önceki / 1/N / Sonraki) |
 | BookFilters | `features/catalog/book-filters/` | kategori ağacı, fiyat, sort; lg offcanvas |
-| BookListPage | `features/catalog/book-list-page/` | size=12 sabit; lg 4 kolon (~3×4); queryParams → switchMap; kapak lazy |
+| BookListPage | `features/catalog/book-list-page/` | size=12 sabit; lg 4 kolon (~3×4); `q` arama (debounce→queryParams); queryParams → switchMap; kapak lazy |
+| BookFilter | `core/models/catalog.ts` | `q?` + kategori/fiyat/sort/page; `toHttpParams` boş atar |
 | BookDetailPage | `features/catalog/book-detail-page/` | getById; 404 EmptyState; sepete ekle → CartStore |
 
 ## Auth katmanı
