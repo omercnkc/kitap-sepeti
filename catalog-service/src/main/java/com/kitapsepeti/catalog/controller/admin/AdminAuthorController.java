@@ -4,7 +4,7 @@ import java.net.URI;
 import java.util.UUID;
 
 import com.kitapsepeti.catalog.config.OpenApiConfig;
-import com.kitapsepeti.catalog.dto.request.AdminPageRequest;
+import com.kitapsepeti.catalog.dto.request.AdminAuthorListRequest;
 import com.kitapsepeti.catalog.dto.request.CreateAuthorRequest;
 import com.kitapsepeti.catalog.dto.request.UpdateAuthorRequest;
 import com.kitapsepeti.catalog.dto.response.AuthorResponse;
@@ -45,10 +45,12 @@ public class AdminAuthorController {
 	}
 
 	@GetMapping
-	@Operation(operationId = "listAuthors", summary = "Yazarları listele", description = "Ada göre sıralı.")
+	@Operation(operationId = "listAuthors", summary = "Yazarları listele",
+			description = "Ada göre sıralı. `q` ile adında arama (LIKE).")
 	@ApiResponse(responseCode = "200", description = "Sayfa.")
-	public PageResponse<AuthorResponse> list(@Valid @ParameterObject @ModelAttribute AdminPageRequest page) {
-		return authorAdminService.list(page);
+	public PageResponse<AuthorResponse> list(
+			@Valid @ParameterObject @ModelAttribute AdminAuthorListRequest request) {
+		return authorAdminService.list(request);
 	}
 
 	@GetMapping("/{id}")

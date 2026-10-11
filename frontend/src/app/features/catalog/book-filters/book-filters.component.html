@@ -54,37 +54,18 @@
 
   <div class="mb-1">
     <span class="form-label small d-block mb-2">Kategori</span>
-    <button
-      type="button"
-      class="btn btn-sm w-100 text-start mb-1"
-      [class.btn-primary]="!filter.categoryId"
-      [class.btn-outline-secondary]="!!filter.categoryId"
-      (click)="onCategorySelect(null)"
-    >
-      Tümü
-    </button>
-    <ng-container *ngFor="let cat of categories">
-      <ng-container
-        *ngTemplateOutlet="catNode; context: { $implicit: cat, depth: 0 }"
-      ></ng-container>
-    </ng-container>
+    <div class="book-filters__categories">
+      <button
+        *ngFor="let cat of flatCategories"
+        type="button"
+        class="btn btn-sm w-100 text-start mb-1 book-filters__cat"
+        [class.btn-primary]="isCategorySelected(cat.id)"
+        [class.active]="isCategorySelected(cat.id)"
+        [class.btn-outline-secondary]="!isCategorySelected(cat.id)"
+        (click)="onCategorySelect(cat.id)"
+      >
+        {{ cat.name }}
+      </button>
+    </div>
   </div>
 </div>
-
-<ng-template #catNode let-cat let-depth="depth">
-  <button
-    type="button"
-    class="btn btn-sm w-100 text-start mb-1"
-    [style.paddingLeft.rem]="0.75 + depth * 0.75"
-    [class.btn-primary]="isCategorySelected(cat.id)"
-    [class.btn-outline-secondary]="!isCategorySelected(cat.id)"
-    (click)="onCategorySelect(cat.id)"
-  >
-    {{ cat.name }}
-  </button>
-  <ng-container *ngFor="let child of cat.children">
-    <ng-container
-      *ngTemplateOutlet="catNode; context: { $implicit: child, depth: depth + 1 }"
-    ></ng-container>
-  </ng-container>
-</ng-template>

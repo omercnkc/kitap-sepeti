@@ -75,6 +75,20 @@ describe('AdminCatalogApi', () => {
     req.flush(page);
   });
 
+  it('listAuthors should pass q query param', () => {
+    const page: PageResponse<AuthorResponse> = {
+      items: [author],
+      page: 0,
+      size: 20,
+      totalElements: 1,
+      totalPages: 1,
+    };
+    api.listAuthors({ q: 'pamuk', page: 0 }).subscribe((res) => expect(res.items.length).toBe(1));
+    const req = httpMock.expectOne('/api/admin/authors?q=pamuk&page=0');
+    expect(req.request.method).toBe('GET');
+    req.flush(page);
+  });
+
   it('createAuthor should POST /api/admin/authors', () => {
     api.createAuthor({ name: 'Orhan Pamuk', slug: 'orhan-pamuk' }).subscribe((res) => {
       expect(res).toEqual(author);
@@ -119,6 +133,13 @@ describe('AdminCatalogApi', () => {
     const req = httpMock.expectOne('/api/admin/books?status=draft&page=0');
     expect(req.request.method).toBe('GET');
     req.flush(page);
+  });
+
+  it('listBooks should GET /api/admin/books with q and authorId', () => {
+    api.listBooks({ q: 'Watch', authorId: 'a1', page: 0 }).subscribe();
+    const req = httpMock.expectOne('/api/admin/books?q=Watch&authorId=a1&page=0');
+    expect(req.request.method).toBe('GET');
+    req.flush({ items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 });
   });
 
   it('createBook should POST /api/admin/books', () => {

@@ -16,7 +16,6 @@ export const ERROR_CODE_MESSAGES: Readonly<Record<string, string>> = {
   RESOURCE_IN_USE: 'Bu kayıt kullanımda olduğu için silinemez.',
   CONCURRENT_MODIFICATION:
     'Kayıt başka biri tarafından değiştirildi. Formu yeniden yükleyin ve tekrar deneyin.',
-  CATEGORY_CYCLE: 'Bir kategoriyi kendi altına veya alt kategorisine taşıyamazsınız.',
   STOCK_BELOW_RESERVED: 'Stok, rezerve edilen miktarın altına düşürülemez.',
   INSUFFICIENT_STOCK: 'Yeterli stok yok.',
   BOOK_NOT_AVAILABLE: 'Kitap satışa uygun değil.',

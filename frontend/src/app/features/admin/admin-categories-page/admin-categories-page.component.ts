@@ -22,15 +22,6 @@ const PAGE_SIZE = 100;
 
 type PageState = 'loading' | 'ready' | 'empty' | 'error';
 
-export interface CategoryTreeNode extends CategoryResponse {
-  children: CategoryTreeNode[];
-}
-
-export interface ParentOption {
-  id: string;
-  label: string;
-}
-
 @Component({
   selector: 'app-admin-categories-page',
   templateUrl: './admin-categories-page.component.html',
@@ -44,9 +35,7 @@ export class AdminCategoriesPageComponent implements OnInit, OnDestroy {
   @ViewChild('entityModal') entityModal!: TemplateRef<unknown>;
 
   pageState: PageState = 'loading';
-  flat: CategoryResponse[] = [];
-  tree: CategoryTreeNode[] = [];
-  parentOptions: ParentOption[] = [];
+  items: CategoryResponse[] = [];
 
   editing: CategoryResponse | null = null;
   saving = false;
@@ -56,7 +45,6 @@ export class AdminCategoriesPageComponent implements OnInit, OnDestroy {
   readonly form: FormGroup = this.fb.group({
     name: ['', [Validators.required, Validators.maxLength(120)]],
     slug: ['', [Validators.pattern(SLUG_PATTERN), Validators.maxLength(120)]],
-    parentId: [''],
   });
 
   constructor(
@@ -82,18 +70,20 @@ export class AdminCategoriesPageComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
-  trackById(_index: number, item: CategoryTreeNode): string {
+  trackById(_index: number, item: CategoryResponse): string {
     return item.id;
   }
 
-  openCreate(parentId: string | null = null): void {
+  get canSave(): boolean {
+    return this.form.valid && !this.saving;
+  }
+
+  openCreate(): void {
     this.editing = null;
     this.fieldErrors = [];
-    this.parentOptions = buildParentOptions(this.flat, null);
     this.form.reset({
       name: '',
       slug: '',
-      parentId: parentId || '',
     });
     this.openModal();
   }
@@ -101,11 +91,9 @@ export class AdminCategoriesPageComponent implements OnInit, OnDestroy {
   openEdit(item: CategoryResponse): void {
     this.editing = item;
     this.fieldErrors = [];
-    this.parentOptions = buildParentOptions(this.flat, item.id);
     this.form.reset({
       name: item.name,
       slug: item.slug,
-      parentId: item.parentId || '',
     });
     this.openModal();
   }
@@ -114,37 +102,22 @@ export class AdminCategoriesPageComponent implements OnInit, OnDestroy {
     this.modalRef?.dismiss();
   }
 
-  get canSave(): boolean {
-    return this.form.valid && !this.saving;
-  }
-
   onFormSubmit(): void {
-    this.form.markAllAsTouched();
-    this.cdr.markForCheck();
     if (!this.canSave) {
+      this.form.markAllAsTouched();
       return;
     }
-
-    const raw = this.form.getRawValue() as {
-      name: string;
-      slug: string;
-      parentId: string;
-    };
-    const name = raw.name.trim();
-    const slug = raw.slug.trim();
-    const parentId = raw.parentId ? raw.parentId : null;
-
     this.saving = true;
     this.fieldErrors = [];
     this.cdr.markForCheck();
 
+    const raw = this.form.getRawValue() as { name: string; slug: string };
+    const name = raw.name.trim();
+    const slug = raw.slug?.trim() || undefined;
+
     const request$ = this.editing
-      ? this.updateAndMaybeMove(this.editing, name, slug, parentId)
-      : this.api.createCategory({
-          name,
-          ...(slug ? { slug } : {}),
-          ...(parentId ? { parentId } : {}),
-        });
+      ? this.api.updateCategory(this.editing.id, { name, slug })
+      : this.api.createCategory({ name, ...(slug ? { slug } : {}) });
 
     request$
       .pipe(
@@ -206,39 +179,14 @@ export class AdminCategoriesPageComponent implements OnInit, OnDestroy {
       });
   }
 
-  private updateAndMaybeMove(
-    current: CategoryResponse,
-    name: string,
-    slug: string,
-    parentId: string | null,
-  ): Observable<CategoryResponse> {
-    const body: { name?: string; slug?: string } = { name };
-    if (slug) {
-      body.slug = slug;
-    }
-
-    const currentParent = current.parentId || null;
-    const parentChanged = parentId !== currentParent;
-
-    return this.api.updateCategory(current.id, body).pipe(
-      switchMap((updated) => {
-        if (!parentChanged) {
-          return of(updated);
-        }
-        return this.api.moveCategory(current.id, { parentId });
-      }),
-    );
-  }
-
   private load(): void {
     this.pageState = 'loading';
     this.cdr.markForCheck();
-    this.loadAllCategories()
+    this.loadAll((page, size) => this.api.listCategories({ page, size }))
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (items) => {
-          this.flat = items;
-          this.tree = buildCategoryTree(items);
+          this.items = items;
           this.pageState = items.length === 0 ? 'empty' : 'ready';
           this.cdr.markForCheck();
         },
@@ -249,15 +197,17 @@ export class AdminCategoriesPageComponent implements OnInit, OnDestroy {
       });
   }
 
-  private loadAllCategories(): Observable<CategoryResponse[]> {
-    return this.api.listCategories({ page: 0, size: PAGE_SIZE }).pipe(
+  private loadAll(
+    fetch: (page: number, size: number) => Observable<PageResponse<CategoryResponse>>,
+  ): Observable<CategoryResponse[]> {
+    return fetch(0, PAGE_SIZE).pipe(
       switchMap((first) => {
         if (first.totalPages <= 1) {
           return of(first.items);
         }
         const rest: Observable<PageResponse<CategoryResponse>>[] = [];
         for (let p = 1; p < first.totalPages; p += 1) {
-          rest.push(this.api.listCategories({ page: p, size: PAGE_SIZE }));
+          rest.push(fetch(p, PAGE_SIZE));
         }
         return forkJoin(rest).pipe(
           map((pages) => first.items.concat(...pages.map((page) => page.items))),
@@ -284,84 +234,4 @@ export class AdminCategoriesPageComponent implements OnInit, OnDestroy {
     });
     this.cdr.markForCheck();
   }
-}
-
-export function buildCategoryTree(items: CategoryResponse[]): CategoryTreeNode[] {
-  const byId = new Map<string, CategoryTreeNode>();
-  items.forEach((item) => {
-    byId.set(item.id, { ...item, children: [] });
-  });
-
-  const roots: CategoryTreeNode[] = [];
-  byId.forEach((node) => {
-    const parentId = node.parentId;
-    if (parentId && byId.has(parentId)) {
-      byId.get(parentId)!.children.push(node);
-    } else {
-      roots.push(node);
-    }
-  });
-
-  const sortRec = (nodes: CategoryTreeNode[]): void => {
-    nodes.sort((a, b) => a.name.localeCompare(b.name, 'tr'));
-    nodes.forEach((n) => sortRec(n.children));
-  };
-  sortRec(roots);
-  return roots;
-}
-
-/** Parent seçenekleri; `excludeId` ve alt ağacı hariç. */
-export function buildParentOptions(
-  items: CategoryResponse[],
-  excludeId: string | null,
-): ParentOption[] {
-  const tree = buildCategoryTree(items);
-  const excluded = new Set<string>();
-  if (excludeId) {
-    collectDescendantIds(tree, excludeId, excluded);
-    excluded.add(excludeId);
-  }
-
-  const options: ParentOption[] = [];
-  const walk = (nodes: CategoryTreeNode[], depth: number): void => {
-    nodes.forEach((node) => {
-      if (!excluded.has(node.id)) {
-        const prefix = depth > 0 ? `${'— '.repeat(depth)}` : '';
-        options.push({ id: node.id, label: `${prefix}${node.name}` });
-      }
-      walk(node.children, depth + 1);
-    });
-  };
-  walk(tree, 0);
-  return options;
-}
-
-function collectDescendantIds(
-  roots: CategoryTreeNode[],
-  id: string,
-  out: Set<string>,
-): void {
-  const find = (nodes: CategoryTreeNode[]): CategoryTreeNode | null => {
-    for (const n of nodes) {
-      if (n.id === id) {
-        return n;
-      }
-      const nested = find(n.children);
-      if (nested) {
-        return nested;
-      }
-    }
-    return null;
-  };
-  const node = find(roots);
-  if (!node) {
-    return;
-  }
-  const walk = (n: CategoryTreeNode): void => {
-    n.children.forEach((c) => {
-      out.add(c.id);
-      walk(c);
-    });
-  };
-  walk(node);
 }

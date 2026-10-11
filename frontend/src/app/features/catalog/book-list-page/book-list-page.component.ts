@@ -7,7 +7,7 @@ import { catchError, debounceTime, distinctUntilChanged, map, switchMap, takeUnt
 import { CatalogApi } from '../../../core/api/catalog.api';
 import { AuthService } from '../../../core/auth/auth.service';
 import { CartStore } from '../../../core/cart/cart.store';
-import { BookFilter, BookSummary, CategoryTree, PageResponse } from '../../../core/models';
+import { BookFilter, BookSummary, CategoryRef, PageResponse } from '../../../core/models';
 import { ToastService } from '../../../core/services/toast.service';
 import { BookFilterChange } from '../book-filters/book-filters.component';
 
@@ -40,7 +40,7 @@ const CLEARABLE_PARAMS = [
 export class BookListPageComponent implements OnInit, OnDestroy {
   private readonly destroy$ = new Subject<void>();
   private readonly stateSubject = new BehaviorSubject<ListState>({ kind: 'loading' });
-  private readonly categoriesSubject = new BehaviorSubject<CategoryTree[]>([]);
+  private readonly categoriesSubject = new BehaviorSubject<CategoryRef[]>([]);
   private readonly priceErrorSubject = new BehaviorSubject<string | null>(null);
 
   readonly state$ = this.stateSubject.asObservable();
@@ -66,7 +66,7 @@ export class BookListPageComponent implements OnInit, OnDestroy {
       .categories()
       .pipe(
         takeUntil(this.destroy$),
-        catchError(() => of([] as CategoryTree[])),
+        catchError(() => of([] as CategoryRef[])),
       )
       .subscribe((cats) => this.categoriesSubject.next(cats));
 
@@ -191,6 +191,9 @@ export class BookListPageComponent implements OnInit, OnDestroy {
   }
 
   onAddToCart(book: BookSummary): void {
+    if (this.auth.isAdmin()) {
+      return;
+    }
     if (!this.auth.isLoggedIn()) {
       void this.router.navigate(['/login'], {
         queryParams: { returnUrl: this.router.url },

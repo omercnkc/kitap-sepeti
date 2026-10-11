@@ -1,3 +1,5 @@
+@import 'styles/variables';
+
 :host {
   display: block;
   height: 100%;
@@ -7,7 +9,7 @@
 }
 
 .book-card {
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba($primary, 0.1);
   border-radius: 0.5rem;
   overflow: hidden;
   background: #fff;
@@ -18,7 +20,7 @@
   flex-shrink: 0;
   aspect-ratio: 3 / 4;
   overflow: hidden;
-  background: #f3f4f6;
+  background: mix($brand-oat, #ffffff, 35%);
 }
 
 .book-card__cover {
@@ -30,7 +32,7 @@
 }
 
 .book-card__cover--placeholder {
-  background: linear-gradient(145deg, #e5e7eb, #f9fafb);
+  background: linear-gradient(145deg, rgba($primary, 0.08), mix($brand-oat, #fff, 45%));
 }
 
 .book-card__body {
@@ -59,4 +61,40 @@
 
 .book-card__price {
   font-variant-numeric: tabular-nums;
+  color: $primary;
+}
+
+.book-card__cart-btn {
+  flex-shrink: 0;
+  width: 2.15rem;
+  height: 2.15rem;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.375rem;
+  border: 1px solid rgba($primary, 0.28);
+  background-color: rgba($primary, 0.08);
+  color: $primary;
+  line-height: 1;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+
+  .bi {
+    font-size: 1.1rem;
+  }
+
+  &:hover {
+    background-color: $primary;
+    border-color: $primary;
+    color: #fff;
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    outline: 2px solid rgba($primary, 0.5);
+    outline-offset: 2px;
+  }
 }

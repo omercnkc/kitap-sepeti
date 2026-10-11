@@ -1,13 +1,23 @@
 @import 'styles/variables';
 
-// Logo paleti: lacivert + turuncu sepet; site $primary (teal) ile uyumlu outline chip
-$header-nav-orange: #e67e22;
-$header-nav-navy: #1a2b4a;
+// Marka: orman + oat zemin; chip’ler primary tonunda (navy yok)
+$header-ink: $primary;
+$header-badge-text: darken($primary, 4%);
 
 .app-header {
   position: sticky;
   top: 0;
   z-index: 1030;
+  background: linear-gradient(
+    165deg,
+    mix($brand-oat, #ffffff, 72%) 0%,
+    mix($primary, #ffffff, 7%) 55%,
+    mix($brand-sage, #ffffff, 9%) 100%
+  );
+  border-bottom: 1px solid rgba($primary, 0.12);
+  box-shadow:
+    0 1px 0 rgba($brand-gold, 0.28),
+    0 6px 18px rgba($primary, 0.07);
 }
 
 .navbar-brand {
@@ -33,15 +43,15 @@ $header-nav-navy: #1a2b4a;
 .app-header__logo {
   display: block;
   flex-shrink: 0;
-  height: 40px;
+  height: 56px;
   width: auto;
-  max-width: 160px;
+  max-width: 220px;
   object-fit: contain;
 }
 
 .app-header__logo--menu {
-  height: 40px;
-  max-width: 140px;
+  height: 56px;
+  max-width: 200px;
 }
 
 @media (min-width: 992px) {
@@ -56,22 +66,24 @@ $header-nav-navy: #1a2b4a;
   justify-content: center;
   gap: 0.35rem;
   margin: 0;
-  padding: 0.25rem 0.7rem;
-  border: 1px solid rgba($header-nav-navy, 0.12);
+  padding: 0.3rem 0.75rem;
+  border: 1px solid rgba($header-ink, 0.14);
   border-radius: 0.375rem;
-  background-color: transparent;
-  color: $header-nav-navy !important;
+  background-color: rgba(#ffffff, 0.55);
+  color: $header-ink !important;
   font-weight: 500;
   font-size: 0.9rem;
   line-height: 1.35;
   text-decoration: none;
   white-space: nowrap;
-  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease,
+    box-shadow 0.15s ease;
 
   &:hover {
-    background-color: rgba($primary, 0.06);
-    border-color: rgba($header-nav-navy, 0.2);
-    color: $primary !important;
+    background-color: rgba($brand-sage, 0.12);
+    border-color: rgba($brand-sage, 0.32);
+    color: $brand-sage !important;
+    box-shadow: 0 1px 4px rgba($primary, 0.08);
   }
 
   &:focus {
@@ -85,10 +97,16 @@ $header-nav-navy: #1a2b4a;
 
   // Active: border/bg vurgusu; font-weight idle ile aynı (logo/menü kayması yok)
   &.active {
-    border-color: rgba($primary, 0.35);
-    background-color: rgba($primary, 0.08);
+    border-color: rgba($primary, 0.4);
+    background-color: rgba($primary, 0.12);
     color: $primary !important;
     font-weight: 500;
+    box-shadow: inset 0 0 0 1px rgba($brand-gold, 0.35);
+  }
+
+  .bi {
+    font-size: 1.05rem;
+    line-height: 1;
   }
 }
 
@@ -97,8 +115,8 @@ $header-nav-navy: #1a2b4a;
 }
 
 .header-nav-btn__badge {
-  background-color: $header-nav-orange;
-  color: #fff;
+  background-color: $brand-gold;
+  color: $header-badge-text;
   font-weight: 600;
   font-size: 0.7rem;
   padding: 0.2em 0.5em;
@@ -106,7 +124,8 @@ $header-nav-navy: #1a2b4a;
 }
 
 .header-nav-btn.active .header-nav-btn__badge {
-  background-color: $primary;
+  background-color: $brand-gold;
+  color: $header-badge-text;
 }
 
 .header-nav-btn--label {
@@ -115,14 +134,15 @@ $header-nav-navy: #1a2b4a;
   text-overflow: ellipsis;
   cursor: default;
   border-color: transparent;
-  background-color: rgba($header-nav-navy, 0.04);
-  color: rgba($header-nav-navy, 0.7) !important;
+  background-color: rgba($primary, 0.06);
+  color: rgba($header-ink, 0.72) !important;
   font-weight: 400;
 
   &:hover {
-    background-color: rgba($header-nav-navy, 0.04);
+    background-color: rgba($primary, 0.06);
     border-color: transparent;
-    color: rgba($header-nav-navy, 0.7) !important;
+    color: rgba($header-ink, 0.72) !important;
+    box-shadow: none;
   }
 }
 

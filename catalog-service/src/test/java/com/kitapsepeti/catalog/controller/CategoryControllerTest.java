@@ -20,27 +20,18 @@ class CategoryControllerTest extends ApiTestSupport {
 	private CategoryRepository categoryRepository;
 
 	@Test
-	void treeIsNestedAndEachLevelSortedByTurkishName() throws Exception {
-		Category edebiyat = categoryRepository.save(new Category(null, "Edebiyat", "edebiyat"));
-		categoryRepository.save(new Category(null, "Çocuk", "cocuk"));
-		Category bilim = categoryRepository.save(new Category(null, "Bilim", "bilim"));
-		Category roman = categoryRepository.save(new Category(edebiyat, "Roman", "roman"));
-		categoryRepository.save(new Category(edebiyat, "Öykü", "oyku"));
-		categoryRepository.save(new Category(edebiyat, "Deneme", "deneme"));
-		categoryRepository.save(new Category(roman, "Polisiye", "polisiye"));
-		categoryRepository.save(new Category(roman, "Bilimkurgu", "bilimkurgu"));
-		categoryRepository.save(new Category(bilim, "Popüler Bilim", "populer-bilim"));
+	void listIsFlatAndSortedByTurkishName() throws Exception {
+		categoryRepository.save(new Category("Edebiyat", "edebiyat"));
+		categoryRepository.save(new Category("Çocuk", "cocuk"));
+		categoryRepository.save(new Category("Bilim", "bilim"));
+		categoryRepository.save(new Category("Roman", "roman"));
 
 		mockMvc.perform(get("/api/categories"))
 			.andExpect(status().isOk())
 			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-			.andExpect(jsonPath("$[*].name", contains("Bilim", "Çocuk", "Edebiyat")))
-			.andExpect(jsonPath("$[0].children[*].slug", contains("populer-bilim")))
-			.andExpect(jsonPath("$[1].children", hasSize(0)))
-			.andExpect(jsonPath("$[2].id").value(edebiyat.getId().toString()))
-			.andExpect(jsonPath("$[2].children[*].name", contains("Deneme", "Öykü", "Roman")))
-			.andExpect(jsonPath("$[2].children[2].children[*].name", contains("Bilimkurgu", "Polisiye")))
-			.andExpect(jsonPath("$[2].children[2].children[0].children", hasSize(0)));
+			.andExpect(jsonPath("$[*].name", contains("Bilim", "Çocuk", "Edebiyat", "Roman")))
+			.andExpect(jsonPath("$[0].children").doesNotExist())
+			.andExpect(jsonPath("$[0].slug").value("bilim"));
 	}
 
 	@Test

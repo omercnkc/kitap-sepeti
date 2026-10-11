@@ -3,7 +3,7 @@
 -- sabit UUID değerleri + INSERT ... ON DUPLICATE KEY UPDATE (aynı satır güncellenir, kopya oluşmaz).
 -- Not: Dosyadan çıkarılan bir bağ (kitap-yazar/kategori) yeniden çalıştırmada silinmez.
 --
--- İçerik: 5 yazar, kategori ağacı (Edebiyat > Roman, Öykü; Bilim > Popüler Bilim; Çocuk),
+-- İçerik: 5 yazar, düz kategoriler (Edebiyat, Roman, Öykü, Bilim, Popüler Bilim, Çocuk + genel temalar),
 -- 14 kitap (Open Library ISBN + kapak URL): 11 published (ikisi stoksuz/rezervli), 2 draft, 1 archived.
 -- Kitaplardaki her rezerv, toplamı reserved_quantity'ye eşit 'held' rezervasyon satırlarıyla karşılanır
 -- (değişmez: reserved_quantity = SUM(quantity WHERE status = 'held')). Bu satırlar 2099'a kadar geçerlidir;
@@ -18,18 +18,32 @@ INSERT INTO authors (id, name, slug) VALUES
     (UUID_TO_BIN('01920000-0000-7000-8000-000000000205'), 'Herman Melville', 'herman-melville') AS new
 ON DUPLICATE KEY UPDATE name = new.name, slug = new.slug;
 
--- Önce kökler, sonra alt kategoriler (parent FK).
-INSERT INTO categories (id, parent_id, name, slug) VALUES
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000301'), NULL, 'Edebiyat', 'edebiyat'),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000304'), NULL, 'Bilim', 'bilim'),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000306'), NULL, 'Çocuk', 'cocuk') AS new
-ON DUPLICATE KEY UPDATE parent_id = new.parent_id, name = new.name, slug = new.slug;
-
-INSERT INTO categories (id, parent_id, name, slug) VALUES
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000302'), UUID_TO_BIN('01920000-0000-7000-8000-000000000301'), 'Roman', 'roman'),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000303'), UUID_TO_BIN('01920000-0000-7000-8000-000000000301'), 'Öykü', 'oyku'),
-    (UUID_TO_BIN('01920000-0000-7000-8000-000000000305'), UUID_TO_BIN('01920000-0000-7000-8000-000000000304'), 'Popüler Bilim', 'populer-bilim') AS new
-ON DUPLICATE KEY UPDATE parent_id = new.parent_id, name = new.name, slug = new.slug;
+-- Düz kategoriler (vitrin filtresi; kitap bağlamak zorunlu değil). Mevcut UUID'ler korunur.
+INSERT INTO categories (id, name, slug) VALUES
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000301'), 'Edebiyat', 'edebiyat'),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000302'), 'Roman', 'roman'),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000303'), 'Öykü', 'oyku'),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000304'), 'Bilim', 'bilim'),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000305'), 'Popüler Bilim', 'populer-bilim'),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000306'), 'Çocuk', 'cocuk'),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000307'), 'Şiir', 'siir'),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000308'), 'Deneme', 'deneme'),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000309'), 'Biyografi', 'biyografi'),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000310'), 'Tarih', 'tarih'),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000311'), 'Felsefe', 'felsefe'),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000312'), 'Psikoloji', 'psikoloji'),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000313'), 'Sanat', 'sanat'),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000314'), 'Din', 'din'),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000315'), 'Eğitim', 'egitim'),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000316'), 'Fantastik', 'fantastik'),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000317'), 'Bilimkurgu', 'bilimkurgu'),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000318'), 'Polisiye', 'polisiye'),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000319'), 'Korku', 'korku'),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000320'), 'Mizah', 'mizah'),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000321'), 'İş/Ekonomi', 'is-ekonomi'),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000322'), 'Sağlık', 'saglik'),
+    (UUID_TO_BIN('01920000-0000-7000-8000-000000000323'), 'Seyahat', 'seyahat') AS new
+ON DUPLICATE KEY UPDATE name = new.name, slug = new.slug;
 
 -- Kapaklar Open Library Books API / covers.openlibrary.org (ISBN lookup ile aynı kaynak).
 INSERT INTO books (id, isbn, title, description, page_count, cover_url, price_amount, currency,

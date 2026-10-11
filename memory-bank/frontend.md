@@ -13,12 +13,13 @@
 | --- | --- | --- |
 | Shell | `features/admin/admin-shell/` | yan menü; lg altı NgbOffcanvas |
 | Header Sepet | `layout/header/` | **Kural A:** `role===ADMIN` iken Sepet+rozet her yerde gizli; USER/misafir aynı |
-| Marka logo | `assets/brand/logo.png` | header + mobil menü `<img>`; metin tekrarı yok; favicon aynı PNG; brand `flex-shrink:0`, logo yükseklik 40px sabit |
-| Header nav | `layout/header/` | `header-nav-btn` outline chip; active primary border/bg (font-weight idle ile aynı); Sepet rozeti chip içinde |
-| Publishers / Authors | `admin-*-page/` | lg tablo / dar kart; modal CRUD |
-| Categories | `admin-categories-page/` | düz satır ağaç; `level` girinti + └/├ + Alt kategori rozeti + «Üst: …»; kart yok |
+| Marka logo | `assets/brand/logo.png` | header + mobil menü `<img>`; metin tekrarı yok; favicon aynı PNG; brand `flex-shrink:0`, logo yükseklik 56px |
+| Header nav | `layout/header/` | oat→sage gradient zemin + gold çizgi; chip primary/beyaz; ikonlar; Sepet `bi-cart3` + gold rozet |
+| Authors | `admin-authors-page/` | lg tablo / dar kart; modal CRUD; `q` ad arama (debounce 300ms + queryParams) |
+| Categories | `admin-categories-page/` | düz liste (üst/alt yok); lg tablo / dar kart; modal CRUD |
 
-| Books list | `admin-books-page/` | status filter; Yayınla/Arşivle/Stok; taslak≠vitrin yardım metni |
+| Books list | `admin-books-page/` | `q` başlık arama + `authorId` filtre bandı; status; Yayınla/Arşivle/Stok |
+| Authors → books | `admin-authors-page/` | satırda Kitapları → `/admin/books?authorId=` |
 | Book form | `admin-book-form-page/` | create/edit; lifecycle + stok; kapak dosya + URL önizleme; kayıt sonrası multipart |
 | AdminCatalogApi | `core/api/admin-catalog.api.ts` | publish/archive/stock-adjustments; `uploadBookCover` FormData |
 | Hata mesajları | `error-messages.ts` | STOCK_BELOW_RESERVED, BOOK_NOT_PUBLISHABLE |
@@ -48,12 +49,14 @@
 | --- | --- | --- |
 | Modeller | `core/models/user.ts` | UpdateProfile / Address OpenAPI birebir |
 | AccountApi | `core/api/account.api.ts` | PATCH `/api/me`; addresses CRUD; setDefault=PATCH isDefault |
-| ProfilePage | `features/account/profile-page/` | toolbar full-width (h1 + Adreslerim chip sağ); form panel `max-width:28rem` ortada |
+| ProfilePage | `features/account/profile-page/` | toolbar full-width (h1+`bi-person-circle` + Adreslerim chip sağ); form panel `max-width:28rem` ortada; `page-task` tint |
 | AddressForm | `shared/components/address-form/` | İl→İlçe→Mahalle select; TR cep `trPhoneValidator`; checkout yeniden kullanır |
 | TR geo | `core/geo/TrAddressDataService` + `assets/geo/` | lazy JSON + shareReplay; `city`/`district`/`line1` string map |
 | TR phone | `shared/validators/tr-phone*` | normalize → `5xxxxxxxxx`; register/profile opsiyonel, adres zorunlu |
-| AddressListPage | `features/account/addresses-page/` | toolbar full-width (h1 + Profile dön chip sağ); modal CRUD; `/addresses/:id` 404 EmptyState |
-| Header | `layout/header/` | Profil → `/account/profile`; Adreslerim → `/account/addresses`; logo `flex-shrink:0` + sabit 40px; active font-weight idle ile aynı |
+| AddressListPage | `features/account/addresses-page/` | toolbar (h1+`bi-geo-alt` + Profile dön chip); `page-task` tint; modal CRUD; `/addresses/:id` 404 EmptyState |
+| İkonlar | `bootstrap-icons` 1.11.3 | `angular.json` styles; sipariş `bi-bag-check`/`bi-receipt`; kitaplar `bi-book` |
+| Marka | `$primary #1E4620` + sage/gold/rust/oat | `_variables.scss`; sepet badge gold; body oat tint; logo PNG aynı |
+| Header | `layout/header/` | Profil/Adresler; logo 56px; marka gradient (oat/primary/sage); chip ikonları; navy yok |
 
 ## Sepet
 
@@ -72,10 +75,11 @@
 
 | Parça | Yol | Not |
 | --- | --- | --- |
-| BookCard | `shared/components/book-card/` | max 280px; Tükendi; addToCart emit |
+| BookCard | `shared/components/book-card/` | max 280px; Tükendi; `bi-cart-plus` (stokta; ADMIN tıklayınca emit/toast yok) |
+| BookCarousel | `shared/components/book-carousel/` | vitrin üstü; `GET /api/books?sort=newest&size=12`; auto-scroll 3.5s; ok+nokta; hover pause; ADMIN sepet ikonu var, emit/toast yok |
 | Pagination | `shared/components/pagination/` | NgbPagination; backend page 0-tabanlı; vitrin `layout=simple` (Önceki / 1/N / Sonraki) |
-| BookFilters | `features/catalog/book-filters/` | kategori ağacı, fiyat, sort; lg offcanvas |
-| BookListPage | `features/catalog/book-list-page/` | size=12 sabit; lg 4 kolon (~3×4); `q` arama (debounce→queryParams); queryParams → switchMap; kapak lazy |
+| BookFilters | `features/catalog/book-filters/` | düz kategori listesi + scroll; Tümü yok—Temizle; fiyat, sort; lg offcanvas |
+| BookListPage | `features/catalog/book-list-page/` | üstte carousel; size=12; lg 4 kolon; `q` arama; queryParams → switchMap |
 | BookFilter | `core/models/catalog.ts` | `q?` + kategori/fiyat/sort/page; `toHttpParams` boş atar |
 | BookDetailPage | `features/catalog/book-detail-page/` | getById; 404 EmptyState; sepete ekle → CartStore |
 

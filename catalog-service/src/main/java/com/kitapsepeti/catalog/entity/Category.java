@@ -5,10 +5,7 @@ import java.util.UUID;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -19,8 +16,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.annotations.UuidGenerator;
 
 /**
- * Kategori ({@code categories} tablosu); {@code parent} ile ağaç oluşturur.
- * Alt kategoriler koleksiyon olarak tutulmaz; alt kategorisi olan kategori silinemez (DB RESTRICT).
+ * Kategori ({@code categories} tablosu). Düz liste; kitabı olan kategori silinemez (DB RESTRICT).
  */
 @Entity
 @Table(name = "categories")
@@ -32,12 +28,6 @@ public class Category {
 	@UuidGenerator(style = UuidGenerator.Style.VERSION_7)
 	@Column(name = "id", nullable = false, updatable = false)
 	private UUID id;
-
-	/** Üst kategori; null ise kök kategori. */
-	@Setter
-	@ManyToOne(fetch = FetchType.LAZY)
-	@JoinColumn(name = "parent_id")
-	private Category parent;
 
 	@Setter
 	@Column(name = "name", nullable = false, length = 120)
@@ -55,9 +45,7 @@ public class Category {
 	@Column(name = "updated_at", nullable = false)
 	private Instant updatedAt;
 
-	/** Kök kategori için {@code parent} null verilir. */
-	public Category(Category parent, String name, String slug) {
-		this.parent = parent;
+	public Category(String name, String slug) {
 		this.name = name;
 		this.slug = slug;
 	}

@@ -79,9 +79,9 @@ class AdminBookControllerTest extends ApiTestSupport {
 	void createReferences() {
 		zeynep = authorRepository.save(new Author("Zeynep Yazar", "zeynep-yazar"));
 		ahmet = authorRepository.save(new Author("Ahmet Yazar", "ahmet-yazar"));
-		edebiyat = categoryRepository.save(new Category(null, "Edebiyat", "edebiyat"));
-		roman = categoryRepository.save(new Category(edebiyat, "Roman", "roman"));
-		categoryRepository.save(new Category(null, "Bilim", "bilim"));
+		edebiyat = categoryRepository.save(new Category("Edebiyat", "edebiyat"));
+		roman = categoryRepository.save(new Category("Roman", "roman"));
+		categoryRepository.save(new Category("Bilim", "bilim"));
 	}
 
 	// --- 1. Yetki
@@ -360,7 +360,7 @@ class AdminBookControllerTest extends ApiTestSupport {
 		assertThat(JsonPath.<List<String>>read(row.get("payload").toString(), "$.categories[*].slug"))
 			.containsExactly("roman");
 		assertThat(JsonPath.<List<String>>read(row.get("payload").toString(), "$.categoryIdsWithAncestors"))
-			.containsExactlyInAnyOrder(roman.getId().toString(), edebiyat.getId().toString());
+			.containsExactly(roman.getId().toString());
 
 		mockMvc.perform(get("/api/books/" + id)).andExpect(status().isOk());
 	}
@@ -660,6 +660,54 @@ class AdminBookControllerTest extends ApiTestSupport {
 		assertInvalidField(get(BASE + "?size=101").with(bearer(ADMIN)), "size");
 		assertInvalidField(get(BASE + "?size=0").with(bearer(ADMIN)), "size");
 		mockMvc.perform(get(BASE + "/" + UUID.randomUUID()).with(bearer(ADMIN))).andExpect(status().isNotFound());
+	}
+
+	@Test
+	void listFiltersByTitleQueryAndAuthorId() throws Exception {
+		Map<String, Object> watchmen = validBook();
+		watchmen.put("title", "Watchmen");
+		watchmen.put("authorNames", List.of(ahmet.getName()));
+		UUID watchmenId = create(watchmen);
+
+		Map<String, Object> moby = validBook();
+		moby.put("title", "Moby-Dick");
+		moby.put("authorNames", List.of(zeynep.getName()));
+		UUID mobyId = create(moby);
+
+		Map<String, Object> other = validBook();
+		other.put("title", "Başka Kitap");
+		other.put("authorNames", List.of(ahmet.getName()));
+		UUID otherId = create(other);
+
+		mockMvc.perform(get(BASE + "?q=watch").with(bearer(ADMIN)))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.items[*].id", contains(watchmenId.toString())))
+			.andExpect(jsonPath("$.totalElements").value(1));
+		mockMvc.perform(get(BASE + "?q=MOBY").with(bearer(ADMIN)))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.items[*].id", contains(mobyId.toString())));
+		mockMvc.perform(get(BASE + "?authorId=" + ahmet.getId()).with(bearer(ADMIN)))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.items[*].id", containsInAnyOrder(watchmenId.toString(), otherId.toString())))
+			.andExpect(jsonPath("$.totalElements").value(2));
+		mockMvc.perform(get(BASE + "?q=watch&authorId=" + ahmet.getId()).with(bearer(ADMIN)))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.items[*].id", contains(watchmenId.toString())))
+			.andExpect(jsonPath("$.totalElements").value(1));
+		mockMvc.perform(get(BASE + "?q=watch&authorId=" + zeynep.getId()).with(bearer(ADMIN)))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.totalElements").value(0));
+		mockMvc.perform(get(BASE + "?q=watch&status=draft").with(bearer(ADMIN)))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.items[*].id", contains(watchmenId.toString())));
+		mockMvc.perform(get(BASE + "?q=watch&status=published").with(bearer(ADMIN)))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.totalElements").value(0));
+		mockMvc.perform(get(BASE + "?q=").with(bearer(ADMIN)))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.totalElements").value(3));
+		assertInvalidField(get(BASE + "?q=a").with(bearer(ADMIN)), "q");
+		assertInvalidField(get(BASE + "?authorId=bozuk").with(bearer(ADMIN)), "authorId");
 	}
 
 	// --- 14. Hata yanıtları gönderilen değerleri içermez

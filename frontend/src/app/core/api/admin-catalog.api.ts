@@ -3,6 +3,7 @@ import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
+  AdminAuthorQuery,
   AdminBook,
   AdminBookQuery,
   AdminBookSummary,
@@ -13,7 +14,6 @@ import {
   CreateBookRequest,
   CreateCategoryRequest,
   IsbnMetadataResponse,
-  MoveCategoryRequest,
   PageResponse,
   StockAdjustmentRequest,
   UpdateAuthorRequest,
@@ -30,7 +30,7 @@ export class AdminCatalogApi {
 
   // —— Authors ——
 
-  listAuthors(query: AdminPageQuery = {}): Observable<PageResponse<AuthorResponse>> {
+  listAuthors(query: AdminAuthorQuery = {}): Observable<PageResponse<AuthorResponse>> {
     return this.http.get<PageResponse<AuthorResponse>>(`${this.base}/authors`, {
       params: toHttpParams(query),
     });
@@ -70,10 +70,6 @@ export class AdminCatalogApi {
 
   updateCategory(id: string, body: UpdateCategoryRequest): Observable<CategoryResponse> {
     return this.http.patch<CategoryResponse>(`${this.base}/categories/${id}`, body);
-  }
-
-  moveCategory(id: string, body: MoveCategoryRequest): Observable<CategoryResponse> {
-    return this.http.put<CategoryResponse>(`${this.base}/categories/${id}/parent`, body);
   }
 
   deleteCategory(id: string): Observable<void> {

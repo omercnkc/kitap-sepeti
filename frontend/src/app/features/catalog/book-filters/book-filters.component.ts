@@ -7,7 +7,7 @@ import {
   Output,
   SimpleChanges,
 } from '@angular/core';
-import { BookFilter, CategoryTree } from '../../../core/models';
+import { BookFilter, CategoryRef } from '../../../core/models';
 
 export const SORT_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: 'newest', label: 'En yeni' },
@@ -23,6 +23,11 @@ export interface BookFilterChange {
   sort?: string | null;
 }
 
+export interface FlatCategory {
+  id: string;
+  name: string;
+}
+
 @Component({
   selector: 'app-book-filters',
   templateUrl: './book-filters.component.html',
@@ -32,7 +37,7 @@ export interface BookFilterChange {
 export class BookFiltersComponent implements OnChanges {
   readonly sortOptions = SORT_OPTIONS;
 
-  @Input() categories: CategoryTree[] = [];
+  @Input() categories: CategoryRef[] = [];
   @Input() filter: BookFilter = {};
   @Input() priceRangeError: string | null = null;
 
@@ -41,8 +46,12 @@ export class BookFiltersComponent implements OnChanges {
 
   draftMinPrice = '';
   draftMaxPrice = '';
+  flatCategories: FlatCategory[] = [];
 
   ngOnChanges(changes: SimpleChanges): void {
+    if (changes['categories']) {
+      this.flatCategories = this.categories.map((c) => ({ id: c.id, name: c.name }));
+    }
     if (changes['filter']) {
       this.draftMinPrice =
         this.filter.minPrice !== null && this.filter.minPrice !== undefined

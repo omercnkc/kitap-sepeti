@@ -71,7 +71,6 @@ class BookTransactionBoundaryTest {
 		jdbc.update("DELETE FROM stock_reservations");
 		jdbc.update("DELETE FROM books");
 		jdbc.update("DELETE FROM authors");
-		jdbc.update("UPDATE categories SET parent_id = NULL");
 		jdbc.update("DELETE FROM categories");
 	}
 
@@ -117,7 +116,7 @@ class BookTransactionBoundaryTest {
 		return tx.execute(status -> {
 			Book book = new Book("Kitap", new BigDecimal("50.00"));
 			book.getAuthors().add(authorRepository.save(new Author("Yazar", "yazar")));
-			book.getCategories().add(categoryRepository.save(new Category(null, "Roman", "roman")));
+			book.getCategories().add(categoryRepository.save(new Category("Roman", "roman")));
 			return bookRepository.save(book).getId();
 		});
 	}

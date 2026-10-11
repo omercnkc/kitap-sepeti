@@ -39,12 +39,11 @@ export interface BookDetail {
   publishedAt?: string;
 }
 
-/** OpenAPI `CategoryTreeResponse` */
-export interface CategoryTree {
+/** OpenAPI `CategoryRef` — public `GET /api/categories` öğesi */
+export interface CategoryRef {
   id: string;
   name: string;
   slug: string;
-  children: CategoryTree[];
 }
 
 /** `GET /api/books` query parametreleri (OpenAPI path parameters) */

@@ -1,0 +1,240 @@
+@import 'styles/variables';
+
+.book-carousel {
+  padding: 1rem 0 1.5rem;
+  // Alta doğru body zeminine eriyerek keskin çizgiyi kaldırır
+  background: linear-gradient(
+    180deg,
+    mix($brand-oat, #ffffff, 42%) 0%,
+    rgba($primary, 0.035) 45%,
+    transparent 100%
+  );
+  margin-bottom: -0.75rem;
+}
+
+.book-carousel__title {
+  color: $primary;
+  font-weight: 600;
+}
+
+.book-carousel__shell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.book-carousel__track {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  padding: 0.35rem 0.15rem 0.5rem;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.book-carousel__item {
+  flex: 0 0 auto;
+  width: 9.5rem;
+  scroll-snap-align: center;
+
+  @media (min-width: 576px) {
+    width: 10.5rem;
+  }
+
+  @media (min-width: 992px) {
+    width: 11rem;
+  }
+}
+
+.book-carousel__card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid rgba($primary, 0.1);
+  border-radius: 0.4rem;
+  overflow: hidden;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+  &--active {
+    border-color: rgba($primary, 0.28);
+    box-shadow: 0 4px 14px rgba($primary, 0.1);
+  }
+}
+
+.book-carousel__media {
+  display: block;
+  aspect-ratio: 3 / 4;
+  background: mix($brand-oat, #ffffff, 40%);
+  overflow: hidden;
+}
+
+.book-carousel__cover {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+}
+
+.book-carousel__cover--placeholder {
+  background: linear-gradient(145deg, rgba($primary, 0.08), mix($brand-oat, #fff, 50%));
+}
+
+.book-carousel__body {
+  padding: 0.55rem 0.6rem 0.65rem;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+}
+
+.book-carousel__book-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.25;
+  min-height: 2.1em;
+  margin-bottom: 0.2rem;
+  color: $primary !important;
+}
+
+.book-carousel__authors {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 0.75rem;
+  color: rgba($primary, 0.65);
+  min-height: 1.1em;
+}
+
+.book-carousel__price-btn {
+  border: none;
+  background-color: $primary;
+  color: #fff;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+
+  &:hover,
+  &:focus-visible {
+    background-color: $brand-sage;
+    color: #fff;
+  }
+}
+
+.book-carousel__cart-btn {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.35rem;
+  border: 1px solid rgba($primary, 0.28);
+  background-color: rgba($primary, 0.08);
+  color: $primary;
+  line-height: 1;
+
+  .bi {
+    font-size: 1rem;
+  }
+
+  &:hover {
+    background-color: $primary;
+    border-color: $primary;
+    color: #fff;
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    outline: 2px solid rgba($primary, 0.5);
+    outline-offset: 2px;
+  }
+}
+
+.book-carousel__nav {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  border: 1px solid rgba($primary, 0.18);
+  background: rgba(#fff, 0.9);
+  color: $primary;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 1;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+
+  &:hover {
+    background: rgba($brand-sage, 0.12);
+    border-color: rgba($brand-sage, 0.35);
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    outline: 2px solid rgba($primary, 0.5);
+    outline-offset: 2px;
+  }
+
+  @media (max-width: 575.98px) {
+    display: none;
+  }
+}
+
+.book-carousel__dots {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem;
+  margin-top: 0.55rem;
+}
+
+.book-carousel__dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba($primary, 0.22);
+  transition: background-color 0.15s ease, transform 0.15s ease;
+
+  &--active {
+    background: $brand-gold;
+    transform: scale(1.15);
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    outline: 2px solid rgba($primary, 0.45);
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .book-carousel__track {
+    scroll-behavior: auto;
+  }
+}

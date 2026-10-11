@@ -12,6 +12,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -45,11 +46,8 @@ public class BookQueryService {
 
 	private final BookRepository bookRepository;
 
-	private final CategoryQueryService categoryQueryService;
-
-	public BookQueryService(BookRepository bookRepository, CategoryQueryService categoryQueryService) {
+	public BookQueryService(BookRepository bookRepository) {
 		this.bookRepository = bookRepository;
-		this.categoryQueryService = categoryQueryService;
 	}
 
 	public PageResponse<BookSummaryResponse> search(BookSearchRequest request) {
@@ -92,7 +90,7 @@ public class BookQueryService {
 			specifications.add(hasAuthor(request.authorId()));
 		}
 		if (request.categoryId() != null) {
-			specifications.add(inAnyCategory(this.categoryQueryService.subtreeIds(request.categoryId())));
+			specifications.add(inAnyCategory(Set.of(request.categoryId())));
 		}
 		if (request.minPrice() != null) {
 			specifications.add(priceAtLeast(request.minPrice()));

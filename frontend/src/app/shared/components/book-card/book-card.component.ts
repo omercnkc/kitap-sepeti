@@ -20,11 +20,6 @@ export class BookCardComponent {
 
   constructor(private readonly auth: AuthService) {}
 
-  /** ADMIN Vitrin’de sepete eklemez (Özellik 6 ek). */
-  get showAddToCart(): boolean {
-    return !this.auth.isAdmin();
-  }
-
   authorsLabel(book: BookSummary): string {
     if (!book.authors || book.authors.length === 0) {
       return '';
@@ -35,7 +30,7 @@ export class BookCardComponent {
   onAddToCart(event: Event): void {
     event.preventDefault();
     event.stopPropagation();
-    if (!this.showAddToCart || !this.book.inStock) {
+    if (!this.book.inStock || this.auth.isAdmin()) {
       return;
     }
     this.addToCart.emit(this.book);

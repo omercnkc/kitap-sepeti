@@ -107,19 +107,10 @@ class CatalogSchemaConstraintsTest {
 	}
 
 	@Test
-	void rejectsDeletingCategoryWithChildren() {
-		byte[] parentId = insertCategory(null, "edebiyat");
-		insertCategory(parentId, "roman");
-
-		assertViolation(() -> jdbc.update("DELETE FROM categories WHERE id = ?", (Object) parentId),
-				"fk_categories_parent");
-	}
-
-	@Test
 	void deletingBookCascadesToLinksButKeepsAuthorAndCategory() {
 		byte[] bookId = insertBook(null, 0);
 		byte[] authorId = insertAuthor("orhan-pamuk");
-		byte[] categoryId = insertCategory(null, "roman");
+		byte[] categoryId = insertCategory("roman");
 		jdbc.update("INSERT INTO book_authors (book_id, author_id) VALUES (?, ?)", bookId, authorId);
 		jdbc.update("INSERT INTO book_categories (book_id, category_id) VALUES (?, ?)", bookId, categoryId);
 
@@ -199,10 +190,9 @@ class CatalogSchemaConstraintsTest {
 		return id;
 	}
 
-	private byte[] insertCategory(byte[] parentId, String slug) {
+	private byte[] insertCategory(String slug) {
 		byte[] id = newId();
-		jdbc.update("INSERT INTO categories (id, parent_id, name, slug) VALUES (?, ?, ?, ?)", id, parentId,
-				"Kategori " + slug, slug);
+		jdbc.update("INSERT INTO categories (id, name, slug) VALUES (?, ?, ?)", id, "Kategori " + slug, slug);
 		return id;
 	}
 

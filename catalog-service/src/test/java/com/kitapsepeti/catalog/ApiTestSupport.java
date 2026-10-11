@@ -63,7 +63,6 @@ public abstract class ApiTestSupport {
 		jdbc.update("DELETE FROM stock_reservations");
 		jdbc.update("DELETE FROM books");
 		jdbc.update("DELETE FROM authors");
-		jdbc.update("UPDATE categories SET parent_id = NULL");
 		jdbc.update("DELETE FROM categories");
 		if (this.coverStorage instanceof InMemoryCoverStorage memory) {
 			memory.clear();

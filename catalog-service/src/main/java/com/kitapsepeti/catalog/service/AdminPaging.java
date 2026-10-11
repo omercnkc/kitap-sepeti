@@ -15,7 +15,11 @@ final class AdminPaging {
 	}
 
 	static Pageable byNameThenId(AdminPageRequest request) {
-		return PageRequest.of(request.page(), request.size(), BY_NAME_THEN_ID);
+		return byNameThenId(request.page(), request.size());
+	}
+
+	static Pageable byNameThenId(int page, int size) {
+		return PageRequest.of(page, size, BY_NAME_THEN_ID);
 	}
 
 }

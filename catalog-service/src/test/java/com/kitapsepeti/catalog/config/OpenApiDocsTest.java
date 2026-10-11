@@ -63,7 +63,7 @@ class OpenApiDocsTest extends ApiTestSupport {
 				"GET /api/admin/authors", "POST /api/admin/authors", "GET /api/admin/authors/{id}",
 				"PATCH /api/admin/authors/{id}", "DELETE /api/admin/authors/{id}",
 				"GET /api/admin/categories", "POST /api/admin/categories", "GET /api/admin/categories/{id}",
-				"PATCH /api/admin/categories/{id}", "PUT /api/admin/categories/{id}/parent",
+				"PATCH /api/admin/categories/{id}",
 				"DELETE /api/admin/categories/{id}",
 				"POST /internal/stock/reservations", "GET /internal/stock/reservations/{orderId}",
 				"POST /internal/stock/reservations/{orderId}/commit",
@@ -89,8 +89,8 @@ class OpenApiDocsTest extends ApiTestSupport {
 			.containsEntry("type", "http").containsEntry("scheme", "bearer").containsEntry("bearerFormat", "JWT");
 
 		Map<String, Map<String, Object>> admin = operationsUnder(docs, "/api/admin/");
-		// publishers kaldırıldı (20) + cover upload (1) = 21
-		assertThat(admin).hasSize(21);
+		// publishers kaldırıldı; moveCategory kaldırıldı; cover upload dahil = 20
+		assertThat(admin).hasSize(20);
 		admin.forEach((operation, spec) -> {
 			assertThat(spec.get("security")).as(operation).isEqualTo(List.of(Map.of("bearerAuth", List.of())));
 			assertThat(responses(spec)).as(operation).containsKeys("401", "403", "503");
@@ -176,6 +176,12 @@ class OpenApiDocsTest extends ApiTestSupport {
 			.containsExactly(100);
 		assertThat(docs.<List<String>>read("$.paths['/api/admin/books'].get.parameters[?(@.name == 'status')].schema.enum[*]"))
 			.containsExactly("draft", "published", "archived");
+		assertThat(docs.<List<Integer>>read("$.paths['/api/admin/books'].get.parameters[?(@.name == 'q')].schema.minLength"))
+			.containsExactly(2);
+		assertThat(docs.<List<Integer>>read("$.paths['/api/admin/books'].get.parameters[?(@.name == 'q')].schema.maxLength"))
+			.containsExactly(100);
+		assertThat(docs.<List<String>>read("$.paths['/api/admin/books'].get.parameters[?(@.name == 'authorId')].schema.format"))
+			.containsExactly("uuid");
 		assertThat(docs.<List<String>>read("$.components.schemas.UpdateBookRequest.required")).contains("version");
 		assertThat(docs.<Map<String, Object>>read("$.components.schemas.ReserveStockRequest.properties.items"))
 			.containsEntry("minItems", 1).containsEntry("maxItems", 50);

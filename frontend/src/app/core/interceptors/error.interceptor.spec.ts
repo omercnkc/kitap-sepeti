@@ -151,22 +151,6 @@ describe('ErrorInterceptor', () => {
     expect(toast.error).toHaveBeenCalledWith('Bu kayıt kullanımda olduğu için silinemez.');
   });
 
-  it('409 CATEGORY_CYCLE should toast cycle message', () => {
-    http.put('/api/admin/categories/c1/parent', { parentId: 'c2' }).subscribe({
-      next: () => fail('expected error'),
-      error: () => undefined,
-    });
-
-    httpMock.expectOne('/api/admin/categories/c1/parent').flush(
-      { title: 'Conflict', status: 409, code: 'CATEGORY_CYCLE' },
-      { status: 409, statusText: 'Conflict' },
-    );
-
-    expect(toast.error).toHaveBeenCalledWith(
-      'Bir kategoriyi kendi altına veya alt kategorisine taşıyamazsınız.',
-    );
-  });
-
   it('409 CONCURRENT_MODIFICATION should toast reload message', () => {
     http.patch('/api/admin/books/b1', { version: 1 }).subscribe({
       next: () => fail('expected error'),

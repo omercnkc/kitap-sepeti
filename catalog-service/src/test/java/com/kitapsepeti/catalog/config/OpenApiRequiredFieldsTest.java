@@ -60,14 +60,12 @@ class OpenApiRequiredFieldsTest extends ApiTestSupport {
 
 		String authorId = check("post", "/api/admin/authors", 201,
 				admin(post("/api/admin/authors")).content("{\"name\":\"Ayşe Kaya\"}")).get("id").asString();
-		String rootId = check("post", "/api/admin/categories", 201,
-				admin(post("/api/admin/categories")).content("{\"name\":\"Edebiyat\"}")).get("id").asString();
-		String childId = check("post", "/api/admin/categories", 201, admin(post("/api/admin/categories"))
-			.content("{\"name\":\"Roman\",\"parentId\":\"%s\"}".formatted(rootId))).get("id").asString();
+		String categoryId = check("post", "/api/admin/categories", 201,
+				admin(post("/api/admin/categories")).content("{\"name\":\"Roman\"}")).get("id").asString();
 		// Opsiyonel alanlar (isbn, açıklama, kapak, sayfa sayısı) bilinçli olarak boş bırakılır.
 		String bookId = check("post", "/api/admin/books", 201, admin(post("/api/admin/books")).content("""
 				{"title":"Deneme","priceAmount":129.90,"initialStock":5,
-				"authorNames":["Ayşe Kaya"],"categoryIds":["%s"]}""".formatted(childId)))
+				"authorNames":["Ayşe Kaya"],"categoryIds":["%s"]}""".formatted(categoryId)))
 			.get("id").asString();
 		check("post", "/api/admin/books/{id}/publish", 200, admin(post("/api/admin/books/{id}/publish", bookId)));
 		check("get", "/api/admin/books/isbn-lookup", 200,
@@ -82,7 +80,7 @@ class OpenApiRequiredFieldsTest extends ApiTestSupport {
 		check("get", "/api/admin/authors", 200, admin(get("/api/admin/authors")));
 		check("get", "/api/admin/authors/{id}", 200, admin(get("/api/admin/authors/{id}", authorId)));
 		check("get", "/api/admin/categories", 200, admin(get("/api/admin/categories")));
-		check("get", "/api/admin/categories/{id}", 200, admin(get("/api/admin/categories/{id}", childId)));
+		check("get", "/api/admin/categories/{id}", 200, admin(get("/api/admin/categories/{id}", categoryId)));
 
 		UUID orderId = UUID.randomUUID();
 		check("post", "/internal/stock/reservations", 201, post("/internal/stock/reservations")

@@ -58,8 +58,9 @@ describe('HeaderComponent', () => {
     expect(logo).toBeTruthy();
     expect(logo?.getAttribute('src')).toBe('assets/brand/logo.png');
     expect(logo?.getAttribute('alt')).toBe('Kitap Sepeti');
-    expect(el.querySelector('a[routerLink="/login"]')).toBeTruthy();
-    expect(el.querySelector('a[routerLink="/register"]')).toBeTruthy();
+    expect(logo?.getAttribute('height')).toBe('56');
+    expect(el.querySelector('a[routerLink="/login"] .bi-box-arrow-in-right')).toBeTruthy();
+    expect(el.querySelector('a[routerLink="/register"] .bi-person-plus')).toBeTruthy();
   });
 
   it('should show account menu when logged in', () => {
@@ -87,6 +88,7 @@ describe('HeaderComponent', () => {
     cartCount$.next(3);
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('a[routerLink="/cart"] .bi-cart3')).toBeTruthy();
     const badge = el.querySelector(
       'a[routerLink="/cart"] .header-nav-btn__badge',
     );

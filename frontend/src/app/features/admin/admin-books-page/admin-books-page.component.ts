@@ -7,11 +7,11 @@ import {
   TemplateRef,
   ViewChild,
 } from '@angular/core';
-import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { FormBuilder, FormControl, FormGroup, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { NgbModal, NgbModalRef } from '@ng-bootstrap/ng-bootstrap';
 import { Subject } from 'rxjs';
-import { finalize, switchMap, takeUntil } from 'rxjs/operators';
+import { debounceTime, distinctUntilChanged, finalize, map, switchMap, takeUntil } from 'rxjs/operators';
 import { AdminCatalogApi } from '../../../core/api/admin-catalog.api';
 import {
   AdminBook,
@@ -24,6 +24,7 @@ import { ConfirmDialogService } from '../../../shared/components/confirm-dialog/
 
 const DEFAULT_PAGE = 0;
 const DEFAULT_SIZE = 20;
+const SEARCH_MIN_LEN = 2;
 
 type PageState = 'loading' | 'ready' | 'empty' | 'error';
 
@@ -58,10 +59,13 @@ export class AdminBooksPageComponent implements OnInit, OnDestroy {
   totalElements = 0;
   totalPages = 0;
   statusFilter: '' | AdminBookStatus = '';
+  authorIdFilter: string | null = null;
+  qFilter: string | null = null;
   busyId: string | null = null;
   stockTarget: AdminBookSummary | null = null;
   stockSaving = false;
 
+  readonly searchControl = new FormControl('');
   readonly stockForm: FormGroup = this.fb.group({
     delta: [
       null as number | null,
@@ -87,8 +91,18 @@ export class AdminBooksPageComponent implements OnInit, OnDestroy {
         switchMap((params) => {
           const page = parsePage(params.get('page'), DEFAULT_PAGE);
           const status = parseStatus(params.get('status'));
+          const q = optionalSearchQuery(params.get('q'));
+          const authorId = optionalUuid(params.get('authorId'));
           this.pageIndex = page;
           this.statusFilter = status;
+          this.qFilter = q;
+          this.authorIdFilter = authorId;
+          const committed = q ?? '';
+          const current = (this.searchControl.value ?? '').trim();
+          const controlCommitted = current.length >= SEARCH_MIN_LEN ? current : '';
+          if (committed !== controlCommitted) {
+            this.searchControl.setValue(committed, { emitEvent: false });
+          }
           this.pageState = 'loading';
           this.cdr.markForCheck();
           return this.api
@@ -96,6 +110,8 @@ export class AdminBooksPageComponent implements OnInit, OnDestroy {
               page,
               size: this.pageSize,
               status: status || null,
+              q,
+              authorId,
             })
             .pipe(finalize(() => this.cdr.markForCheck()));
         }),
@@ -106,6 +122,22 @@ export class AdminBooksPageComponent implements OnInit, OnDestroy {
           this.pageState = 'error';
           this.cdr.markForCheck();
         },
+      });
+
+    this.searchControl.valueChanges
+      .pipe(
+        debounceTime(300),
+        map((raw) => (raw ?? '').trim()),
+        distinctUntilChanged(),
+        takeUntil(this.destroy$),
+      )
+      .subscribe((trimmed) => {
+        const q = trimmed.length >= SEARCH_MIN_LEN ? trimmed : null;
+        void this.router.navigate([], {
+          relativeTo: this.route,
+          queryParams: { q, page: 0 },
+          queryParamsHandling: 'merge',
+        });
       });
   }
 
@@ -159,6 +191,14 @@ export class AdminBooksPageComponent implements OnInit, OnDestroy {
         status: status || null,
         page: null,
       },
+      queryParamsHandling: 'merge',
+    });
+  }
+
+  clearAuthorFilter(): void {
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { authorId: null, page: 0 },
       queryParamsHandling: 'merge',
     });
   }
@@ -335,6 +375,8 @@ export class AdminBooksPageComponent implements OnInit, OnDestroy {
         page: this.pageIndex,
         size: this.pageSize,
         status: this.statusFilter || null,
+        q: this.qFilter,
+        authorId: this.authorIdFilter,
       })
       .pipe(takeUntil(this.destroy$))
       .subscribe({
@@ -385,4 +427,19 @@ function parseStatus(raw: string | null): '' | AdminBookStatus {
     return raw;
   }
   return '';
+}
+
+function optionalSearchQuery(value: string | null): string | null {
+  if (value === null) {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length >= SEARCH_MIN_LEN ? trimmed : null;
+}
+
+function optionalUuid(value: string | null): string | null {
+  if (value === null || value.trim() === '') {
+    return null;
+  }
+  return value.trim();
 }

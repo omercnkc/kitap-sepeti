@@ -1,7 +1,7 @@
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { CatalogApi } from './catalog.api';
-import { BookDetail, BookSummary, CategoryTree, PageResponse } from '../models';
+import { BookDetail, BookSummary, CategoryRef, PageResponse } from '../models';
 
 describe('CatalogApi', () => {
   let api: CatalogApi;
@@ -55,7 +55,7 @@ describe('CatalogApi', () => {
   });
 
   it('categories should GET /api/categories', () => {
-    const body: CategoryTree[] = [];
+    const body: CategoryRef[] = [];
 
     api.categories().subscribe((res) => {
       expect(res).toEqual(body);

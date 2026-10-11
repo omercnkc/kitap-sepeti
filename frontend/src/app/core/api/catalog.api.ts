@@ -6,7 +6,7 @@ import {
   BookDetail,
   BookFilter,
   BookSummary,
-  CategoryTree,
+  CategoryRef,
   PageResponse,
 } from '../models';
 import { toHttpParams } from './to-http-params';
@@ -27,7 +27,7 @@ export class CatalogApi {
     return this.http.get<BookDetail>(`${this.base}/books/${id}`);
   }
 
-  categories(): Observable<CategoryTree[]> {
-    return this.http.get<CategoryTree[]>(`${this.base}/categories`);
+  categories(): Observable<CategoryRef[]> {
+    return this.http.get<CategoryRef[]>(`${this.base}/categories`);
   }
 }

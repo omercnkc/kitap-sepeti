@@ -65,7 +65,9 @@ class DevSeedMigrationTest {
 
 		assertThat(count("SELECT COUNT(*) FROM books")).isEqualTo(booksAfterFirst).isEqualTo(14);
 		assertThat(count("SELECT COUNT(*) FROM authors")).isEqualTo(5);
-		assertThat(count("SELECT COUNT(*) FROM categories")).isEqualTo(6);
+		assertThat(count("SELECT COUNT(*) FROM categories")).isEqualTo(23);
+		assertThat(count("SELECT COUNT(*) FROM categories WHERE slug IN ('siir', 'tarih', 'polisiye', 'is-ekonomi')"))
+			.as("sample general theme slugs present").isEqualTo(4);
 		assertThat(count("SELECT COUNT(*) FROM book_authors")).isEqualTo(14);
 		assertThat(count("SELECT COUNT(*) FROM book_categories")).isEqualTo(17);
 		assertThat(count("SELECT COUNT(*) FROM books WHERE status = 'published'")).isEqualTo(11);

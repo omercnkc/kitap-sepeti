@@ -16,13 +16,13 @@ import jakarta.validation.constraints.Size;
  * Tip dönüşümü hatası (bozuk UUID/sayı, tanınmayan sort) ve kural ihlali 400 VALIDATION_FAILED olur.
  *
  * @param q başlıkta arama; boş/yalnızca boşluk yok sayılır
- * @param categoryId kategori; alt kategorilerdeki kitaplar da dahil
+ * @param categoryId kategori; yalnızca bu kategoriye doğrudan bağlı kitaplar
  */
 @ValidPriceRange
 public record BookSearchRequest(
 		@Schema(description = "Başlıkta arama (LIKE); boş veya yalnızca boşluk yok sayılır") @Size(min = 2,
 				max = 100) String q,
-		@Schema(description = "Kategori; alt kategorilerdeki kitaplar da dahil") UUID categoryId,
+		@Schema(description = "Kategori; yalnızca bu kategoriye doğrudan bağlı kitaplar") UUID categoryId,
 		UUID authorId,
 		@DecimalMin("0") BigDecimal minPrice,
 		@Schema(description = "`minPrice` ile birlikte verilirse ondan küçük olamaz") @DecimalMin("0") BigDecimal maxPrice,

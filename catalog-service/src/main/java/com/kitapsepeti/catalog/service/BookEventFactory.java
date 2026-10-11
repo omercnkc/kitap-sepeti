@@ -13,14 +13,13 @@ import com.kitapsepeti.catalog.entity.Book;
 import com.kitapsepeti.catalog.entity.Category;
 import com.kitapsepeti.catalog.mapper.BookMapper;
 import com.kitapsepeti.catalog.mapper.NameOrder;
-import com.kitapsepeti.catalog.repository.CategoryRepository;
 import com.kitapsepeti.catalog.service.event.BookRemovedEvent;
 import com.kitapsepeti.catalog.service.event.BookUpsertedEvent;
 import org.springframework.stereotype.Component;
 
 /**
  * Kitap olaylarının payload'larını kurar. Transaction içinde çağrılmalı (lazy ilişkilere dokunur).
- * {@code categoryIdsWithAncestors} tüm kategori ağacı tek sorguda okunarak hesaplanır (tablo küçük).
+ * {@code categoryIdsWithAncestors} alan adı uyumluluk için korunur; düz kategoride kitap kategorileriyle aynıdır.
  */
 @Component
 public class BookEventFactory {
@@ -28,21 +27,13 @@ public class BookEventFactory {
 	/** Outbox {@code aggregate_type}; user-service'teki {@code "user"} gibi küçük harf. */
 	public static final String BOOK_AGGREGATE = "book";
 
-	private final CategoryRepository categoryRepository;
-
-	public BookEventFactory(CategoryRepository categoryRepository) {
-		this.categoryRepository = categoryRepository;
-	}
-
 	public BookUpsertedEvent upserted(Book book) {
 		List<UUID> bookCategoryIds = book.getCategories().stream().map(Category::getId).toList();
-		List<UUID> withAncestors = List.copyOf(
-				CategoryForest.of(this.categoryRepository.findAll()).withAncestors(bookCategoryIds));
 		return new BookUpsertedEvent(BookUpsertedEvent.VERSION, book.getId(), book.getTitle(), book.getIsbn(),
 				book.getDescription(), book.getPriceAmount().setScale(2, RoundingMode.UNNECESSARY).toPlainString(),
 				book.getCurrency(), book.getCoverUrl(), book.getPageCount(), BookMapper.inStock(book),
 				book.getPublishedAt(), refs(book.getAuthors(), Author::getName, Author::getSlug, Author::getId),
-				refs(book.getCategories(), Category::getName, Category::getSlug, Category::getId), withAncestors,
+				refs(book.getCategories(), Category::getName, Category::getSlug, Category::getId), bookCategoryIds,
 				Instant.now());
 	}
 

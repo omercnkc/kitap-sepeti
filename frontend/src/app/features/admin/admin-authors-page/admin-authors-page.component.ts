@@ -7,10 +7,11 @@ import {
   TemplateRef,
   ViewChild,
 } from '@angular/core';
+import { FormControl } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { NgbModal, NgbModalRef } from '@ng-bootstrap/ng-bootstrap';
 import { Subject } from 'rxjs';
-import { finalize, switchMap, takeUntil } from 'rxjs/operators';
+import { debounceTime, distinctUntilChanged, finalize, map, switchMap, takeUntil } from 'rxjs/operators';
 import { AdminCatalogApi } from '../../../core/api/admin-catalog.api';
 import { toProblemDetail } from '../../../core/interceptors/error.interceptor';
 import { AuthorResponse, FieldError, PageResponse } from '../../../core/models';
@@ -20,6 +21,7 @@ import { AdminNameSlugValue } from '../admin-name-slug-form/admin-name-slug-form
 
 const DEFAULT_PAGE = 0;
 const DEFAULT_SIZE = 20;
+const SEARCH_MIN_LEN = 2;
 
 type PageState = 'loading' | 'ready' | 'empty' | 'error';
 
@@ -41,11 +43,14 @@ export class AdminAuthorsPageComponent implements OnInit, OnDestroy {
   pageSize = DEFAULT_SIZE;
   totalElements = 0;
   totalPages = 0;
+  qFilter: string | null = null;
 
   editing: AuthorResponse | null = null;
   saving = false;
   busyId: string | null = null;
   fieldErrors: FieldError[] = [];
+
+  readonly searchControl = new FormControl('');
 
   constructor(
     private readonly api: AdminCatalogApi,
@@ -63,10 +68,18 @@ export class AdminAuthorsPageComponent implements OnInit, OnDestroy {
         takeUntil(this.destroy$),
         switchMap((params) => {
           const page = parsePage(params.get('page'), DEFAULT_PAGE);
+          const q = optionalSearchQuery(params.get('q'));
           this.pageIndex = page;
+          this.qFilter = q;
+          const committed = q ?? '';
+          const current = (this.searchControl.value ?? '').trim();
+          const controlCommitted = current.length >= SEARCH_MIN_LEN ? current : '';
+          if (committed !== controlCommitted) {
+            this.searchControl.setValue(committed, { emitEvent: false });
+          }
           this.pageState = 'loading';
           this.cdr.markForCheck();
-          return this.api.listAuthors({ page, size: this.pageSize }).pipe(
+          return this.api.listAuthors({ page, size: this.pageSize, q }).pipe(
             finalize(() => this.cdr.markForCheck()),
           );
         }),
@@ -77,6 +90,22 @@ export class AdminAuthorsPageComponent implements OnInit, OnDestroy {
           this.pageState = 'error';
           this.cdr.markForCheck();
         },
+      });
+
+    this.searchControl.valueChanges
+      .pipe(
+        debounceTime(300),
+        map((raw) => (raw ?? '').trim()),
+        distinctUntilChanged(),
+        takeUntil(this.destroy$),
+      )
+      .subscribe((trimmed) => {
+        const q = trimmed.length >= SEARCH_MIN_LEN ? trimmed : null;
+        void this.router.navigate([], {
+          relativeTo: this.route,
+          queryParams: { q, page: 0 },
+          queryParamsHandling: 'merge',
+        });
       });
   }
 
@@ -108,6 +137,12 @@ export class AdminAuthorsPageComponent implements OnInit, OnDestroy {
     this.editing = item;
     this.fieldErrors = [];
     this.openModal();
+  }
+
+  openBooks(item: AuthorResponse): void {
+    void this.router.navigate(['/admin/books'], {
+      queryParams: { authorId: item.id, page: 0 },
+    });
   }
 
   onFormCancel(): void {
@@ -198,7 +233,7 @@ export class AdminAuthorsPageComponent implements OnInit, OnDestroy {
 
   private reload(): void {
     this.api
-      .listAuthors({ page: this.pageIndex, size: this.pageSize })
+      .listAuthors({ page: this.pageIndex, size: this.pageSize, q: this.qFilter })
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (page) => {
@@ -241,4 +276,12 @@ function parsePage(raw: string | null, fallback: number): number {
   }
   const n = Number(raw);
   return Number.isInteger(n) && n >= 0 ? n : fallback;
+}
+
+function optionalSearchQuery(value: string | null): string | null {
+  if (value === null) {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length >= SEARCH_MIN_LEN ? trimmed : null;
 }

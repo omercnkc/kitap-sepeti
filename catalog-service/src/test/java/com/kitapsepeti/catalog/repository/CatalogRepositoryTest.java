@@ -72,7 +72,7 @@ class CatalogRepositoryTest {
 	@Test
 	void savesAndReadsAuthorAndCategoryWithUuidV7Ids() {
 		UUID authorId = authorRepository.saveAndFlush(new Author("Orhan Pamuk", "orhan-pamuk")).getId();
-		UUID categoryId = categoryRepository.saveAndFlush(new Category(null, "Roman", "roman")).getId();
+		UUID categoryId = categoryRepository.saveAndFlush(new Category("Roman", "roman")).getId();
 		entityManager.clear();
 
 		Author author = authorRepository.findBySlug("orhan-pamuk").orElseThrow();
@@ -84,7 +84,7 @@ class CatalogRepositoryTest {
 		assertThat(author.getCreatedAt()).isNotNull();
 		assertThat(author.getUpdatedAt()).isNotNull();
 		assertThat(category.getId()).isEqualTo(categoryId);
-		assertThat(category.getParent()).isNull();
+		assertThat(category.getName()).isEqualTo("Roman");
 		assertThat(authorRepository.existsBySlug("yok")).isFalse();
 		assertThat(categoryRepository.existsBySlug("roman")).isTrue();
 	}
@@ -92,7 +92,7 @@ class CatalogRepositoryTest {
 	@Test
 	void hashCodeOfSetMembersIsStableAcrossPersist() {
 		Author author = new Author("Yaşar Kemal", "yasar-kemal");
-		Category category = new Category(null, "Klasik", "klasik");
+		Category category = new Category("Klasik", "klasik");
 		Set<Author> authors = new HashSet<>(Set.of(author));
 		Set<Category> categories = new HashSet<>(Set.of(category));
 		int authorHash = author.hashCode();
@@ -107,20 +107,6 @@ class CatalogRepositoryTest {
 		assertThat(category.hashCode()).isEqualTo(categoryHash);
 		assertThat(authors).contains(author);
 		assertThat(categories).contains(category);
-	}
-
-	@Test
-	void savesChildCategoryWithParentAndListsOnlyRoots() {
-		Category edebiyat = categoryRepository.save(new Category(null, "Edebiyat", "edebiyat"));
-		Category bilim = categoryRepository.save(new Category(null, "Bilim", "bilim"));
-		Category roman = categoryRepository.saveAndFlush(new Category(edebiyat, "Roman", "roman"));
-		entityManager.clear();
-
-		Category child = categoryRepository.findById(roman.getId()).orElseThrow();
-		List<Category> roots = categoryRepository.findAllByParentIsNull();
-
-		assertThat(child.getParent().getId()).isEqualTo(edebiyat.getId());
-		assertThat(roots).extracting(Category::getId).containsExactlyInAnyOrder(edebiyat.getId(), bilim.getId());
 	}
 
 	@Test
@@ -273,7 +259,7 @@ class CatalogRepositoryTest {
 	}
 
 	private Category saveCategory(String slug) {
-		return categoryRepository.save(new Category(null, "Kategori " + slug, slug));
+		return categoryRepository.save(new Category("Kategori " + slug, slug));
 	}
 
 	private Book newBook(String title) {

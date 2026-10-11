@@ -1,5 +1,13 @@
 // Uygulama geneli tipografi, taşma ve odak.
 
+:root {
+  --brand-primary: #{$primary};
+  --brand-sage: #{$brand-sage};
+  --brand-gold: #{$brand-gold};
+  --brand-rust: #{$brand-rust};
+  --brand-oat: #{$brand-oat};
+}
+
 html {
   overflow-x: clip;
 }
@@ -7,6 +15,8 @@ html {
 body {
   min-height: 100vh;
   overflow-x: clip;
+  // Oat + beyaz karışımı — hafif sıcak, full krem duvar değil
+  background-color: mix($brand-oat, #ffffff, 38%);
 }
 
 // Dar ekranda flex/grid çocukları yatay taşmasın
@@ -16,6 +26,29 @@ body {
 
 .app-page {
   padding: 1.5rem;
+}
+
+// Hesap / sipariş / kitap görev sayfalarında hafif marka zemini
+.page-task {
+  background-color: rgba($primary, 0.05);
+  border-radius: 0.5rem;
+}
+
+.page-task__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.page-task__title .bi {
+  font-size: 1.15em;
+  line-height: 1;
+  color: $primary;
+}
+
+.badge-sale {
+  background-color: $brand-rust;
+  color: #fff;
 }
 
 // Klavye odağı — fare tıklamasında Bootstrap varsayılan gölgeyi bastırma

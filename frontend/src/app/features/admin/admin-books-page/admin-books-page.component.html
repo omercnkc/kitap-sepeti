@@ -12,6 +12,18 @@
   </p>
 
   <div class="row g-2 align-items-end mb-3">
+    <div class="col-12 col-sm-6 col-md-5 col-lg-4">
+      <label class="form-label small mb-1" for="admin-book-search">Başlıkta ara</label>
+      <input
+        id="admin-book-search"
+        type="search"
+        class="form-control form-control-sm"
+        placeholder="Başlıkta ara…"
+        autocomplete="off"
+        maxlength="100"
+        [formControl]="searchControl"
+      />
+    </div>
     <div class="col-12 col-sm-6 col-md-4 col-lg-3">
       <label class="form-label small mb-1" for="book-status-filter">Durum</label>
       <select
@@ -27,14 +39,28 @@
     </div>
   </div>
 
+  <div
+    *ngIf="authorIdFilter"
+    class="alert alert-light border d-flex flex-wrap align-items-center justify-content-between gap-2 py-2 mb-3"
+    role="status"
+  >
+    <span class="small mb-0">
+      <i class="bi bi-funnel me-1" aria-hidden="true"></i>
+      Yazar filtresi aktif
+    </span>
+    <button type="button" class="btn btn-sm btn-outline-secondary" (click)="clearAuthorFilter()">
+      Temizle
+    </button>
+  </div>
+
   <app-spinner *ngIf="pageState === 'loading'" label="Kitaplar yükleniyor…"></app-spinner>
 
   <app-empty-state
     *ngIf="pageState === 'empty'"
-    [title]="statusFilter ? 'Bu filtrede kitap yok' : 'Henüz kitap yok'"
+    [title]="statusFilter || authorIdFilter || qFilter ? 'Bu filtrede kitap yok' : 'Henüz kitap yok'"
     [message]="
-      statusFilter
-        ? 'Başka bir durum seçin veya yeni kitap ekleyin.'
+      statusFilter || authorIdFilter || qFilter
+        ? 'Filtreleri değiştirin veya yeni kitap ekleyin.'
         : 'İlk kitabı taslak olarak oluşturabilirsiniz.'
     "
   ></app-empty-state>

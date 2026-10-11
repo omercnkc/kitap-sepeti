@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import com.kitapsepeti.catalog.dto.request.AdminPageRequest;
+import com.kitapsepeti.catalog.dto.request.AdminAuthorListRequest;
 import com.kitapsepeti.catalog.dto.request.CreateAuthorRequest;
 import com.kitapsepeti.catalog.dto.request.UpdateAuthorRequest;
 import com.kitapsepeti.catalog.dto.response.AuthorResponse;
@@ -14,7 +14,9 @@ import com.kitapsepeti.catalog.exception.InvalidFieldException;
 import com.kitapsepeti.catalog.exception.SlugAlreadyExistsException;
 import com.kitapsepeti.catalog.mapper.AuthorMapper;
 import com.kitapsepeti.catalog.repository.AuthorRepository;
+import com.kitapsepeti.catalog.repository.CaseInsensitiveContains;
 import com.kitapsepeti.common.error.ResourceNotFoundException;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,8 +38,14 @@ public class AuthorAdminService {
 	}
 
 	@Transactional(readOnly = true)
-	public PageResponse<AuthorResponse> list(AdminPageRequest page) {
-		return PageResponse.of(this.authorRepository.findAll(AdminPaging.byNameThenId(page)), AuthorMapper::toResponse);
+	public PageResponse<AuthorResponse> list(AdminAuthorListRequest request) {
+		Pageable pageable = AdminPaging.byNameThenId(request.page(), request.size());
+		if (request.q() == null) {
+			return PageResponse.of(this.authorRepository.findAll(pageable), AuthorMapper::toResponse);
+		}
+		return PageResponse.of(
+				this.authorRepository.findAll(CaseInsensitiveContains.of("name", request.q()), pageable),
+				AuthorMapper::toResponse);
 	}
 
 	@Transactional(readOnly = true)

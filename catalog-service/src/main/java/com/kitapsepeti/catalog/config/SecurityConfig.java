@@ -49,7 +49,6 @@ public class SecurityConfig {
 				"/api/admin/books/{bookId}/cover",
 				"/api/admin/authors/{authorId}",
 				"/api/admin/categories/{categoryId}",
-				"/api/admin/categories/{categoryId}/parent",
 				"/internal/stock/reservations/{orderId}",
 				"/internal/stock/reservations/{orderId}/commit",
 				"/internal/stock/reservations/{orderId}/release");

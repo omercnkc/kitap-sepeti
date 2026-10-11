@@ -39,8 +39,8 @@ public class BookController {
 	/** Yayındaki kitaplar; filtre, sıralama ve sayfa query parametrelerinden ({@link BookSearchRequest}). */
 	@GetMapping
 	@Operation(operationId = "searchBooks", summary = "Kitapları listele / ara",
-			description = "Yalnızca yayındaki kitaplar. `categoryId` alt kategorilerdeki kitapları da kapsar. "
-					+ "`minPrice` > `maxPrice` ise 400.")
+			description = "Yalnızca yayındaki kitaplar. `categoryId` yalnızca o kategoriye doğrudan bağlı kitapları "
+					+ "döner (alt kategoriler dahil edilmez). `minPrice` > `maxPrice` ise 400.")
 	@ApiResponse(responseCode = "200", description = "Sayfa (son sayfadan sonrası boş `items` döner).")
 	public PageResponse<BookSummaryResponse> search(@Valid @ParameterObject @ModelAttribute BookSearchRequest request) {
 		return bookQueryService.search(request);

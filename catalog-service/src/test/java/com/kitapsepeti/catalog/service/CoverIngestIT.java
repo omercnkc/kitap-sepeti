@@ -80,7 +80,7 @@ class CoverIngestIT extends ApiTestSupport {
 	@BeforeEach
 	void refs() {
 		this.author = this.authorRepository.save(new Author("Ingest Yazar", "ingest-yazar"));
-		this.category = this.categoryRepository.save(new Category(null, "Ingest", "ingest"));
+		this.category = this.categoryRepository.save(new Category("Ingest", "ingest"));
 	}
 
 	@Test

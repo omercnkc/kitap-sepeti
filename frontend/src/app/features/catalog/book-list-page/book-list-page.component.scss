@@ -1,3 +1,22 @@
+@import 'styles/variables';
+
 :host {
   display: block;
+}
+
+// Carousel ile yumuşak geçiş; panel zemini daha az kontrastlı
+.page-task {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0,
+    mix($brand-oat, #ffffff, 22%) 2rem,
+    rgba($primary, 0.04) 100%
+  );
+}
+
+#book-search:focus {
+  border-color: $brand-gold;
+  box-shadow: 0 0 0 0.2rem rgba($brand-gold, 0.28);
 }

@@ -91,7 +91,7 @@ class OutboxRelayIT extends ApiTestSupport {
 	void setUp() {
 		publisher.reset();
 		author = authorRepository.save(new Author("Ahmet Yazar", "ahmet-yazar"));
-		category = categoryRepository.save(new Category(null, "Roman", "roman"));
+		category = categoryRepository.save(new Category("Roman", "roman"));
 	}
 
 	@AfterEach

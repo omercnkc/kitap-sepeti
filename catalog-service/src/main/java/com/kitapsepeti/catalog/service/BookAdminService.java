@@ -29,6 +29,7 @@ import com.kitapsepeti.catalog.exception.StaleVersionException;
 import com.kitapsepeti.catalog.exception.StockBelowReservedException;
 import com.kitapsepeti.catalog.mapper.AdminBookMapper;
 import com.kitapsepeti.catalog.repository.BookRepository;
+import com.kitapsepeti.catalog.repository.BookSpecifications;
 import com.kitapsepeti.catalog.repository.CategoryRepository;
 import com.kitapsepeti.catalog.service.event.BookRemovedEvent;
 import com.kitapsepeti.catalog.service.event.BookUpsertedEvent;
@@ -93,8 +94,17 @@ public class BookAdminService {
 
 	@Transactional(readOnly = true)
 	public PageResponse<AdminBookSummaryResponse> list(AdminBookListRequest request) {
-		Specification<Book> spec = (request.status() == null) ? Specification.unrestricted()
-				: (root, query, cb) -> cb.equal(root.get("status"), request.status());
+		List<Specification<Book>> specs = new ArrayList<>();
+		if (request.status() != null) {
+			specs.add((root, query, cb) -> cb.equal(root.get("status"), request.status()));
+		}
+		if (request.q() != null) {
+			specs.add(BookSpecifications.titleContains(request.q()));
+		}
+		if (request.authorId() != null) {
+			specs.add(BookSpecifications.hasAuthor(request.authorId()));
+		}
+		Specification<Book> spec = specs.isEmpty() ? Specification.unrestricted() : Specification.allOf(specs);
 		PageRequest pageable = PageRequest.of(request.page(), request.size(), ADMIN_ORDER);
 		return PageResponse.of(this.bookRepository.findAll(spec, pageable), AdminBookMapper::toSummary);
 	}

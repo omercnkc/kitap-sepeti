@@ -8,6 +8,7 @@ import { SpinnerComponent } from './components/spinner/spinner.component';
 import { EmptyStateComponent } from './components/empty-state/empty-state.component';
 import { FieldErrorComponent } from './components/field-error/field-error.component';
 import { BookCardComponent } from './components/book-card/book-card.component';
+import { BookCarouselComponent } from './components/book-carousel/book-carousel.component';
 import { PaginationComponent } from './components/pagination/pagination.component';
 import { ConfirmDialogComponent } from './components/confirm-dialog/confirm-dialog.component';
 import { AddressFormComponent } from './components/address-form/address-form.component';
@@ -25,6 +26,7 @@ import { TrPhoneInputDirective } from './directives/tr-phone-input.directive';
     EmptyStateComponent,
     FieldErrorComponent,
     BookCardComponent,
+    BookCarouselComponent,
     PaginationComponent,
     ConfirmDialogComponent,
     AddressFormComponent,
@@ -42,6 +44,7 @@ import { TrPhoneInputDirective } from './directives/tr-phone-input.directive';
     EmptyStateComponent,
     FieldErrorComponent,
     BookCardComponent,
+    BookCarouselComponent,
     PaginationComponent,
     ConfirmDialogComponent,
     AddressFormComponent,

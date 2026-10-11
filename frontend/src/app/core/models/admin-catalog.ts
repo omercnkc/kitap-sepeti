@@ -29,7 +29,6 @@ export interface CategoryResponse {
   id: string;
   name: string;
   slug: string;
-  parentId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -37,7 +36,6 @@ export interface CategoryResponse {
 /** OpenAPI `CreateCategoryRequest` */
 export interface CreateCategoryRequest {
   name: string;
-  parentId?: string;
   slug?: string;
 }
 
@@ -45,11 +43,6 @@ export interface CreateCategoryRequest {
 export interface UpdateCategoryRequest {
   name?: string;
   slug?: string;
-}
-
-/** OpenAPI `MoveCategoryRequest` */
-export interface MoveCategoryRequest {
-  parentId?: string | null;
 }
 
 /** OpenAPI `AdminBookSummaryResponse` */
@@ -119,14 +112,21 @@ export interface StockAdjustmentRequest {
   delta: number;
 }
 
-/** Admin list query (authors / categories) */
+/** Admin list query (categories) */
 export interface AdminPageQuery {
   page?: number | null;
   size?: number | null;
 }
 
+/** `GET /api/admin/authors` query */
+export interface AdminAuthorQuery extends AdminPageQuery {
+  q?: string | null;
+}
+
 /** `GET /api/admin/books` query */
 export interface AdminBookQuery extends AdminPageQuery {
+  q?: string | null;
+  authorId?: string | null;
   status?: AdminBookStatus | null;
 }
 

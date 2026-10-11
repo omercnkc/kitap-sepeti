@@ -1,4 +1,11 @@
 // Bootstrap !default değişkenlerini ezmek için styles.scss'te Bootstrap'ten ÖNCE import edilir.
-$primary: #0f6b5c;
+// Marka paleti (hafif evrim; krem+terracotta redesign değil).
+
+$primary: #1e4620; // Orman — btn-primary, link, aktif
+$brand-sage: #2e6f40; // hover, ikincil vurgu
+$brand-gold: #d4a373; // sepet badge, arama vurgu
+$brand-rust: #b33e2b; // yalnızca .badge-sale / kritik rozet
+$brand-oat: #f5ebe0; // body hafif zemin
+
 $font-family-base: "Segoe UI", system-ui, -apple-system, sans-serif;
 $border-radius: 0.35rem;

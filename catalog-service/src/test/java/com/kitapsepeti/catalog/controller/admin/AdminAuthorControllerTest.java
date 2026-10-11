@@ -1,6 +1,7 @@
 package com.kitapsepeti.catalog.controller.admin;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -108,6 +109,28 @@ class AdminAuthorControllerTest extends ApiTestSupport {
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
 		}
+	}
+
+	@Test
+	void listFiltersByNameQuery() throws Exception {
+		Author pamuk = authorRepository.save(new Author("Orhan Pamuk", "orhan-pamuk"));
+		authorRepository.save(new Author("Yaşar Kemal", "yasar-kemal"));
+		authorRepository.save(new Author("Ahmet Ümit", "ahmet-umit"));
+
+		mockMvc.perform(get(BASE + "?q=pamuk").with(bearer(ADMIN)))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.items[*].id", contains(pamuk.getId().toString())))
+			.andExpect(jsonPath("$.totalElements").value(1));
+		mockMvc.perform(get(BASE + "?q=ORHAN").with(bearer(ADMIN)))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.items[*].id", contains(pamuk.getId().toString())));
+		mockMvc.perform(get(BASE + "?q=").with(bearer(ADMIN)))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.totalElements").value(3));
+		mockMvc.perform(get(BASE + "?q=a").with(bearer(ADMIN)))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+			.andExpect(jsonPath("$.errors[0].field").value("q"));
 	}
 
 	private MockHttpServletRequestBuilder json(MockHttpServletRequestBuilder request, String body) {

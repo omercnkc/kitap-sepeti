@@ -1,0 +1,107 @@
+<section
+  *ngIf="visible"
+  class="book-carousel"
+  aria-roledescription="carousel"
+  aria-label="Öne çıkan kitaplar"
+  (mouseenter)="onPointerEnter()"
+  (mouseleave)="onPointerLeave()"
+  (focusin)="onPointerEnter()"
+  (focusout)="onPointerLeave()"
+>
+  <div class="container">
+    <div class="book-carousel__head d-flex align-items-baseline justify-content-between gap-2 mb-2">
+      <h2 class="h6 mb-0 book-carousel__title">Öne çıkanlar</h2>
+      <span class="small text-muted">En yeni yayınlar</span>
+    </div>
+
+    <div class="book-carousel__shell">
+      <button
+        type="button"
+        class="book-carousel__nav book-carousel__nav--prev"
+        aria-label="Önceki kitaplar"
+        (click)="prev()"
+      >
+        <i class="bi bi-chevron-left" aria-hidden="true"></i>
+      </button>
+
+      <ul #track class="book-carousel__track list-unstyled mb-0" tabindex="0">
+        <li *ngFor="let book of books; let i = index; trackBy: trackById" class="book-carousel__item">
+          <article
+            class="book-carousel__card"
+            [class.book-carousel__card--active]="i === activeIndex"
+          >
+            <a
+              [routerLink]="['/books', book.id]"
+              class="book-carousel__media text-decoration-none"
+              [attr.aria-label]="book.title"
+            >
+              <img
+                *ngIf="book.coverUrl; else noCover"
+                [src]="book.coverUrl"
+                [alt]="book.title"
+                class="book-carousel__cover"
+                loading="lazy"
+              />
+              <ng-template #noCover>
+                <div class="book-carousel__cover book-carousel__cover--placeholder" aria-hidden="true"></div>
+              </ng-template>
+            </a>
+            <div class="book-carousel__body">
+              <a
+                [routerLink]="['/books', book.id]"
+                class="book-carousel__book-title text-decoration-none"
+              >
+                {{ book.title }}
+              </a>
+              <p class="book-carousel__authors mb-2">{{ authorsLabel(book) }}&nbsp;</p>
+              <div class="d-flex align-items-center gap-1 mt-auto">
+                <button
+                  type="button"
+                  class="btn btn-sm book-carousel__price-btn flex-grow-1"
+                  (click)="openBook(book)"
+                >
+                  {{
+                    book.priceAmount
+                      | currency: (book.currency || 'TRY') : 'symbol' : '1.2-2' : 'tr-TR'
+                  }}
+                </button>
+                <button
+                  *ngIf="book.inStock"
+                  type="button"
+                  class="btn btn-sm book-carousel__cart-btn"
+                  [attr.aria-label]="'Sepete ekle: ' + book.title"
+                  title="Sepete ekle"
+                  (click)="onAddToCart($event, book)"
+                >
+                  <i class="bi bi-cart-plus" aria-hidden="true"></i>
+                </button>
+              </div>
+            </div>
+          </article>
+        </li>
+      </ul>
+
+      <button
+        type="button"
+        class="book-carousel__nav book-carousel__nav--next"
+        aria-label="Sonraki kitaplar"
+        (click)="next()"
+      >
+        <i class="bi bi-chevron-right" aria-hidden="true"></i>
+      </button>
+    </div>
+
+    <div class="book-carousel__dots" role="tablist" aria-label="Slayt">
+      <button
+        *ngFor="let book of books; let i = index; trackBy: trackById"
+        type="button"
+        class="book-carousel__dot"
+        [class.book-carousel__dot--active]="i === activeIndex"
+        role="tab"
+        [attr.aria-selected]="i === activeIndex"
+        [attr.aria-label]="'Kitap ' + (i + 1) + ': ' + book.title"
+        (click)="goTo(i)"
+      ></button>
+    </div>
+  </div>
+</section>

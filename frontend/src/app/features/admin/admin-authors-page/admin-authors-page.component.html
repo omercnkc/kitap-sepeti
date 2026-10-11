@@ -11,12 +11,31 @@
     </button>
   </div>
 
+  <div class="row g-2 align-items-end mb-3">
+    <div class="col-12 col-sm-6 col-md-5 col-lg-4">
+      <label class="form-label small mb-1" for="admin-author-search">Adında ara</label>
+      <input
+        id="admin-author-search"
+        type="search"
+        class="form-control form-control-sm"
+        placeholder="Adında ara…"
+        autocomplete="off"
+        maxlength="100"
+        [formControl]="searchControl"
+      />
+    </div>
+  </div>
+
   <app-spinner *ngIf="pageState === 'loading'" label="Yazarlar yükleniyor…"></app-spinner>
 
   <app-empty-state
     *ngIf="pageState === 'empty'"
-    title="Henüz yazar yok"
-    message="İlk yazarı ekleyerek kataloğu oluşturmaya başlayın."
+    [title]="qFilter ? 'Bu aramada yazar yok' : 'Henüz yazar yok'"
+    [message]="
+      qFilter
+        ? 'Arama terimini değiştirin veya yeni yazar ekleyin.'
+        : 'İlk yazarı ekleyerek kataloğu oluşturmaya başlayın.'
+    "
   ></app-empty-state>
 
   <div *ngIf="pageState === 'empty'" class="text-center mt-n2 mb-3">
@@ -48,6 +67,15 @@
             <td class="text-end text-nowrap">
               <button
                 type="button"
+                class="btn btn-sm btn-outline-primary me-1"
+                (click)="openBooks(item)"
+                [disabled]="busyId === item.id"
+              >
+                <i class="bi bi-book me-1" aria-hidden="true"></i>
+                Kitapları
+              </button>
+              <button
+                type="button"
                 class="btn btn-sm btn-outline-secondary me-1"
                 (click)="openEdit(item)"
                 [disabled]="busyId === item.id"
@@ -72,7 +100,16 @@
       <li *ngFor="let item of items; trackBy: trackById" class="border rounded p-3 mb-2">
         <div class="fw-semibold mb-1">{{ item.name }}</div>
         <div class="font-monospace small text-muted mb-2">{{ item.slug }}</div>
-        <div class="d-flex gap-2">
+        <div class="d-flex flex-wrap gap-2">
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-primary"
+            (click)="openBooks(item)"
+            [disabled]="busyId === item.id"
+          >
+            <i class="bi bi-book me-1" aria-hidden="true"></i>
+            Kitapları
+          </button>
           <button
             type="button"
             class="btn btn-sm btn-outline-secondary"

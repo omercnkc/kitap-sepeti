@@ -1,6 +1,11 @@
-<section class="container py-4">
+<app-book-carousel (addToCart)="onAddToCart($event)"></app-book-carousel>
+
+<section class="container py-4 page-task">
   <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
-    <h1 class="h4 mb-0">Kitaplar</h1>
+    <h1 class="h4 mb-0 page-task__title">
+      <i class="bi bi-book" aria-hidden="true"></i>
+      Kitaplar
+    </h1>
     <button
       type="button"
       class="btn btn-outline-secondary btn-sm d-lg-none"

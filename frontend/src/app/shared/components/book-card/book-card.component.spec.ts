@@ -44,40 +44,42 @@ describe('BookCardComponent', () => {
     expect(el.textContent).toContain('120');
   });
 
-  it('shows Tükendi when out of stock and does not emit addToCart', () => {
+  it('shows Tükendi when out of stock and hides cart button', () => {
     fixture = TestBed.createComponent(BookCardComponent);
     component = fixture.componentInstance;
     component.book = { ...book, inStock: false };
     fixture.detectChanges();
 
-    const spy = jasmine.createSpy('addToCart');
-    component.addToCart.subscribe(spy);
-
     const el = fixture.nativeElement as HTMLElement;
     expect(el.textContent).toContain('Tükendi');
-    const btn = el.querySelector('button') as HTMLButtonElement;
-    expect(btn.disabled).toBeTrue();
-    btn.click();
-    expect(spy).not.toHaveBeenCalled();
+    expect(el.querySelector('.book-card__cart-btn')).toBeNull();
   });
 
-  it('emits addToCart when in stock', () => {
+  it('emits addToCart when cart icon clicked', () => {
     const spy = jasmine.createSpy('addToCart');
     component.addToCart.subscribe(spy);
-    const btn = (fixture.nativeElement as HTMLElement).querySelector('button') as HTMLButtonElement;
+    const btn = (fixture.nativeElement as HTMLElement).querySelector(
+      '.book-card__cart-btn',
+    ) as HTMLButtonElement;
+    expect(btn.querySelector('.bi-cart-plus')).toBeTruthy();
     btn.click();
     expect(spy).toHaveBeenCalledWith(book);
   });
 
-  it('hides Sepete ekle for ADMIN', () => {
+  it('shows cart icon for ADMIN but does not emit', () => {
     isAdminSpy.and.returnValue(true);
     fixture = TestBed.createComponent(BookCardComponent);
     component = fixture.componentInstance;
     component.book = book;
     fixture.detectChanges();
 
-    const el = fixture.nativeElement as HTMLElement;
-    expect(el.querySelector('button')).toBeNull();
-    expect(el.textContent).not.toContain('Sepete ekle');
+    const spy = jasmine.createSpy('addToCart');
+    component.addToCart.subscribe(spy);
+    const btn = (fixture.nativeElement as HTMLElement).querySelector(
+      '.book-card__cart-btn',
+    ) as HTMLButtonElement;
+    expect(btn).toBeTruthy();
+    btn.click();
+    expect(spy).not.toHaveBeenCalled();
   });
 });

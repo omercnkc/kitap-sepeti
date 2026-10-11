@@ -1,12 +1,12 @@
-<header class="app-header border-bottom bg-white">
+<header class="app-header">
   <nav class="navbar navbar-expand-lg navbar-light container py-2">
     <a class="navbar-brand mb-0 flex-shrink-0" routerLink="/books" aria-label="Kitap Sepeti">
       <img
         class="app-header__logo"
         src="assets/brand/logo.png"
         alt="Kitap Sepeti"
-        width="133"
-        height="40"
+        width="186"
+        height="56"
       />
     </a>
 
@@ -26,8 +26,10 @@
             class="nav-link header-nav-btn"
             routerLink="/books"
             routerLinkActive="active"
-            >{{ booksNavLabel(currentUser$ | async) }}</a
           >
+            <i class="bi bi-book" aria-hidden="true"></i>
+            <span>{{ booksNavLabel(currentUser$ | async) }}</span>
+          </a>
         </li>
         <li class="nav-item" *ngIf="showCart$ | async">
           <a
@@ -35,6 +37,7 @@
             routerLink="/cart"
             routerLinkActive="active"
           >
+            <i class="bi bi-cart3" aria-hidden="true"></i>
             <span>Sepet</span>
             <span
               *ngIf="(cartCount$ | async) as count"
@@ -52,32 +55,40 @@
               class="nav-link header-nav-btn"
               routerLink="/account/profile"
               routerLinkActive="active"
-              >Profil</a
             >
+              <i class="bi bi-person-circle" aria-hidden="true"></i>
+              <span>Profil</span>
+            </a>
           </li>
           <li class="nav-item">
             <a
               class="nav-link header-nav-btn"
               routerLink="/account/addresses"
               routerLinkActive="active"
-              >Adreslerim</a
             >
+              <i class="bi bi-geo-alt" aria-hidden="true"></i>
+              <span>Adreslerim</span>
+            </a>
           </li>
           <li class="nav-item" *ngIf="!isAdmin(user)">
             <a
               class="nav-link header-nav-btn"
               routerLink="/orders"
               routerLinkActive="active"
-              >Siparişler</a
             >
+              <i class="bi bi-bag-check" aria-hidden="true"></i>
+              <span>Siparişler</span>
+            </a>
           </li>
           <li class="nav-item" *ngIf="isAdmin(user)">
             <a
               class="nav-link header-nav-btn"
               routerLink="/admin"
               routerLinkActive="active"
-              >Admin</a
             >
+              <i class="bi bi-shield-lock" aria-hidden="true"></i>
+              <span>Admin</span>
+            </a>
           </li>
           <li class="nav-item">
             <span class="nav-link header-nav-btn header-nav-btn--label">{{
@@ -90,7 +101,8 @@
               class="nav-link header-nav-btn"
               (click)="logout()"
             >
-              Çıkış
+              <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
+              <span>Çıkış</span>
             </button>
           </li>
         </ng-container>
@@ -100,16 +112,20 @@
               class="nav-link header-nav-btn"
               routerLink="/login"
               routerLinkActive="active"
-              >Giriş</a
             >
+              <i class="bi bi-box-arrow-in-right" aria-hidden="true"></i>
+              <span>Giriş</span>
+            </a>
           </li>
           <li class="nav-item">
             <a
               class="nav-link header-nav-btn"
               routerLink="/register"
               routerLinkActive="active"
-              >Kayıt</a
             >
+              <i class="bi bi-person-plus" aria-hidden="true"></i>
+              <span>Kayıt</span>
+            </a>
           </li>
         </ng-template>
       </ul>
@@ -129,8 +145,8 @@
         class="app-header__logo app-header__logo--menu"
         src="assets/brand/logo.png"
         alt="Kitap Sepeti"
-        width="133"
-        height="40"
+        width="186"
+        height="56"
       />
     </a>
     <button
@@ -148,7 +164,8 @@
         routerLinkActive="active"
         (click)="offcanvas.dismiss()"
       >
-        {{ booksNavLabel(currentUser$ | async) }}
+        <i class="bi bi-book" aria-hidden="true"></i>
+        <span>{{ booksNavLabel(currentUser$ | async) }}</span>
       </a>
       <a
         *ngIf="showCart$ | async"
@@ -157,6 +174,7 @@
         routerLinkActive="active"
         (click)="offcanvas.dismiss()"
       >
+        <i class="bi bi-cart3" aria-hidden="true"></i>
         <span>Sepet</span>
         <span
           *ngIf="(cartCount$ | async) as count"
@@ -174,7 +192,8 @@
           routerLinkActive="active"
           (click)="offcanvas.dismiss()"
         >
-          Profil
+          <i class="bi bi-person-circle" aria-hidden="true"></i>
+          <span>Profil</span>
         </a>
         <a
           class="nav-link header-nav-btn"
@@ -182,7 +201,8 @@
           routerLinkActive="active"
           (click)="offcanvas.dismiss()"
         >
-          Adreslerim
+          <i class="bi bi-geo-alt" aria-hidden="true"></i>
+          <span>Adreslerim</span>
         </a>
         <a
           *ngIf="!isAdmin(user)"
@@ -191,7 +211,8 @@
           routerLinkActive="active"
           (click)="offcanvas.dismiss()"
         >
-          Siparişler
+          <i class="bi bi-bag-check" aria-hidden="true"></i>
+          <span>Siparişler</span>
         </a>
         <a
           *ngIf="isAdmin(user)"
@@ -200,7 +221,8 @@
           routerLinkActive="active"
           (click)="offcanvas.dismiss()"
         >
-          Admin
+          <i class="bi bi-shield-lock" aria-hidden="true"></i>
+          <span>Admin</span>
         </a>
         <span class="nav-link header-nav-btn header-nav-btn--label">{{
           displayName(user)
@@ -210,7 +232,8 @@
           class="nav-link header-nav-btn text-start"
           (click)="logout(); offcanvas.dismiss()"
         >
-          Çıkış
+          <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
+          <span>Çıkış</span>
         </button>
       </ng-container>
       <ng-template #mobileGuest>
@@ -220,7 +243,8 @@
           routerLinkActive="active"
           (click)="offcanvas.dismiss()"
         >
-          Giriş
+          <i class="bi bi-box-arrow-in-right" aria-hidden="true"></i>
+          <span>Giriş</span>
         </a>
         <a
           class="nav-link header-nav-btn"
@@ -228,7 +252,8 @@
           routerLinkActive="active"
           (click)="offcanvas.dismiss()"
         >
-          Kayıt
+          <i class="bi bi-person-plus" aria-hidden="true"></i>
+          <span>Kayıt</span>
         </a>
       </ng-template>
     </nav>

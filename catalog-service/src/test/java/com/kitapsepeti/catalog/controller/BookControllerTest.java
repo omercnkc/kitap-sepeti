@@ -87,8 +87,8 @@ class BookControllerTest extends ApiTestSupport {
 
 	@Test
 	void titleSearchMatchesCaseInsensitiveAndCombinesWithCategory() throws Exception {
-		Category roman = categoryRepository.save(new Category(null, "Roman", "roman"));
-		Category bilim = categoryRepository.save(new Category(null, "Bilim", "bilim"));
+		Category roman = categoryRepository.save(new Category("Roman", "roman"));
+		Category bilim = categoryRepository.save(new Category("Bilim", "bilim"));
 		save(withCategories(book("Watchmen", "10.00"), roman));
 		save(withCategories(book("Moby-Dick", "20.00"), roman));
 		save(withCategories(book("Başka Kitap", "30.00"), bilim));
@@ -107,12 +107,12 @@ class BookControllerTest extends ApiTestSupport {
 	}
 
 	@Test
-	void categoryFilterIncludesSubcategoriesAndReturnsEachBookOnce() throws Exception {
-		Category edebiyat = categoryRepository.save(new Category(null, "Edebiyat", "edebiyat"));
-		Category roman = categoryRepository.save(new Category(edebiyat, "Roman", "roman"));
-		Category oyku = categoryRepository.save(new Category(edebiyat, "Öykü", "oyku"));
-		Category polisiye = categoryRepository.save(new Category(roman, "Polisiye", "polisiye"));
-		Category bilim = categoryRepository.save(new Category(null, "Bilim", "bilim"));
+	void categoryFilterMatchesOnlyDirectAssignmentsAndReturnsEachBookOnce() throws Exception {
+		Category edebiyat = categoryRepository.save(new Category("Edebiyat", "edebiyat"));
+		Category roman = categoryRepository.save(new Category("Roman", "roman"));
+		Category oyku = categoryRepository.save(new Category("Öykü", "oyku"));
+		Category polisiye = categoryRepository.save(new Category("Polisiye", "polisiye"));
+		Category bilim = categoryRepository.save(new Category("Bilim", "bilim"));
 		save(withCategories(book("Roman Kitabı", "10.00"), roman));
 		save(withCategories(book("Öykü Kitabı", "20.00"), oyku));
 		save(withCategories(book("İkisi Birden", "30.00"), roman, oyku));
@@ -120,12 +120,10 @@ class BookControllerTest extends ApiTestSupport {
 		save(withCategories(book("Genel Edebiyat", "50.00"), edebiyat));
 		save(withCategories(book("Bilim Kitabı", "60.00"), bilim));
 
-		mockMvc.perform(get("/api/books?sort=price_asc&categoryId=" + edebiyat.getId()))
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.items[*].title",
-					contains("Roman Kitabı", "Öykü Kitabı", "İkisi Birden", "Polisiye Kitabı", "Genel Edebiyat")))
-			.andExpect(jsonPath("$.totalElements").value(5));
-		assertTitles("categoryId=" + roman.getId(), "Roman Kitabı", "İkisi Birden", "Polisiye Kitabı");
+		assertTitles("categoryId=" + edebiyat.getId(), "Genel Edebiyat");
+		assertTitles("categoryId=" + roman.getId(), "Roman Kitabı", "İkisi Birden");
+		assertTitles("categoryId=" + polisiye.getId(), "Polisiye Kitabı");
+		assertTitles("categoryId=" + bilim.getId(), "Bilim Kitabı");
 		assertTitles("categoryId=" + UUID.randomUUID());
 	}
 
@@ -226,8 +224,8 @@ class BookControllerTest extends ApiTestSupport {
 	void detailOfPublishedBookContainsRelationsButNoInternalFields() throws Exception {
 		Author zeynep = authorRepository.save(new Author("Zeynep", "zeynep"));
 		Author ali = authorRepository.save(new Author("Ali", "ali"));
-		Category roman = categoryRepository.save(new Category(null, "Roman", "roman"));
-		Category oyku = categoryRepository.save(new Category(null, "Öykü", "oyku"));
+		Category roman = categoryRepository.save(new Category("Roman", "roman"));
+		Category oyku = categoryRepository.save(new Category("Öykü", "oyku"));
 		Book book = book("Detaylı Kitap", "42.50");
 		book.setIsbn("9786050009999");
 		book.setDescription("Açıklama");
