@@ -18,11 +18,13 @@ spring:
       timeout: ${REDIS_TIMEOUT:500ms}
   cloud:
     gateway:
-      filter:
-        request-rate-limiter:
-          deny-empty-key: false
       server:
         webflux:
+          # throw-on-limit: 429'u HttpClientErrorException olarak firlat → Problem Details handler.
+          filter:
+            request-rate-limiter:
+              deny-empty-key: false
+              throw-on-limit: true
           # Daha spesifik route'lar (Method + dar Path) once; order dusuk = oncelik yuksek.
           routes: &gateway_routes
             - id: auth
@@ -195,7 +197,9 @@ app:
   # Token-bucket dokumantasyonu (replenishRate = token/saniye). Filtreler env ile okur.
   # Env: AUTH_RATE_REPLENISH/BURST, CATALOG_READ_RATE_*, CART_RATE_*, CHECKOUT_RATE_*,
   # DEFAULT_RATE_*, WEBHOOK_RATE_*.
+  # retry-after-seconds: 429 Retry-After (sabit; X-RateLimit-* kalan token'dan turetilmez).
   rate-limit:
+    retry-after-seconds: ${RATE_LIMIT_RETRY_AFTER_SECONDS:60}
     auth:
       replenish-rate: ${AUTH_RATE_REPLENISH:1}
       burst-capacity: ${AUTH_RATE_BURST:10}

@@ -32,7 +32,7 @@ Redis erişilemezse istek rate limit uygulanmadan devam eder. Prod fail-closed s
 | default | diğer `/api/**` | 100 / 60s | user→IP |
 | webhook | `/webhooks/**` | 60 / 60s | IP |
 
-Adım 0–4 tamam; sıradaki: **Adım 5 — 429 Problem Details**.
+Adım 0–5 tamam; sıradaki: **Adım 6 — Testler**.
 
 ---
 
@@ -72,21 +72,19 @@ Durum: ✅ tamamlandı — 2026-10-12
 
 **FAIL-OPEN:** `RedisRateLimiter` Redis hata/timeout’ta allow (`onErrorResume` → allowed); kısa `connect-timeout`/`timeout`. Bilinen kısıt: Redis yavaşken istek latency artabilir (timeout kadar bekler), yine de 429 değil allow.
 
-Sıradaki iş: **Adım 5 — 429 Problem Details** (`Retry-After`, mevcut 401 stili).
-
 **Dokunulan:** `api-gateway/.../application.yml`, `src/test/resources/application.properties` (yalnızca env override; test’te `application.yml` koyma — main yml’i ezer), route config testi
 
 ---
 
 ## Adım 5 — 429 yanıtı (2–3 saat)
 
-1. Gateway default 429’u mevcut **Problem Details** stiline çek
-   (`type`/`title`/`status`/`detail`/`code` — diğer 401’lerle uyumlu)
-2. Header: `Retry-After` (saniye)
-3. `X-Request-Id` korunsun (zaten global filter var)
-4. Opsiyonel: `RateLimitExceeded` benzeri bir `code` (gateway’e özel; common’a zorla taşımak şart değil)
+Durum: ✅ tamamlandı — 2026-10-12
 
-**Dokunulan:** küçük bir `WebExceptionHandler` / filter customizer
+**Ne eklendi:** `throw-on-limit: true` + `RateLimitExceededExceptionHandler` (`WebExceptionHandler` @Order -2). Body: `type=about:blank`, `title=İstek sınırı aşıldı`, `status=429`, `detail` (TR), `instance=path`, `code=RATE_LIMIT_EXCEEDED`; `Content-Type: application/problem+json`. **Retry-After:** sabit `app.rate-limit.retry-after-seconds` (varsayılan 60); X-RateLimit-* kalan token’dan türetilmez. X-Request-Id bozulmaz.
+
+Sıradaki iş: **Adım 6 — Testler** (Testcontainers Redis / E2E 429 senaryoları).
+
+**Dokunulan:** `RateLimitExceededExceptionHandler`, `application.yml`, unit test
 
 ---
 
