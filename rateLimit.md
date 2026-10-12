@@ -32,7 +32,7 @@ Redis erişilemezse istek rate limit uygulanmadan devam eder. Prod fail-closed s
 | default | diğer `/api/**` | 100 / 60s | user→IP |
 | webhook | `/webhooks/**` | 60 / 60s | IP |
 
-Adım 0–5 tamam; sıradaki: **Adım 6 — Testler**.
+Adım 0–6 tamam; sıradaki: **Adım 7 — Frontend** (opsiyonel) veya **Adım 8 — Doğrulama & dokümantasyon**.
 
 ---
 
@@ -82,24 +82,21 @@ Durum: ✅ tamamlandı — 2026-10-12
 
 **Ne eklendi:** `throw-on-limit: true` + `RateLimitExceededExceptionHandler` (`WebExceptionHandler` @Order -2). Body: `type=about:blank`, `title=İstek sınırı aşıldı`, `status=429`, `detail` (TR), `instance=path`, `code=RATE_LIMIT_EXCEEDED`; `Content-Type: application/problem+json`. **Retry-After:** sabit `app.rate-limit.retry-after-seconds` (varsayılan 60); X-RateLimit-* kalan token’dan türetilmez. X-Request-Id bozulmaz.
 
-Sıradaki iş: **Adım 6 — Testler** (Testcontainers Redis / E2E 429 senaryoları).
-
 **Dokunulan:** `RateLimitExceededExceptionHandler`, `application.yml`, unit test
 
 ---
 
 ## Adım 6 — Testler (3–4 saat)
 
-1. Testcontainers Redis (veya embedded) ile gateway testi
-2. Senaryolar:
-   - auth: N+1. istek → **429**
-   - limit altı → **200/401** (normal akış bozulmasın)
-   - farklı IP’ler birbirini etkilemesin
-   - JWT’li cart: aynı user kotası paylaşsın
-3. Mevcut JWT/CORS/route testlerinin kırılmadığını doğrula
-   `.\mvnw.cmd -pl api-gateway -am test`
+Durum: ✅ tamamlandı — 2026-10-12
 
-**Dokunulan:** `api-gateway/src/test/...`
+**Ne eklendi:** `RateLimitIT` — Testcontainers `RedisContainer` (`redis:7-alpine`, `@ServiceConnection`); IT-only düşük `AUTH_RATE_*` / `CART_RATE_*` (burst=2); WireMock + JWT (JwtAuthFilterTest stili). Senaryolar: auth burst+1 → 429 Problem Details; limit altı ≠429; farklı XFF ayrı kota; cart aynı/farklı `sub`. Global `application.properties` 100000 dokunulmadı. Surefire `*IT` include. Docker daemon gerekir.
+
+**Bugfix (JWT + 429):** `JwtAuthGlobalFilter` içindeki geniş `onErrorResume`, `chain.filter` sonrası rate-limit 429’unu yakalayıp 401 `INVALID_TOKEN` yapıyordu; `onErrorResume` yalnızca JWKS hatalarına daraltıldı.
+
+Sıradaki iş: **Adım 7 — Frontend** (429 toast) veya **Adım 8 — Doğrulama & docs**.
+
+**Dokunulan:** `api-gateway/pom.xml` (testcontainers), `RateLimitIT.java`, `JwtAuthGlobalFilter.java` (429 yutma fix)
 
 ---
 

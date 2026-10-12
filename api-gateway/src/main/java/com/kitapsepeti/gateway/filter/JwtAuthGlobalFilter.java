@@ -134,7 +134,14 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
 		}
 
 		String kid = signedJwt.getHeader().getKeyID();
+		// onErrorResume yalnızca JWKS hatalarına; chain.filter (örn. rate-limit 429) yutulmamalı.
 		return this.jwksKeyProvider.getKey(kid)
+				.onErrorResume(ex -> {
+					log.warn("Failed to retrieve verification key: {}", ex.getMessage());
+					return onError(exchange, HttpStatus.UNAUTHORIZED, "INVALID_TOKEN",
+							"Geçersiz kimlik doğrulama belirteci", "Belirteç doğrulama anahtarı temin edilemedi.")
+							.then(Mono.empty());
+				})
 				.flatMap(jwk -> {
 					try {
 						if (!(jwk instanceof RSAKey rsaKey)) {
@@ -177,11 +184,6 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
 						return onError(exchange, HttpStatus.UNAUTHORIZED, "INVALID_TOKEN",
 								"Geçersiz kimlik doğrulama belirteci", "Belirteç doğrulama sırasında hata oluştu.");
 					}
-				})
-				.onErrorResume(ex -> {
-					log.warn("Failed to retrieve verification key: {}", ex.getMessage());
-					return onError(exchange, HttpStatus.UNAUTHORIZED, "INVALID_TOKEN",
-							"Geçersiz kimlik doğrulama belirteci", "Belirteç doğrulama anahtarı temin edilemedi.");
 				});
 	}
 
