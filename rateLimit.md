@@ -32,7 +32,7 @@ Redis erişilemezse istek rate limit uygulanmadan devam eder. Prod fail-closed s
 | default | diğer `/api/**` | 100 / 60s | user→IP |
 | webhook | `/webhooks/**` | 60 / 60s | IP |
 
-Sıradaki iş: **Adım 1 — Redis infra** (`docker-compose`); henüz gateway rate-limit kodu yok.
+Adım 0–2 tamam; sıradaki: **Adım 3 — KeyResolver**.
 
 ---
 
@@ -42,16 +42,15 @@ Durum: ✅ tamamlandı — 2026-10-12
 
 **Ne eklendi:** `redis:7-alpine` (`kitapsepeti-redis`, `127.0.0.1:6379`, healthcheck `redis-cli ping`, volume yok); `api-gateway` → `depends_on: redis` (healthy) + `REDIS_HOST`/`REDIS_PORT`; `.env.example` + `docs/docker.md` Redis notları.
 
-Sıradaki iş: **Adım 2 — Gateway bağımlılıkları** (`pom.xml` + Redis bağlantı ayarı); henüz KeyResolver / route rate-limit kodu yok.
-
 ---
 
 ## Adım 2 — Gateway bağımlılıkları (1 saat)
 
-1. `api-gateway/pom.xml`: Redis + rate limiter için gereken starter’lar
-   (`spring-boot-starter-data-redis-reactive` + Gateway `RequestRateLimiter` filter’ı)
-2. `application.yml`: `spring.data.redis.host/port`
-3. Gateway Redis’e bağlanmadan ayağa kalkıyorsa / kalkmıyorsa bunu Adım 0 kararına göre sabitle
+Durum: ✅ tamamlandı — 2026-10-12
+
+**Ne eklendi:** `spring-boot-starter-data-redis-reactive`; `spring.data.redis.host/port` (`REDIS_HOST`/`REDIS_PORT`); `management.health.redis.enabled=false` (FAIL-OPEN — Redis DOWN iken gateway health/startup bozulmaz). Route filter / KeyResolver yok.
+
+Sıradaki iş: **Adım 3 — KeyResolver** (`IpKeyResolver`, `UserOrIpKeyResolver`); henüz route `RequestRateLimiter` / 429 handler yok.
 
 **Dokunulan:** `api-gateway/pom.xml`, `application.yml`
 

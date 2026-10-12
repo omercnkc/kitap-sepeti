@@ -7,6 +7,12 @@ spring:
   # Kapak multipart (~5 MB dosya); varsayılan codec limiti küçük kalır.
   codec:
     max-in-memory-size: 6MB
+  # Rate limit (Adım 2+). Compose: REDIS_HOST=redis; lokal spring-boot:run: localhost.
+  # Lettuce lazy connect; Redis yokken context fail-fast açılmaz (FAIL-OPEN, Adım 0).
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
   cloud:
     gateway:
       server:
@@ -50,6 +56,10 @@ management:
   endpoint:
     health:
       show-details: never
+  # Redis DOWN olsa bile /actuator/health UP kalsın (FAIL-OPEN; readiness'e bağlama Adım 8 opsiyonel).
+  health:
+    redis:
+      enabled: false
 
 app:
   jwt:
