@@ -55,6 +55,20 @@ services:
       retries: 10
       start_period: 30s
 
+  # Rate limit sayaçları (api-gateway). v1'de volume yok; container silinince sayaçlar sıfırlanır.
+  redis:
+    image: redis:7-alpine
+    container_name: kitapsepeti-redis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
   user-service:
     build:
       context: .
@@ -305,6 +319,8 @@ services:
     ports:
       - "8080:8080"
     depends_on:
+      redis:
+        condition: service_healthy
       user-service:
         condition: service_healthy
       catalog-service:
@@ -325,6 +341,9 @@ services:
       PAYMENT_SERVICE_URL: http://payment-service:8087
       NOTIFICATION_SERVICE_URL: http://notification-service:8087
       JWKS_URL: http://user-service:8081/.well-known/jwks.json
+      # Rate limit (Adım 2+). Compose ağı: servis adı redis. Lokal spring-boot:run → localhost.
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "--max-time", "4", "-o", "/dev/null", "http://localhost:8080/actuator/health"]
       interval: 10s

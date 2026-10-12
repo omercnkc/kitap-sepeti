@@ -12,9 +12,26 @@ docker compose ps        # … api-gateway, frontend → healthy
 Volume'ları silen `docker compose down -v` veritabanını ve kuyrukları da siler; durdurmak için `docker compose stop`.
 Yerelde `spring-boot:run` ile açık bir servis varsa aynı portu kullandığı için önce o kapatılmalı.
 
-Host portları yalnızca `127.0.0.1`'e bağlıdır (8081, 8082, 8083, 8087, 3306, 5672, 15672, adminer 8090): makinenin kendisinden
+Host portları yalnızca `127.0.0.1`'e bağlıdır (8081, 8082, 8083, 8087, 8088, 3306, 5672, 15672, 6379, adminer 8090): makinenin kendisinden
 `localhost` ile erişilir, ağdaki başka cihazlardan erişilemez. Container'lar birbirine compose ağı üzerinden servis
-adıyla bağlanır (`mysql:3306`, `rabbitmq:5672`, `user-service:8081`, `catalog-service:8082`); bu bağlama etkilenmez.
+adıyla bağlanır (`mysql:3306`, `rabbitmq:5672`, `redis:6379`, `user-service:8081`, `catalog-service:8082`); bu bağlama etkilenmez.
+
+## Redis
+
+api-gateway rate limit sayaçları için in-memory store (`redis:7-alpine`). Volume yok (v1); container silinince sayaçlar sıfırlanır.
+
+| | |
+|---|---|
+| Container | `kitapsepeti-redis` |
+| Host port | `127.0.0.1:6379` → container `6379` |
+| Health | `redis-cli ping` → `PONG` (compose healthcheck) |
+
+Compose'da `api-gateway` için sabit: `REDIS_HOST=redis`, `REDIS_PORT=6379`. Lokal `spring-boot:run` için `.env`'de `REDIS_HOST=localhost`, `REDIS_PORT=6379`.
+
+```powershell
+docker compose up -d redis
+docker compose exec redis redis-cli ping   # PONG
+```
 
 ## catalog-service
 
@@ -192,10 +209,11 @@ docker compose logs -f order-service
 | Health | `/actuator/health` (yalnızca `status`) |
 | Rol | İstemcinin tüm mikroservislere erişeceği tek giriş kapısı |
 
-Compose'da sabit verilenler: `SERVER_PORT=8080`, `USER_SERVICE_URL=http://user-service:8081`, `CATALOG_SERVICE_URL=http://catalog-service:8082`, `CART_SERVICE_URL=http://cart-service:8083`, `ORDER_SERVICE_URL=http://order-service:8088`, `SEARCH_SERVICE_URL=http://search-service:8084`, `PAYMENT_SERVICE_URL=http://payment-service:8087`, `NOTIFICATION_SERVICE_URL=http://notification-service:8087`, `JWKS_URL=http://user-service:8081/.well-known/jwks.json`.
+Compose'da sabit verilenler: `SERVER_PORT=8080`, `USER_SERVICE_URL=http://user-service:8081`, `CATALOG_SERVICE_URL=http://catalog-service:8082`, `CART_SERVICE_URL=http://cart-service:8083`, `ORDER_SERVICE_URL=http://order-service:8088`, `SEARCH_SERVICE_URL=http://search-service:8084`, `PAYMENT_SERVICE_URL=http://payment-service:8087`, `NOTIFICATION_SERVICE_URL=http://notification-service:8087`, `JWKS_URL=http://user-service:8081/.well-known/jwks.json`, `REDIS_HOST=redis`, `REDIS_PORT=6379`.
 
 Bağımlılıklar:
-- `user-service`, `catalog-service`, `cart-service`, `payment-service` ve `order-service` healthy olduktan sonra başlar.
+- `redis`, `user-service`, `catalog-service`, `cart-service`, `payment-service` ve `order-service` healthy olduktan sonra başlar.
+- Redis şimdilik yalnızca rate limit için (gateway Java tarafı Adım 2+); Redis kapalıysa v1 politikası FAIL-OPEN.
 - Her gelen isteğe correlation tracing için `X-Request-Id` ekler (yoksa üretir, yanıta da yansıtır).
 - Angular UI (`http://localhost:4200`) için tam CORS desteği sunar.
 - Reaktif JWT doğrulaması ve JWKS cache mekanizması barındırır.
