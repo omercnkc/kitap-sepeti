@@ -4,48 +4,173 @@ server:
 spring:
   application:
     name: api-gateway
-  # Kapak multipart (~5 MB dosya); varsayılan codec limiti küçük kalır.
+  # Kapak multipart (~5 MB dosya); varsayilan codec limiti kucuk kalir.
   codec:
     max-in-memory-size: 6MB
-  # Rate limit (Adım 2+). Compose: REDIS_HOST=redis; lokal spring-boot:run: localhost.
-  # Lettuce lazy connect; Redis yokken context fail-fast açılmaz (FAIL-OPEN, Adım 0).
+  # Rate limit (Adim 2+). Compose: REDIS_HOST=redis; lokal spring-boot:run: localhost.
+  # Lettuce lazy connect; Redis yokken context fail-fast acilmaz (FAIL-OPEN, Adim 0).
+  # Kisa timeout: Redis DOWN iken istekler RedisRateLimiter onErrorResume ile allow olur.
   data:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:500ms}
+      timeout: ${REDIS_TIMEOUT:500ms}
   cloud:
     gateway:
+      filter:
+        request-rate-limiter:
+          deny-empty-key: false
       server:
         webflux:
+          # Daha spesifik route'lar (Method + dar Path) once; order dusuk = oncelik yuksek.
           routes: &gateway_routes
-            - id: user-service
+            - id: auth
               uri: ${USER_SERVICE_URL:http://localhost:8081}
+              order: 0
               predicates:
-                - Path=/api/auth/**, /api/me/**
-            - id: catalog-service
+                - Path=/api/auth/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@ipKeyResolver}"
+                    redis-rate-limiter.replenishRate: ${AUTH_RATE_REPLENISH:1}
+                    redis-rate-limiter.burstCapacity: ${AUTH_RATE_BURST:10}
+                    redis-rate-limiter.requestedTokens: 1
+
+            - id: user-me
+              uri: ${USER_SERVICE_URL:http://localhost:8081}
+              order: 0
+              predicates:
+                - Path=/api/me,/api/me/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@userOrIpKeyResolver}"
+                    redis-rate-limiter.replenishRate: ${DEFAULT_RATE_REPLENISH:2}
+                    redis-rate-limiter.burstCapacity: ${DEFAULT_RATE_BURST:100}
+                    redis-rate-limiter.requestedTokens: 1
+
+            - id: catalog-public
               uri: ${CATALOG_SERVICE_URL:http://localhost:8082}
+              order: 0
               predicates:
-                - Path=/api/books/**, /api/categories/**, /api/admin/**
-            - id: cart-service
+                - Method=GET
+                - Path=/api/books,/api/books/**,/api/categories,/api/categories/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@ipKeyResolver}"
+                    redis-rate-limiter.replenishRate: ${CATALOG_READ_RATE_REPLENISH:2}
+                    redis-rate-limiter.burstCapacity: ${CATALOG_READ_RATE_BURST:120}
+                    redis-rate-limiter.requestedTokens: 1
+
+            - id: catalog-write
+              uri: ${CATALOG_SERVICE_URL:http://localhost:8082}
+              order: 10
+              predicates:
+                - Method=POST,PUT,PATCH,DELETE
+                - Path=/api/books,/api/books/**,/api/categories,/api/categories/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@userOrIpKeyResolver}"
+                    redis-rate-limiter.replenishRate: ${DEFAULT_RATE_REPLENISH:2}
+                    redis-rate-limiter.burstCapacity: ${DEFAULT_RATE_BURST:100}
+                    redis-rate-limiter.requestedTokens: 1
+
+            - id: catalog-admin
+              uri: ${CATALOG_SERVICE_URL:http://localhost:8082}
+              order: 10
+              predicates:
+                - Path=/api/admin,/api/admin/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@userOrIpKeyResolver}"
+                    redis-rate-limiter.replenishRate: ${DEFAULT_RATE_REPLENISH:2}
+                    redis-rate-limiter.burstCapacity: ${DEFAULT_RATE_BURST:100}
+                    redis-rate-limiter.requestedTokens: 1
+
+            - id: cart
               uri: ${CART_SERVICE_URL:http://localhost:8083}
+              order: 0
               predicates:
-                - Path=/api/cart/**
-            - id: order-service
+                - Path=/api/cart,/api/cart/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@userOrIpKeyResolver}"
+                    redis-rate-limiter.replenishRate: ${CART_RATE_REPLENISH:1}
+                    redis-rate-limiter.burstCapacity: ${CART_RATE_BURST:60}
+                    redis-rate-limiter.requestedTokens: 1
+
+            - id: orders-checkout
               uri: ${ORDER_SERVICE_URL:http://localhost:8088}
+              order: 0
               predicates:
-                - Path=/api/orders/**
-            - id: search-service
+                - Method=POST
+                - Path=/api/orders/checkout
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@userOrIpKeyResolver}"
+                    redis-rate-limiter.replenishRate: ${CHECKOUT_RATE_REPLENISH:1}
+                    redis-rate-limiter.burstCapacity: ${CHECKOUT_RATE_BURST:5}
+                    redis-rate-limiter.requestedTokens: 1
+
+            - id: orders
+              uri: ${ORDER_SERVICE_URL:http://localhost:8088}
+              order: 10
+              predicates:
+                - Path=/api/orders,/api/orders/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@userOrIpKeyResolver}"
+                    redis-rate-limiter.replenishRate: ${DEFAULT_RATE_REPLENISH:2}
+                    redis-rate-limiter.burstCapacity: ${DEFAULT_RATE_BURST:100}
+                    redis-rate-limiter.requestedTokens: 1
+
+            # search/notification: ghost route; default tier (skip yok)
+            - id: search
               uri: ${SEARCH_SERVICE_URL:http://localhost:8084}
+              order: 0
               predicates:
-                - Path=/api/search/**, /api/suggest/**
-            - id: notification-service
+                - Path=/api/search,/api/search/**,/api/suggest,/api/suggest/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@userOrIpKeyResolver}"
+                    redis-rate-limiter.replenishRate: ${DEFAULT_RATE_REPLENISH:2}
+                    redis-rate-limiter.burstCapacity: ${DEFAULT_RATE_BURST:100}
+                    redis-rate-limiter.requestedTokens: 1
+
+            - id: notification
               uri: ${NOTIFICATION_SERVICE_URL:http://localhost:8087}
+              order: 0
               predicates:
-                - Path=/api/notifications/**, /api/preferences/**
+                - Path=/api/notifications,/api/notifications/**,/api/preferences,/api/preferences/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@userOrIpKeyResolver}"
+                    redis-rate-limiter.replenishRate: ${DEFAULT_RATE_REPLENISH:2}
+                    redis-rate-limiter.burstCapacity: ${DEFAULT_RATE_BURST:100}
+                    redis-rate-limiter.requestedTokens: 1
+
             - id: payment-webhook
               uri: ${PAYMENT_SERVICE_URL:http://localhost:8087}
+              order: 0
               predicates:
-                - Path=/webhooks/**, /api/webhooks/**
+                - Path=/webhooks/**,/api/webhooks/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@ipKeyResolver}"
+                    redis-rate-limiter.replenishRate: ${WEBHOOK_RATE_REPLENISH:1}
+                    redis-rate-limiter.burstCapacity: ${WEBHOOK_RATE_BURST:60}
+                    redis-rate-limiter.requestedTokens: 1
       routes: *gateway_routes
 
 management:
@@ -56,7 +181,7 @@ management:
   endpoint:
     health:
       show-details: never
-  # Redis DOWN olsa bile /actuator/health UP kalsın (FAIL-OPEN; readiness'e bağlama Adım 8 opsiyonel).
+  # Redis DOWN olsa bile /actuator/health UP kalsin (FAIL-OPEN; readiness'e baglama Adim 8 opsiyonel).
   health:
     redis:
       enabled: false
@@ -67,3 +192,25 @@ app:
     cache-ttl-seconds: ${JWT_CACHE_TTL_SECONDS:300}
     protected-paths:
       - /api/protected/**
+  # Token-bucket dokumantasyonu (replenishRate = token/saniye). Filtreler env ile okur.
+  # Env: AUTH_RATE_REPLENISH/BURST, CATALOG_READ_RATE_*, CART_RATE_*, CHECKOUT_RATE_*,
+  # DEFAULT_RATE_*, WEBHOOK_RATE_*.
+  rate-limit:
+    auth:
+      replenish-rate: ${AUTH_RATE_REPLENISH:1}
+      burst-capacity: ${AUTH_RATE_BURST:10}
+    catalog-read:
+      replenish-rate: ${CATALOG_READ_RATE_REPLENISH:2}
+      burst-capacity: ${CATALOG_READ_RATE_BURST:120}
+    cart:
+      replenish-rate: ${CART_RATE_REPLENISH:1}
+      burst-capacity: ${CART_RATE_BURST:60}
+    checkout:
+      replenish-rate: ${CHECKOUT_RATE_REPLENISH:1}
+      burst-capacity: ${CHECKOUT_RATE_BURST:5}
+    default:
+      replenish-rate: ${DEFAULT_RATE_REPLENISH:2}
+      burst-capacity: ${DEFAULT_RATE_BURST:100}
+    webhook:
+      replenish-rate: ${WEBHOOK_RATE_REPLENISH:1}
+      burst-capacity: ${WEBHOOK_RATE_BURST:60}

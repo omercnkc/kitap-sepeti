@@ -32,7 +32,7 @@ Redis erişilemezse istek rate limit uygulanmadan devam eder. Prod fail-closed s
 | default | diğer `/api/**` | 100 / 60s | user→IP |
 | webhook | `/webhooks/**` | 60 / 60s | IP |
 
-Adım 0–3 tamam; sıradaki: **Adım 4 — Route bazlı limitler**.
+Adım 0–4 tamam; sıradaki: **Adım 5 — 429 Problem Details**.
 
 ---
 
@@ -60,25 +60,21 @@ Durum: ✅ tamamlandı — 2026-10-12
 
 **Ne eklendi:** bean `ipKeyResolver` (XFF ilk hop → remoteAddress → `unknown`); bean `userOrIpKeyResolver` (@Primary; `user:<X-User-Id>` veya `ip:<aynı IP mantığı>`). JWT yeniden parse yok; `X-User-Id` JwtAuthGlobalFilter sonrası. Route `RequestRateLimiter` yok.
 
-Sıradaki iş: **Adım 4 — Route bazlı limitler** (`#{@ipKeyResolver}` / `#{@userOrIpKeyResolver}` + tier tablosu).
-
 **Dokunulan:** `api-gateway/.../ratelimit/`, unit test
 
 ---
 
 ## Adım 4 — Route bazlı limitler (2–3 saat)
 
-1. Mevcut route listesini **böl** veya aynı URI’ye birden fazla route + `order` ile önceliklendir:
-   - `auth` (sıkı, IP)
-   - `catalog-public` (orta, IP) — mümkünse yalnızca GET; admin ayrı kalsın
-   - `cart` (user)
-   - `orders` / checkout (sıkı, user)
-   - `payment-webhook` (IP)
-   - `default` catch-all (gevşek)
-2. Her route’a `RequestRateLimiter` filter + `redis-rate-limiter.replenishRate` / `burstCapacity` / `requestedTokens`
-3. Değerleri `app.rate-limit.*` altında topla; env ile override (`AUTH_RATE_REPLENISH` vb.)
+Durum: ✅ tamamlandı — 2026-10-12
 
-**Dokunulan:** `application.yml` (asıl iş burası)
+**Ne eklendi:** route id’ler `auth`, `user-me`, `catalog-public` (GET), `catalog-write`, `catalog-admin`, `cart`, `orders-checkout` (POST), `orders`, `search`, `notification`, `payment-webhook` + `RequestRateLimiter`. Tier token-bucket (`app.rate-limit.*` / env): auth 1/10, catalog-read 2/120, cart 1/60, checkout 1/5, default 2/100, webhook 1/60. Search/notification: default tier (skip yok). 429 body hâlâ Gateway default (Adım 5).
+
+**FAIL-OPEN:** `RedisRateLimiter` Redis hata/timeout’ta allow (`onErrorResume` → allowed); kısa `connect-timeout`/`timeout`. Bilinen kısıt: Redis yavaşken istek latency artabilir (timeout kadar bekler), yine de 429 değil allow.
+
+Sıradaki iş: **Adım 5 — 429 Problem Details** (`Retry-After`, mevcut 401 stili).
+
+**Dokunulan:** `api-gateway/.../application.yml`, `src/test/resources/application.properties` (yalnızca env override; test’te `application.yml` koyma — main yml’i ezer), route config testi
 
 ---
 
