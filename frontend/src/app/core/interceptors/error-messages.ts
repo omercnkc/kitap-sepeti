@@ -30,6 +30,7 @@ export const ERROR_CODE_MESSAGES: Readonly<Record<string, string>> = {
   CHECKOUT_INTERRUPTED: 'Ödeme kesintiye uğradı; sipariş durumunu kontrol edin.',
   CATALOG_UNAVAILABLE: 'Katalog şu an kullanılamıyor; biraz sonra tekrar deneyin.',
   AUTHENTICATION_UNAVAILABLE: 'Kimlik doğrulama şu an kullanılamıyor; biraz sonra tekrar deneyin.',
+  RATE_LIMIT_EXCEEDED: 'Çok hızlı istek; biraz sonra tekrar dene',
   INTERNAL_ERROR: 'Beklenmeyen bir hata oluştu.',
 };
 

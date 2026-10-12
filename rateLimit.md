@@ -32,7 +32,7 @@ Redis erişilemezse istek rate limit uygulanmadan devam eder. Prod fail-closed s
 | default | diğer `/api/**` | 100 / 60s | user→IP |
 | webhook | `/webhooks/**` | 60 / 60s | IP |
 
-Adım 0–6 tamam; sıradaki: **Adım 7 — Frontend** (opsiyonel) veya **Adım 8 — Doğrulama & dokümantasyon**.
+Adım 0–7 tamam; sıradaki: **Adım 8 — Doğrulama & dokümantasyon**.
 
 ---
 
@@ -102,11 +102,13 @@ Sıradaki iş: **Adım 7 — Frontend** (429 toast) veya **Adım 8 — Doğrulam
 
 ## Adım 7 — Frontend (hafif, 1–2 saat) — v1’e dahil edilebilir
 
-1. HTTP interceptor: **429** → kısa Türkçe toast/snackbar (“Çok hızlı istek; biraz sonra tekrar dene”)
-2. Login ekranında özel mesaj (brute-force hissi vermeden)
-3. Otomatik retry **yapma** (auth’ta tehlikeli)
+Durum: ✅ tamamlandı — 2026-10-12
 
-Workspace kuralı: yalnızca `frontend/` + gerekirse `memory-bank/frontend.md`
+**Ne eklendi:** `ErrorInterceptor` status 429 → toast.error (`RATE_LIMIT_EXCEEDED` / “Çok hızlı istek; biraz sonra tekrar dene”); otomatik retry yok; login’e özel UI yok (interceptor yeterli). Spec: toast + rethrow, retry yok.
+
+Sıradaki iş: **Adım 8 — Doğrulama & dokümantasyon**.
+
+**Dokunulan:** `error.interceptor.ts`, `error-messages.ts`, `error.interceptor.spec.ts`, `memory-bank/frontend.md`
 
 ---
 

@@ -22,7 +22,7 @@
 | Authors → books | `admin-authors-page/` | satırda Kitapları → `/admin/books?authorId=` |
 | Book form | `admin-book-form-page/` | create/edit; lifecycle + stok; kapak dosya + URL önizleme; kayıt sonrası multipart |
 | AdminCatalogApi | `core/api/admin-catalog.api.ts` | publish/archive/stock-adjustments; `uploadBookCover` FormData |
-| Hata mesajları | `error-messages.ts` | STOCK_BELOW_RESERVED, BOOK_NOT_PUBLISHABLE |
+| Hata mesajları | `error-messages.ts` | STOCK_BELOW_RESERVED, BOOK_NOT_PUBLISHABLE; **429** `RATE_LIMIT_EXCEEDED` → toast «Çok hızlı istek; biraz sonra tekrar dene» (retry yok) |
 ## Admin kitap formu (PATCH 400)
 
 - İstemci: `isbnValidator` (checksum), `httpUrlValidator` (mutlak http/https)

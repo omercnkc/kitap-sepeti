@@ -200,4 +200,35 @@ describe('ErrorInterceptor', () => {
     expect(toast.error).not.toHaveBeenCalled();
     expect(caught?.status).toBe(401);
   });
+
+  it('429 should toast rate-limit message, rethrow, and not retry', () => {
+    let caught: ProblemDetail | undefined;
+    let nextCount = 0;
+    http.post('/api/auth/login', {}).subscribe({
+      next: () => {
+        nextCount += 1;
+        fail('expected error');
+      },
+      error: (err: ProblemDetail) => {
+        caught = err;
+      },
+    });
+
+    const req = httpMock.expectOne('/api/auth/login');
+    req.flush(
+      {
+        title: 'İstek sınırı aşıldı',
+        status: 429,
+        code: 'RATE_LIMIT_EXCEEDED',
+        detail: 'Çok fazla istek gönderdiniz.',
+      },
+      { status: 429, statusText: 'Too Many Requests' },
+    );
+
+    expect(toast.error).toHaveBeenCalledWith('Çok hızlı istek; biraz sonra tekrar dene');
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(caught?.status).toBe(429);
+    expect(caught?.code).toBe('RATE_LIMIT_EXCEEDED');
+    expect(nextCount).toBe(0);
+  });
 });

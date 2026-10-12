@@ -63,6 +63,12 @@ export class ErrorInterceptor implements HttpInterceptor {
       return;
     }
 
+    if (status === 429) {
+      // Otomatik retry yok (auth brute-force riski).
+      this.toastService.error(this.resolveMessage(problem));
+      return;
+    }
+
     if (status === 503) {
       this.toastService.error('Şu anda işlem yapılamıyor, tekrar deneyin');
       return;
