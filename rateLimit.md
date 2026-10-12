@@ -32,7 +32,7 @@ Redis erişilemezse istek rate limit uygulanmadan devam eder. Prod fail-closed s
 | default | diğer `/api/**` | 100 / 60s | user→IP |
 | webhook | `/webhooks/**` | 60 / 60s | IP |
 
-Adım 0–2 tamam; sıradaki: **Adım 3 — KeyResolver**.
+Adım 0–3 tamam; sıradaki: **Adım 4 — Route bazlı limitler**.
 
 ---
 
@@ -50,20 +50,19 @@ Durum: ✅ tamamlandı — 2026-10-12
 
 **Ne eklendi:** `spring-boot-starter-data-redis-reactive`; `spring.data.redis.host/port` (`REDIS_HOST`/`REDIS_PORT`); `management.health.redis.enabled=false` (FAIL-OPEN — Redis DOWN iken gateway health/startup bozulmaz). Route filter / KeyResolver yok.
 
-Sıradaki iş: **Adım 3 — KeyResolver** (`IpKeyResolver`, `UserOrIpKeyResolver`); henüz route `RequestRateLimiter` / 429 handler yok.
-
 **Dokunulan:** `api-gateway/pom.xml`, `application.yml`
 
 ---
 
 ## Adım 3 — KeyResolver (2–3 saat)
 
-1. `IpKeyResolver` — `X-Forwarded-For` (ilk hop) yoksa `remoteAddress`
-2. `UserOrIpKeyResolver` — JWT’den `sub` (filtrede zaten claim okunuyorsa reuse; yoksa header `X-User-Id` sonrası da olur ama **rate limit JWT doğrulamasından sonra** çalışmalı)
-3. Sıra önemli: `JwtAuthGlobalFilter` → sonra rate limit (auth’suz protected zaten 401; public path’lerde IP)
-4. Bean’leri route’lara bağla (`#{@ipKeyResolver}` / `#{@userOrIpKeyResolver}`)
+Durum: ✅ tamamlandı — 2026-10-12
 
-**Dokunulan:** `api-gateway/.../ratelimit/` (yeni paket)
+**Ne eklendi:** bean `ipKeyResolver` (XFF ilk hop → remoteAddress → `unknown`); bean `userOrIpKeyResolver` (@Primary; `user:<X-User-Id>` veya `ip:<aynı IP mantığı>`). JWT yeniden parse yok; `X-User-Id` JwtAuthGlobalFilter sonrası. Route `RequestRateLimiter` yok.
+
+Sıradaki iş: **Adım 4 — Route bazlı limitler** (`#{@ipKeyResolver}` / `#{@userOrIpKeyResolver}` + tier tablosu).
+
+**Dokunulan:** `api-gateway/.../ratelimit/`, unit test
 
 ---
 
